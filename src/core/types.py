@@ -113,7 +113,7 @@ class ScanResult(BaseModel):
             SeverityLevel.INFO: 0,
         }
         return max(self.detections, key=lambda d: severity_order[d.severity]).severity
-    
+
     @property
     def detection_summary(self) -> Dict[str, int]:
         """Get summary of detections grouped by category."""
