@@ -239,3 +239,7 @@ class PatternLibrary:
         return [
             p for p in self.patterns.values() if severity_order[p.severity] >= min_level
         ]
+
+    def list_all_patterns(self) -> List[AttackPattern]:
+        """Get all patterns in the library."""
+        return list(self.patterns.values())

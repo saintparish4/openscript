@@ -7,7 +7,7 @@ Runtime validation with Pydantic ensures data integrity
 
 from enum import Enum
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -63,7 +63,7 @@ class ThreatDetection(BaseModel):
     context: str = Field(..., description="Surrounding text context")
     position: int = Field(..., ge=0, description="Character position in input")
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    detected_at: datetime = Field(default_factory=datetime.utcnow)
+    detected_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("confidence")
     @classmethod
@@ -98,7 +98,7 @@ class ScanResult(BaseModel):
     policy_applied: Optional[str] = None
     blocked: bool = False
     metadata: Dict[str, Any] = Field(default_factory=dict)
-    scanned_at: datetime = Field(default_factory=datetime.utcnow)
+    scanned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def max_severity(self) -> Optional[SeverityLevel]:
@@ -113,3 +113,12 @@ class ScanResult(BaseModel):
             SeverityLevel.INFO: 0,
         }
         return max(self.detections, key=lambda d: severity_order[d.severity]).severity
+    
+    @property
+    def detection_summary(self) -> Dict[str, int]:
+        """Get summary of detections grouped by category."""
+        summary: Dict[str, int] = {}
+        for detection in self.detections:
+            category_name = detection.category.value
+            summary[category_name] = summary.get(category_name, 0) + 1
+        return summary
