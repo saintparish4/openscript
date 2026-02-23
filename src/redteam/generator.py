@@ -40,11 +40,11 @@ class AttackGenerator:
     def generate_delimiter_variants(self, attack: str) -> List[str]:
         """Generate delimiter confusion variants."""
         return [
-            f"{attack}",
+            f"<system>{attack}</system>",
             f"[/INST]{attack}",
             f"```\n{attack}\n```",
             f"---END---\n{attack}",
-            f"{attack}",
+            f"</end>\n{attack}",
         ]
 
     def generate_roleplay_variants(self, objective: str) -> List[str]:

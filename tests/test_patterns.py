@@ -35,17 +35,17 @@ class TestPatternLibrary:
         """Test that benign text doesn't trigger patterns."""
         pattern = self.library.patterns["direct_injection_001"]
 
-        # Should NOT detect
         benign = [
             "I need to ignore the noise and focus on my work",
             "Please disregard the previous email, here's the correct one",
             "Let's forget about yesterday and move forward",
+            "Please ignore the previous noise in the data",
         ]
         for text in benign:
             matches = pattern.match(text)
-            # These might match but should be low confidence in real system
-            # This is where we'd tune the patterns
-            assert True  # Placeholder - in real system, check confidence scores
+            assert len(matches) == 0, (
+                f"False positive triggered on benign text: {text!r}"
+            )
 
     def test_roleplay_jailbreak_detection(self):
         """Test role manipulation detection."""

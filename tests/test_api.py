@@ -11,8 +11,9 @@ from src.api.server import app
 
 @pytest.fixture
 def client():
-    """Create test client."""
-    return TestClient(app)
+    """Create test client with lifespan events."""
+    with TestClient(app) as c:
+        yield c
 
 
 class TestScanEndpoints:

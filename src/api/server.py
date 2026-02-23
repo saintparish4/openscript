@@ -5,21 +5,51 @@ Why: RESTful API allows integration with any application.
 FastAPI provides high performance, async support, and automatic documentation.
 """
 
+import os
 from typing import List
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from prometheus_client import make_asgi_app
 import structlog
 import time
 
 from ..core.detector import DetectionEngine
+from ..core.types import ScanResult, ThreatDetection as DomainThreatDetection, SecurityPolicy
 from ..core.policy import PolicyManager
+from ..observability.metrics import (
+    record_scan,
+    record_threat,
+    record_block,
+    count_api_requests,
+    ACTIVE_SCANS,
+    LOADED_PATTERNS,
+    LOADED_POLICIES,
+)
 
 logger = structlog.get_logger()
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+API_KEYS: set = set(
+    filter(None, os.environ.get("OPENSCRIPT_API_KEYS", "").split(","))
+)
+CORS_ORIGINS: list = [
+    o.strip()
+    for o in os.environ.get("OPENSCRIPT_CORS_ORIGINS", "").split(",")
+    if o.strip()
+]
+RATE_LIMIT: str = os.environ.get("OPENSCRIPT_RATE_LIMIT", "")
+
 
 # ============================================================================
 # REQUEST/RESPONSE MODELS
@@ -33,7 +63,7 @@ class ScanRequest(BaseModel):
         ...,
         description="Text to scan for security threats",
         min_length=1,
-        max_length=100_000,  # 100KB limit
+        max_length=100_000,
     )
     policy_id: str = Field(
         default="balanced", description="Policy ID to apply for scanning"
@@ -56,6 +86,19 @@ class ThreatDetectionResponse(BaseModel):
     position: int
     metadata: dict
 
+    @classmethod
+    def from_domain(cls, detection: DomainThreatDetection) -> "ThreatDetectionResponse":
+        return cls(
+            attack_id=detection.attack_id,
+            category=detection.category.value,
+            severity=detection.severity.value,
+            confidence=detection.confidence,
+            detection_method=detection.detection_method.value,
+            context=detection.context,
+            position=detection.position,
+            metadata=detection.metadata,
+        )
+
 
 class ScanResponse(BaseModel):
     """Response from a scan operation."""
@@ -68,6 +111,20 @@ class ScanResponse(BaseModel):
     policy_applied: str
     timestamp: datetime
 
+    @classmethod
+    def from_domain(cls, result: ScanResult) -> "ScanResponse":
+        return cls(
+            scan_id=result.scan_id,
+            is_safe=result.is_safe,
+            blocked=result.blocked,
+            detections=[
+                ThreatDetectionResponse.from_domain(d) for d in result.detections
+            ],
+            scan_duration_ms=result.scan_duration_ms,
+            policy_applied=result.policy_applied or "",
+            timestamp=result.scanned_at,
+        )
+
 
 class PolicyResponse(BaseModel):
     """Representation of a security policy."""
@@ -79,6 +136,18 @@ class PolicyResponse(BaseModel):
     block_on_detection: bool
     severity_threshold: str
     categories: List[str]
+
+    @classmethod
+    def from_domain(cls, policy: SecurityPolicy) -> "PolicyResponse":
+        return cls(
+            policy_id=policy.policy_id,
+            name=policy.name,
+            description=policy.description,
+            enabled=policy.enabled,
+            block_on_detection=policy.block_on_detection,
+            severity_threshold=policy.severity_threshold.value,
+            categories=[c.value for c in policy.categories],
+        )
 
 
 class HealthResponse(BaseModel):
@@ -100,26 +169,48 @@ class ErrorResponse(BaseModel):
 
 
 # ============================================================================
+# DEPENDENCY INJECTION
+# ============================================================================
+
+
+def get_detection_engine(request: Request) -> DetectionEngine:
+    return request.app.state.detection_engine
+
+
+def get_policy_manager(request: Request) -> PolicyManager:
+    return request.app.state.policy_manager
+
+
+# ============================================================================
 # APPLICATION SETUP
 # ============================================================================
 
-# Initialize core components (before app creation)
-detection_engine = DetectionEngine()
-policy_manager = PolicyManager()
+limiter = Limiter(
+    key_func=get_remote_address,
+    enabled=bool(RATE_LIMIT),
+    default_limits=[RATE_LIMIT] if RATE_LIMIT else [],
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
-    # Startup
+    engine = DetectionEngine()
+    policy_manager = PolicyManager()
+
+    app.state.detection_engine = engine
+    app.state.policy_manager = policy_manager
+
+    LOADED_PATTERNS.set(len(engine.pattern_library.patterns))
+    LOADED_POLICIES.set(len(policy_manager.policies))
+
     logger.info(
         "api_server_starting",
         version="1.0.0",
-        patterns=len(detection_engine.pattern_library.patterns),
+        patterns=len(engine.pattern_library.patterns),
         policies=len(policy_manager.policies),
     )
     yield
-    # Shutdown
     logger.info("api_server_shutting_down")
 
 
@@ -135,19 +226,45 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware
+app.state.limiter = limiter
+
+# CORS -- use configured origins or permissive fallback (never wildcard + credentials)
+cors_origins = CORS_ORIGINS or ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=cors_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Prometheus metrics endpoint
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 
 # ============================================================================
 # MIDDLEWARE
 # ============================================================================
+
+OPEN_PATHS = {"/v1/health", "/docs", "/redoc", "/openapi.json"}
+
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    """Validate API key for protected endpoints."""
+    if API_KEYS and request.url.path not in OPEN_PATHS and not request.url.path.startswith("/metrics"):
+        key = request.headers.get("X-API-Key")
+        if key not in API_KEYS:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": "Unauthorized",
+                    "detail": "Invalid or missing API key",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -155,7 +272,6 @@ async def log_requests(request: Request, call_next):
     """Log all requests and responses."""
     start_time = time.time()
 
-    # Log request
     logger.info(
         "api_request",
         method=request.method,
@@ -163,7 +279,6 @@ async def log_requests(request: Request, call_next):
         client=request.client.host if request.client else None,
     )
 
-    # Process request
     try:
         response = await call_next(request)
     except Exception as e:
@@ -176,7 +291,6 @@ async def log_requests(request: Request, call_next):
         )
         raise
 
-    # Log response
     duration_ms = (time.time() - start_time) * 1000
     logger.info(
         "api_response",
@@ -187,6 +301,57 @@ async def log_requests(request: Request, call_next):
     )
 
     return response
+
+
+# ============================================================================
+# SCAN HELPER
+# ============================================================================
+
+
+async def _do_scan(
+    text: str,
+    policy_id: str,
+    metadata: dict,
+    scan_type: str,
+    engine: DetectionEngine,
+    pm: PolicyManager,
+) -> ScanResponse:
+    """Shared scan logic for input and output endpoints."""
+    policy = pm.get_policy(policy_id)
+    if not policy:
+        raise HTTPException(
+            status_code=404, detail=f"Policy '{policy_id}' not found"
+        )
+
+    record_scan(policy_id=policy_id, endpoint=f"/v1/scan/{scan_type}")
+    ACTIVE_SCANS.inc()
+    try:
+        result = engine.scan_text(text, policy, metadata)
+    finally:
+        ACTIVE_SCANS.dec()
+
+    for d in result.detections:
+        record_threat(
+            severity=d.severity.value,
+            category=d.category.value,
+            policy_id=policy_id,
+        )
+
+    if result.blocked:
+        max_sev = result.max_severity.value if result.max_severity else "unknown"
+        record_block(policy_id=policy_id, severity=max_sev)
+
+    logger.info(
+        "scan_completed",
+        scan_type=scan_type,
+        scan_id=result.scan_id,
+        policy_id=policy_id,
+        is_safe=result.is_safe,
+        blocked=result.blocked,
+        detection_count=len(result.detections),
+    )
+
+    return ScanResponse.from_domain(result)
 
 
 # ============================================================================
@@ -204,7 +369,14 @@ async def log_requests(request: Request, call_next):
         "Returns detections and blocking decision."
     ),
 )
-async def scan_input(request: ScanRequest) -> ScanResponse:
+@limiter.limit(RATE_LIMIT or "1000/minute")
+@count_api_requests("/v1/scan/input", "POST")
+async def scan_input(
+    request: Request,
+    body: ScanRequest,
+    engine: DetectionEngine = Depends(get_detection_engine),
+    pm: PolicyManager = Depends(get_policy_manager),
+) -> ScanResponse:
     """
     Scan user input for security threats.
 
@@ -212,39 +384,7 @@ async def scan_input(request: ScanRequest) -> ScanResponse:
     If the response indicates `blocked=true`, you should not process the input.
     """
     try:
-        # Get policy
-        policy = policy_manager.get_policy(request.policy_id)
-        if not policy:
-            raise HTTPException(
-                status_code=404, detail=f"Policy '{request.policy_id}' not found"
-            )
-
-        # Run scan
-        result = detection_engine.scan_text(request.text, policy, request.metadata)
-
-        # Convert to response format
-        return ScanResponse(
-            scan_id=result.scan_id,
-            is_safe=result.is_safe,
-            blocked=result.blocked,
-            detections=[
-                ThreatDetectionResponse(
-                    attack_id=d.attack_id,
-                    category=d.category.value,
-                    severity=d.severity.value,
-                    confidence=d.confidence,
-                    detection_method=d.detection_method.value,
-                    context=d.context,
-                    position=d.position,
-                    metadata=d.metadata,
-                )
-                for d in result.detections
-            ],
-            scan_duration_ms=result.scan_duration_ms,
-            policy_applied=result.policy_applied or request.policy_id,
-            timestamp=result.scanned_at,
-        )
-
+        return await _do_scan(body.text, body.policy_id, body.metadata, "input", engine, pm)
     except HTTPException:
         raise
     except Exception as e:
@@ -262,19 +402,31 @@ async def scan_input(request: ScanRequest) -> ScanResponse:
         "Detects credential leaks, PII exposure, etc."
     ),
 )
-async def scan_output(request: ScanRequest) -> ScanResponse:
+@limiter.limit(RATE_LIMIT or "1000/minute")
+@count_api_requests("/v1/scan/output", "POST")
+async def scan_output(
+    request: Request,
+    body: ScanRequest,
+    engine: DetectionEngine = Depends(get_detection_engine),
+    pm: PolicyManager = Depends(get_policy_manager),
+) -> ScanResponse:
     """
     Scan LLM output for security issues.
 
     Use this endpoint to scan LLM responses before showing them to users.
     Primarily detects data leaks (credentials, PII) in model outputs.
     """
-    # Use data protection policy by default for output scanning
-    if request.policy_id == "balanced":
-        request.policy_id = "data_protection"
+    policy_id = body.policy_id
+    if policy_id == "balanced":
+        policy_id = "data_protection"
 
-    # Same logic as input scanning
-    return await scan_input(request)
+    try:
+        return await _do_scan(body.text, policy_id, body.metadata, "output", engine, pm)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("scan_output_failed", error=str(e), error_type=type(e).__name__)
+        raise HTTPException(status_code=500, detail=f"Scan failed: {str(e)}")
 
 
 @app.get(
@@ -284,24 +436,12 @@ async def scan_output(request: ScanRequest) -> ScanResponse:
     summary="List policies",
     description="List all available security policies",
 )
-async def list_policies() -> List[PolicyResponse]:
+async def list_policies(
+    pm: PolicyManager = Depends(get_policy_manager),
+) -> List[PolicyResponse]:
     """Get list of all available security policies."""
     try:
-        policies = policy_manager.list_policies()
-
-        return [
-            PolicyResponse(
-                policy_id=p.policy_id,
-                name=p.name,
-                description=p.description,
-                enabled=p.enabled,
-                block_on_detection=p.block_on_detection,
-                severity_threshold=p.severity_threshold.value,
-                categories=[c.value for c in p.categories],
-            )
-            for p in policies
-        ]
-
+        return [PolicyResponse.from_domain(p) for p in pm.list_policies()]
     except Exception as e:
         logger.error("list_policies_failed", error=str(e), error_type=type(e).__name__)
         raise HTTPException(
@@ -316,26 +456,18 @@ async def list_policies() -> List[PolicyResponse]:
     summary="Get policy",
     description="Get details of a specific policy",
 )
-async def get_policy(policy_id: str) -> PolicyResponse:
+async def get_policy(
+    policy_id: str,
+    pm: PolicyManager = Depends(get_policy_manager),
+) -> PolicyResponse:
     """Get details of a specific policy."""
     try:
-        policy = policy_manager.get_policy(policy_id)
-
+        policy = pm.get_policy(policy_id)
         if not policy:
             raise HTTPException(
                 status_code=404, detail=f"Policy '{policy_id}' not found"
             )
-
-        return PolicyResponse(
-            policy_id=policy.policy_id,
-            name=policy.name,
-            description=policy.description,
-            enabled=policy.enabled,
-            block_on_detection=policy.block_on_detection,
-            severity_threshold=policy.severity_threshold.value,
-            categories=[c.value for c in policy.categories],
-        )
-
+        return PolicyResponse.from_domain(policy)
     except HTTPException:
         raise
     except Exception as e:
@@ -355,14 +487,17 @@ async def get_policy(policy_id: str) -> PolicyResponse:
     summary="Health check",
     description="Check if the service is running and healthy",
 )
-async def health_check() -> HealthResponse:
+async def health_check(
+    engine: DetectionEngine = Depends(get_detection_engine),
+    pm: PolicyManager = Depends(get_policy_manager),
+) -> HealthResponse:
     """Health check endpoint."""
     return HealthResponse(
         status="healthy",
         timestamp=datetime.now(timezone.utc),
         version="1.0.0",
-        pattern_count=len(detection_engine.pattern_library.patterns),
-        policy_count=len(policy_manager.policies),
+        pattern_count=len(engine.pattern_library.patterns),
+        policy_count=len(pm.policies),
     )
 
 
@@ -373,7 +508,6 @@ async def health_check() -> HealthResponse:
 )
 async def get_stats():
     """Get usage statistics."""
-    # Placeholder for future statistics endpoint
     return {
         "total_scans": "not_implemented",
         "threats_detected": "not_implemented",
@@ -384,6 +518,19 @@ async def get_stats():
 # ============================================================================
 # ERROR HANDLERS
 # ============================================================================
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Handle rate limit exceeded."""
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "Rate Limit Exceeded",
+            "detail": str(exc.detail),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
 
 @app.exception_handler(HTTPException)
@@ -417,9 +564,3 @@ async def general_exception_handler(request: Request, exc: Exception):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )
-
-
-# ============================================================================
-# STARTUP/SHUTDOWN
-# ============================================================================
-# Lifecycle events are now handled via the lifespan context manager above

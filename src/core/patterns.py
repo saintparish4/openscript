@@ -228,16 +228,11 @@ class PatternLibrary:
         self, min_severity: SeverityLevel
     ) -> List[AttackPattern]:
         """Get patterns above a severity threshold."""
-        severity_order = {
-            SeverityLevel.INFO: 0,
-            SeverityLevel.LOW: 1,
-            SeverityLevel.MEDIUM: 2,
-            SeverityLevel.HIGH: 3,
-            SeverityLevel.CRITICAL: 4,
-        }
-        min_level = severity_order[min_severity]
+        from .types import SEVERITY_ORDER
+
+        min_level = SEVERITY_ORDER[min_severity]
         return [
-            p for p in self.patterns.values() if severity_order[p.severity] >= min_level
+            p for p in self.patterns.values() if SEVERITY_ORDER[p.severity] >= min_level
         ]
 
     def list_all_patterns(self) -> List[AttackPattern]:

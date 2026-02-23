@@ -12,9 +12,11 @@ Design:
 
 import hashlib
 import uuid
+import time
 from typing import List, Optional, Set
 from datetime import datetime, timezone
 import structlog
+from cachetools import TTLCache
 
 from .types import (
     ThreatDetection,
@@ -23,8 +25,16 @@ from .types import (
     DetectionMethod,
     SeverityLevel,
     AttackCategory,
+    SEVERITY_ORDER,
 )
 from .patterns import PatternLibrary, AttackPattern
+from ..observability.metrics import (
+    record_pattern_match,
+    SCAN_DURATION_SECONDS,
+    INPUT_LENGTH_BYTES,
+    ACTIVE_SCANS,
+    CACHED_SCANS,
+)
 
 logger = structlog.get_logger()
 
@@ -47,6 +57,8 @@ class DetectionEngine:
         self,
         pattern_library: Optional[PatternLibrary] = None,
         enable_caching: bool = True,
+        cache_maxsize: int = 10_000,
+        cache_ttl: int = 300,
     ):
         """
         Initialize detection engine
@@ -54,14 +66,16 @@ class DetectionEngine:
         Args:
             pattern_library: Custom pattern library (or use default)
             enable_caching: Whether to cache scan results by input hash
+            cache_maxsize: Maximum number of cached scan results
+            cache_ttl: Cache entry time-to-live in seconds
         """
         self.pattern_library = pattern_library or PatternLibrary()
         self.enable_caching = enable_caching
         self.logger = logger.bind(component="detection_engine")
 
-        # Simple in-memory cache for deduplication
-        # In prod, use Redis or similar for distributed caching
-        self._scan_cache: dict = {} if enable_caching else None
+        self._scan_cache: Optional[TTLCache] = (
+            TTLCache(maxsize=cache_maxsize, ttl=cache_ttl) if enable_caching else None
+        )
 
         self.logger.info(
             "detection_engine_initialized",
@@ -85,22 +99,23 @@ class DetectionEngine:
         Returns:
             ScanResult with all detections and decision
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = time.perf_counter()
         scan_id = str(uuid.uuid4())
         input_hash = self._hash_input(text)
+        cache_key = f"{input_hash}:{policy.policy_id}"
 
-        # Check cache for duplicate scans
-        if self._scan_cache is not None and input_hash in self._scan_cache:
-            cached_result = self._scan_cache[input_hash]
+        # Check cache for duplicate scans (policy-aware key)
+        if self._scan_cache is not None and cache_key in self._scan_cache:
+            cached_result = self._scan_cache[cache_key]
             self.logger.info(
                 "scan_cache_hit",
                 scan_id=scan_id,
                 input_hash=input_hash,
                 cached_scan_id=cached_result.scan_id,
             )
-            # Return cached result with new scan_id
-            cached_result.scan_id = scan_id
-            return cached_result
+            result = cached_result.model_copy(deep=True)
+            result.scan_id = scan_id
+            return result
 
         self.logger.info(
             "scan_started",
@@ -137,11 +152,15 @@ class DetectionEngine:
                 # Extract context around match for review
                 context = self._extract_context(text, position, len(matched_text))
 
+                record_pattern_match(pattern.pattern_id, pattern.category.value)
+
                 detection = ThreatDetection(
                     attack_id=pattern.pattern_id,
                     category=pattern.category,
                     severity=pattern.severity,
-                    confidence=self._calculate_confidence(pattern, matched_text, text),
+                    confidence=self._calculate_confidence(
+                        pattern, matched_text, text, position
+                    ),
                     detection_method=DetectionMethod.PATTERN_MATCH,
                     matched_pattern=pattern.regex.pattern[:100],  # Truncate for logs
                     context=context,
@@ -180,7 +199,7 @@ class DetectionEngine:
                     break
 
         # Calculate scan duration
-        duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        duration_ms = (time.perf_counter() - start_time) * 1000
 
         # Determine if should block based on policy
         blocked = self._should_block(detections, policy)
@@ -199,7 +218,13 @@ class DetectionEngine:
 
         # Cache result
         if self._scan_cache is not None:
-            self._scan_cache[input_hash] = result
+            self._scan_cache[cache_key] = result
+            CACHED_SCANS.set(len(self._scan_cache))
+
+        SCAN_DURATION_SECONDS.labels(policy_id=policy.policy_id).observe(
+            duration_ms / 1000
+        )
+        INPUT_LENGTH_BYTES.observe(len(text))
 
         self.logger.info(
             "scan_completed",
@@ -246,7 +271,11 @@ class DetectionEngine:
         return context
 
     def _calculate_confidence(
-        self, pattern: AttackPattern, matched_text: str, full_text: str
+        self,
+        pattern: AttackPattern,
+        matched_text: str,
+        full_text: str,
+        position: int,
     ) -> float:
         """
         Calculate confidence score for a detection.
@@ -261,14 +290,14 @@ class DetectionEngine:
         """
         base_confidence = 1.0 - pattern.false_positive_rate
 
-        # Boost confidence for longer matches
         if len(matched_text) > 50:
             base_confidence = min(1.0, base_confidence + 0.1)
 
-        # Boost confidence for attacks near start of text
-        # (many attacks try to override initial instructions)
-        position_ratio = full_text.find(matched_text) / len(full_text)
-        if position_ratio < 0.1:  # First 10% of text
+        if len(full_text) == 0:
+            return base_confidence
+
+        position_ratio = position / len(full_text)
+        if position_ratio < 0.1:
             base_confidence = min(1.0, base_confidence + 0.05)
 
         return round(base_confidence, 2)
@@ -317,14 +346,7 @@ class DetectionEngine:
 
         Severity hierarchy: INFO < LOW < MEDIUM < HIGH < CRITICAL
         """
-        severity_order = {
-            SeverityLevel.INFO: 0,
-            SeverityLevel.LOW: 1,
-            SeverityLevel.MEDIUM: 2,
-            SeverityLevel.HIGH: 3,
-            SeverityLevel.CRITICAL: 4,
-        }
-        return severity_order[severity] >= severity_order[threshold]
+        return SEVERITY_ORDER[severity] >= SEVERITY_ORDER[threshold]
 
     def _should_block(
         self, detections: List[ThreatDetection], policy: SecurityPolicy

@@ -105,14 +105,7 @@ class ScanResult(BaseModel):
         """Get highest severity level detected."""
         if not self.detections:
             return None
-        severity_order = {
-            SeverityLevel.CRITICAL: 4,
-            SeverityLevel.HIGH: 3,
-            SeverityLevel.MEDIUM: 2,
-            SeverityLevel.LOW: 1,
-            SeverityLevel.INFO: 0,
-        }
-        return max(self.detections, key=lambda d: severity_order[d.severity]).severity
+        return max(self.detections, key=lambda d: SEVERITY_ORDER[d.severity]).severity
 
     @property
     def detection_summary(self) -> Dict[str, int]:
@@ -122,3 +115,12 @@ class ScanResult(BaseModel):
             category_name = detection.category.value
             summary[category_name] = summary.get(category_name, 0) + 1
         return summary
+
+
+SEVERITY_ORDER: Dict[SeverityLevel, int] = {
+    SeverityLevel.INFO: 0,
+    SeverityLevel.LOW: 1,
+    SeverityLevel.MEDIUM: 2,
+    SeverityLevel.HIGH: 3,
+    SeverityLevel.CRITICAL: 4,
+}
