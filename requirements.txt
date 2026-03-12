@@ -10,3 +10,4 @@ prometheus-client>=0.24.1
 cachetools>=5.3.0
 slowapi>=0.1.9
 uvicorn>=0.34.0
+     
