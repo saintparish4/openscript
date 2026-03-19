@@ -33,7 +33,7 @@ Declared in `requirements.txt` / `pyproject.toml` as the project evolves. Typica
 
 ### Requirements
 
-- **Python**: **3.10+** (`requires-python` in `pyproject.toml`)
+- **Python**: **3.10+** (`requires-python` in `pyproject.toml`). Local tooling (Black/Ruff) targets **3.12**—using **Python 3.12.x** (see `.python-version`) avoids formatter/parser mismatches.
 - **pip**: current stable; install deps from `requirements.txt`
 
 ### Initial setup

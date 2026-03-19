@@ -48,9 +48,7 @@ class OpenScriptMiddleware:
 
         return result
 
-    async def stream(
-        self, input_data: dict[str, Any], **kwargs: Any
-    ) -> AsyncGenerator[Any, None]:
+    async def stream(self, input_data: dict[str, Any], **kwargs: Any) -> AsyncGenerator[Any, None]:
         context = ActionContext(
             action="stream",
             agent_id=kwargs.get("agent_id", "default"),
@@ -71,9 +69,7 @@ class OpenScriptMiddleware:
             try:
                 context = await interceptor.before_action(context)
             except Exception as exc:
-                context = self._handle_failure(
-                    interceptor, exc, context, "before_action"
-                )
+                context = self._handle_failure(interceptor, exc, context, "before_action")
         return context
 
     async def _run_after(self, context: ActionContext) -> ActionContext:
@@ -81,9 +77,7 @@ class OpenScriptMiddleware:
             try:
                 context = await interceptor.after_action(context)
             except Exception as exc:
-                context = self._handle_failure(
-                    interceptor, exc, context, "after_action"
-                )
+                context = self._handle_failure(interceptor, exc, context, "after_action")
         return context
 
     def _handle_failure(
@@ -132,6 +126,4 @@ class OpenScriptMiddleware:
             for chunk in self._agent.stream(input_data, **kwargs):
                 yield chunk
         else:
-            raise TypeError(
-                f"Agent {type(self._agent)} has no stream or astream method"
-            )
+            raise TypeError(f"Agent {type(self._agent)} has no stream or astream method")

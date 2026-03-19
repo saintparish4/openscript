@@ -94,6 +94,5 @@ class TestMiddlewareAutoConfigures:
 
         root = logging.getLogger()
         assert any(
-            isinstance(h.formatter, structlog.stdlib.ProcessorFormatter)
-            for h in root.handlers
+            isinstance(h.formatter, structlog.stdlib.ProcessorFormatter) for h in root.handlers
         )

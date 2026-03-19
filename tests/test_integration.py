@@ -88,13 +88,9 @@ class TestLangGraphIntegration:
     @pytest.mark.asyncio
     async def test_wrap_graph_agent_invoke_with_noop(self):
         """wrap_graph_agent + NoopInterceptor runs mock graph end-to-end."""
-        graph = MockLLMAgent(
-            responses=[{"messages": [{"role": "assistant", "content": "Hi!"}]}]
-        )
+        graph = MockLLMAgent(responses=[{"messages": [{"role": "assistant", "content": "Hi!"}]}])
         secure = wrap_graph_agent(graph, interceptors=[NoopInterceptor()])
-        result = await secure.invoke(
-            {"messages": [{"role": "user", "content": "hello"}]}
-        )
+        result = await secure.invoke({"messages": [{"role": "user", "content": "hello"}]})
         assert result["messages"] == [{"role": "assistant", "content": "Hi!"}]
 
     @pytest.mark.asyncio

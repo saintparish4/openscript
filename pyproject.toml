@@ -39,7 +39,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["sdk", "contracts"] 
+include = ["sdk", "contracts*", "events*", "server*"]  
 
 [tool.pytest.ini_options]
 # Repo root must be on path so `sdk` and `contracts` resolve when collecting tests.
@@ -47,8 +47,12 @@ pythonpath = ["."]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
+[tool.black]
+target-version = ["py312"]
+line-length = 100
+
 [tool.ruff] 
-target-version = "py310" 
+target-version = "py312" 
 line-length = 100 
 
 [tool.ruff.lint]
@@ -68,6 +72,10 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["sdk", "contracts"]
+
+# FastAPI dependency injection uses Depends(...) in parameter defaults by design.
+[tool.ruff.lint.per-file-ignores]
+"server/app.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.10"
