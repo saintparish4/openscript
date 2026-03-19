@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openscript"
+version = "0.1.0" 
+description = "Python SDK for building prompt-secured LLM/agent workflows"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pydantic>=2.12",
+    "structlog>=25.5.0", 
+]
+
+[project.optional-dependencies] 
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-benchmark>=5.2.3",
+    "black>=26.1.0",
+    "ruff>=0.15.6",
+    "mypy>=1.19.1",
+    "hypothesis>=6.151.9",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sdk", "contracts"] 
+
+[tool.pytest.ini_options]
+# Repo root must be on path so `sdk` and `contracts` resolve when collecting tests.
+pythonpath = ["."]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff] 
+target-version = "py310" 
+line-length = 100 
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",   # line length (black handles this)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sdk", "contracts"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true 
+disallow_untyped_defs = true 
+disallow_incomplete_defs = true 
+check_untyped_defs = true  
+
+[[tool.mypy.overrides]]
+module = ["structlog.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["sdk.middleware.middleware", "sdk.integrations.*"]
+disallow_any_explicit = false
+warn_return_any = false

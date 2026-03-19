@@ -79,7 +79,10 @@ logs/
 .dockerignore
 
 # Project specific
-cmd/
+directive/ 
+.cursor/ 
+memory/ 
+
 
 # Temporary files
 *.tmp
