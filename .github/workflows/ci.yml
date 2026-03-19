@@ -82,8 +82,8 @@ jobs:
       - name: Build package
         run: python -m build 
 
-      - name: Verify wheel 
-      run: |
-        pip install dist/*.whl
-        python -c "from contracts import Interceptor, FailureMode, AgentCapabilities; print('contracts OK')"
-        python -c "from sdk import OpenScriptMiddleware, NoopInterceptor; print('sdk OK')"
+      - name: Verify wheel
+        run: |
+          pip install dist/*.whl
+          python -c "from contracts import Interceptor, FailureMode, AgentCapabilities; print('contracts OK')"
+          python -c "from sdk import OpenScriptMiddleware, NoopInterceptor; print('sdk OK')"
