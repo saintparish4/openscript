@@ -7,7 +7,7 @@ from typing import Any
 import structlog
 
 from contracts.interceptor import Interceptor
-from contracts.types import ActionContext, FailureMode
+from contracts.types import ActionBlockedError, ActionContext, FailureMode, InterceptorDecision
 from sdk.interceptors.base import NoopInterceptor
 from sdk.logging import _ensure_configured
 
@@ -44,9 +44,13 @@ class OpenScriptMiddleware:
         result = await self._call_agent(input_data, **kwargs)
 
         context.output_data = result if isinstance(result, dict) else {"output": result}
-        await self._run_after(context)
+        context = await self._run_after(context)
 
-        return result
+        # Return context.output_data so after_action interceptors (e.g. PIIInterceptor)
+        # can modify the output that callers receive.
+        if isinstance(result, dict):
+            return context.output_data
+        return context.output_data.get("output", result)
 
     async def stream(self, input_data: dict[str, Any], **kwargs: Any) -> AsyncGenerator[Any, None]:
         context = ActionContext(
@@ -70,6 +74,12 @@ class OpenScriptMiddleware:
                 context = await interceptor.before_action(context)
             except Exception as exc:
                 context = self._handle_failure(interceptor, exc, context, "before_action")
+                continue
+            if context.decision in (InterceptorDecision.DENY, InterceptorDecision.REQUIRE_APPROVAL):
+                raise ActionBlockedError(
+                    reason=context.decision_reason,
+                    interceptor=type(interceptor).__name__,
+                )
         return context
 
     async def _run_after(self, context: ActionContext) -> ActionContext:

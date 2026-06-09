@@ -91,3 +91,4 @@ memory/
 *.bak
 *.swp
 *~
+.claude/

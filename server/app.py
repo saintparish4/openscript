@@ -3,22 +3,29 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import Depends, FastAPI, Query
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from contracts.server_types import EventType
 from contracts.session_graph import SessionGraph
 from events.store import EventStore
 from server.auth import require_api_key
+from server.routers import sessions as sessions_router
+from server.routers import sse as sse_router
+from server.routers import threat as threat_router
 
 logger = structlog.get_logger(__name__)
+
+_STATIC_DIR = Path(__file__).parent / "static" / "dashboard"
 
 
 def _database_url() -> str:
     return os.environ.get(
-        "DATABASE_URL", "postgresql://openscript:openscript@localhost:5432/openscript"
+        "DATABASE_URL", "postgresql+asyncpg://openscript:openscript@localhost:5432/openscript"
     )
 
 
@@ -35,6 +42,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="OpenScript Server", version="0.1.0", lifespan=lifespan)
+
+# Routers
+app.include_router(threat_router.router)
+app.include_router(sessions_router.router)
+app.include_router(sse_router.router)
+
+# Dashboard static files — served at /dashboard/
+if _STATIC_DIR.exists():
+    app.mount(
+        "/dashboard",
+        StaticFiles(directory=str(_STATIC_DIR), html=True),
+        name="dashboard",
+    )
 
 
 def _get_event_store() -> EventStore:
