@@ -1,30 +1,48 @@
 services:
   postgres:
-    image: postgres:16-alpine 
+    image: postgres:16-alpine
     environment:
-      POSTGRES_USER: openscript 
-      POSTGRES_PASSWORD: openscript 
-      POSTGRES_DB: openscript 
+      POSTGRES_USER: openscript
+      POSTGRES_PASSWORD: openscript
+      POSTGRES_DB: openscript
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data 
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U openscript"]
       interval: 5s
-      timeout: 3s 
-      retries: 5 
+      timeout: 3s
+      retries: 5
 
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+asyncpg://openscript:openscript@postgres:5432/openscript
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: on-failure
 
-  redis:
-    image: redis:7-alpine 
-    ports: 
-      - "6379:6379"
+  server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://openscript:openscript@postgres:5432/openscript
+      OPENSCRIPT_API_KEY: ${OPENSCRIPT_API_KEY:-changeme}
+      OPENSCRIPT_LOG_FORMAT: json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping"]
-      interval: 5s
-      timeout: 3s 
-      retries: 5 
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
-  pgdata: 
+  pgdata:

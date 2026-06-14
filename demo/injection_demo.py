@@ -1,6 +1,7 @@
 """OpenScript injection demo.
 
-Runs entirely in-memory — no database or server required.
+Runs in-memory by default. Set DATABASE_URL to persist events to Postgres
+so the dashboard can visualize the session afterward.
 
 Usage:
     python demo/injection_demo.py
@@ -14,12 +15,16 @@ To view the session graph in the dashboard afterward:
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import uuid
 from pathlib import Path
 
 # Allow running from repo root without installing the package
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from rich.console import Console
 from rich.panel import Panel
@@ -37,7 +42,7 @@ from sdk.interceptors.threat import ThreatInterceptor, score_text
 console = Console()
 
 # ---------------------------------------------------------------------------
-# In-memory event sink (no DB needed for demo)
+# Event sink — Postgres when DATABASE_URL is set, otherwise in-memory
 # ---------------------------------------------------------------------------
 
 class InMemorySink:
@@ -46,6 +51,16 @@ class InMemorySink:
 
     async def insert_events(self, events: list[Event]) -> None:
         self.events.extend(events)
+
+
+def _build_sink():
+    db_url = os.environ.get("DATABASE_URL")
+    if db_url:
+        from sqlalchemy.ext.asyncio import create_async_engine
+        from events.store import EventStore
+        engine = create_async_engine(db_url)
+        return EventStore(engine), True
+    return InMemorySink(), False
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +113,7 @@ PII_TRIGGER = "Tell me about something sensitive"
 
 async def run_demo() -> None:
     session_id = f"demo-{uuid.uuid4().hex[:8]}"
-    sink = InMemorySink()
+    sink, persisted = _build_sink()
     writer = EventWriter(store=sink, flush_interval=0.05)
     await writer.start()
 
@@ -212,16 +227,28 @@ async def run_demo() -> None:
     console.print(table)
 
     console.print()
-    console.print(Panel(
-        "[bold]To visualize this session:[/bold]\n\n"
-        "  1. [cyan]docker compose up -d[/cyan]\n"
-        "  2. [cyan]alembic upgrade head[/cyan]\n"
-        "  3. [cyan]OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload[/cyan]\n"
-        "  4. Open [link=http://localhost:8000/dashboard/]http://localhost:8000/dashboard/[/link]\n\n"
-        "[dim]The dashboard shows the session graph, event timeline, and threat badges.[/dim]",
-        border_style="dim",
-        title="[dim]Next steps[/dim]",
-    ))
+    if persisted:
+        console.print(Panel(
+            f"[bold]Session saved to Postgres.[/bold] Open the dashboard to visualize it:\n\n"
+            f"  [cyan]http://localhost:8000/dashboard/session.html?session_id={session_id}[/cyan]\n\n"
+            "[dim]Make sure the server is running: "
+            "OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload[/dim]",
+            border_style="green",
+            title="[dim]Visualize[/dim]",
+        ))
+    else:
+        console.print(Panel(
+            "[bold]To visualize this session in the dashboard:[/bold]\n\n"
+            "  1. [cyan]docker compose up -d[/cyan]\n"
+            "  2. [cyan]alembic upgrade head[/cyan]\n"
+            "  3. [cyan]DATABASE_URL=postgresql+asyncpg://openscript:openscript@localhost:5432/openscript \\\n"
+            "     OPENSCRIPT_API_KEY=demo python demo/injection_demo.py[/cyan]\n"
+            "  4. [cyan]OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload[/cyan]\n"
+            "  5. Open [link=http://localhost:8000/dashboard/]http://localhost:8000/dashboard/[/link]\n\n"
+            "[dim]Re-running with DATABASE_URL set persists events so the dashboard has data.[/dim]",
+            border_style="dim",
+            title="[dim]Next steps[/dim]",
+        ))
     console.print()
 
 

@@ -16,11 +16,11 @@
       border: 1px solid #e5e7eb;
       background: #fafafa;
     }
-    .event-threat { background: #fff1f2; border-left: 3px solid #f43f5e; }
+    .event-threat      { background: #fff1f2; border-left: 3px solid #f43f5e; }
     .event-interceptor { border-left: 3px solid #8b5cf6; }
-    .event-tool { border-left: 3px solid #f97316; }
-    .event-turn { border-left: 3px solid #3b82f6; }
-    .event-default { border-left: 3px solid #9ca3af; }
+    .event-tool        { border-left: 3px solid #f97316; }
+    .event-turn        { border-left: 3px solid #3b82f6; }
+    .event-default     { border-left: 3px solid #9ca3af; }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-900 min-h-screen">
@@ -37,7 +37,13 @@
 
   <main class="max-w-7xl mx-auto px-6 py-8"
         x-data="sessionApp()"
-        x-init="init()">
+        x-init="init()"
+        x-cloak>
+
+    <!-- Error banner -->
+    <div x-show="error"
+         class="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm"
+         x-text="error"></div>
 
     <!-- Session ID + stats strip -->
     <div class="flex items-start justify-between mb-6">
@@ -58,7 +64,7 @@
         </div>
         <div class="bg-white border rounded-lg px-4 py-2 text-center">
           <div class="font-bold text-lg"
-               :class="(stats.max_threat_score||0) >= 0.7 ? 'text-red-600' : 'text-green-600'"
+               :class="(stats.max_threat_score || 0) >= 0.7 ? 'text-red-600' : 'text-green-600'"
                x-text="stats.max_threat_score ? stats.max_threat_score.toFixed(2) : '0.00'"></div>
           <div class="text-gray-500 text-xs">Max Score</div>
         </div>
@@ -80,70 +86,62 @@
     <div class="grid grid-cols-2 gap-6">
 
       <!-- Left: Graph -->
-      <div>
-        <div class="bg-white rounded-xl border p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="font-semibold text-sm">Causal Session Graph</h2>
-            <div class="flex gap-3 text-xs text-gray-500">
-              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>Turn</span>
-              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span>Threat</span>
-              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-purple-500 inline-block"></span>Interceptor</span>
-              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-orange-400 inline-block"></span>Tool</span>
-            </div>
+      <div class="bg-white rounded-xl border p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-sm">Causal Session Graph</h2>
+          <div class="flex gap-3 text-xs text-gray-500">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>Turn</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span>Threat</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-purple-500 inline-block"></span>Interceptor</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-orange-400 inline-block"></span>Tool</span>
           </div>
-          <div id="graph-container"></div>
-          <p x-show="graphLoading" class="text-xs text-gray-400 text-center mt-2">Building graph…</p>
         </div>
+        <div id="graph-container"></div>
+        <p x-show="graphLoading" class="text-xs text-gray-400 text-center mt-2">Building graph…</p>
       </div>
 
       <!-- Right: Event timeline -->
-      <div>
-        <div class="bg-white rounded-xl border">
-          <div class="flex items-center justify-between px-4 py-3 border-b">
-            <h2 class="font-semibold text-sm">Event Timeline</h2>
-            <div class="flex items-center gap-2">
-              <span x-show="liveConnected"
-                    class="flex items-center gap-1 text-xs text-green-600">
-                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block"></span>
-                Live
-              </span>
-              <span x-show="!liveConnected" class="text-xs text-gray-400">Disconnected</span>
-            </div>
-          </div>
-          <div class="divide-y overflow-y-auto" style="max-height: 440px;">
-            <template x-for="ev in events" :key="ev.id">
-              <div class="px-4 py-2.5 text-xs" :class="eventClass(ev)">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="font-medium font-mono" x-text="ev.event_type"></span>
-                  <span class="text-gray-400" x-text="formatTime(ev.timestamp)"></span>
-                </div>
-                <div class="text-gray-600 font-mono truncate" x-text="payloadSummary(ev)"></div>
-                <!-- Threat score badge -->
-                <div x-show="ev.event_type === 'threat_detected'" class="mt-1">
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
-                    score: <span x-text="ev.payload?.score?.toFixed ? ev.payload.score.toFixed(3) : ev.payload?.score"></span>
-                  </span>
-                  <span class="ml-1 text-gray-500"
-                        x-text="Object.keys(ev.payload?.signals || {}).join(', ')"></span>
-                </div>
+      <div class="bg-white rounded-xl border">
+        <div class="flex items-center justify-between px-4 py-3 border-b">
+          <h2 class="font-semibold text-sm">Event Timeline</h2>
+          <span class="flex items-center gap-1 text-xs text-blue-600">
+            <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse inline-block"></span>
+            Polling
+          </span>
+        </div>
+        <div class="divide-y overflow-y-auto" style="max-height: 440px;">
+          <template x-for="ev in events" :key="ev.id">
+            <div class="px-4 py-2.5 text-xs" :class="eventClass(ev)">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-medium font-mono" x-text="ev.event_type"></span>
+                <span class="text-gray-400" x-text="formatTime(ev.timestamp)"></span>
               </div>
-            </template>
-            <div x-show="events.length === 0 && !loading"
-                 class="px-4 py-8 text-center text-gray-400 text-sm">No events yet</div>
-          </div>
+              <div class="text-gray-600 font-mono truncate" x-text="payloadSummary(ev)"></div>
+              <div x-show="ev.event_type === 'threat_detected'" class="mt-1">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
+                  score: <span x-text="ev.payload?.score?.toFixed ? ev.payload.score.toFixed(3) : ev.payload?.score"></span>
+                </span>
+                <span class="ml-1 text-gray-500"
+                      x-text="Object.keys(ev.payload?.signals || {}).join(', ')"></span>
+              </div>
+            </div>
+          </template>
+          <div x-show="events.length === 0 && !loading"
+               class="px-4 py-8 text-center text-gray-400 text-sm">No events yet</div>
         </div>
       </div>
+
     </div>
   </main>
 
   <script>
     const NODE_COLORS = {
-      turn:        { background: '#3b82f6', border: '#1d4ed8' },
-      threat:      { background: '#ef4444', border: '#b91c1c' },
-      interceptor: { background: '#8b5cf6', border: '#6d28d9' },
-      tool_call:   { background: '#f97316', border: '#c2410c' },
-      memory_write:{ background: '#10b981', border: '#047857' },
-      policy:      { background: '#f59e0b', border: '#b45309' },
+      turn:         { background: '#3b82f6', border: '#1d4ed8' },
+      threat:       { background: '#ef4444', border: '#b91c1c' },
+      interceptor:  { background: '#8b5cf6', border: '#6d28d9' },
+      tool_call:    { background: '#f97316', border: '#c2410c' },
+      memory_write: { background: '#10b981', border: '#047857' },
+      policy:       { background: '#f59e0b', border: '#b45309' },
       agent_message:{ background: '#6b7280', border: '#374151' },
     };
 
@@ -154,11 +152,8 @@
         stats: {},
         loading: true,
         graphLoading: true,
-        liveConnected: false,
-        _es: null,
+        error: '',
         _network: null,
-        _graphNodes: null,
-        _graphEdges: null,
 
         get apiKey() {
           return localStorage.getItem('openscript_api_key') || '';
@@ -168,7 +163,7 @@
           if (!this.sessionId) return;
           await Promise.all([this.fetchEvents(), this.fetchStats()]);
           await this.fetchGraph();
-          this.connectSSE();
+          this.startPolling();
         },
 
         async fetchEvents() {
@@ -177,6 +172,7 @@
             const res = await fetch(`/events/${encodeURIComponent(this.sessionId)}`, {
               headers: { 'X-API-KEY': this.apiKey },
             });
+            if (res.status === 401) { this.error = 'Invalid API key — go back and reset your key'; return; }
             if (!res.ok) return;
             const data = await res.json();
             this.events = data.events || [];
@@ -208,19 +204,44 @@
           }
         },
 
+        startPolling() {
+          const poll = async () => {
+            const maxSeq = this.events.length > 0
+              ? Math.max(...this.events.map(e => e.sequence_num))
+              : 0;
+            try {
+              const res = await fetch(
+                `/events/${encodeURIComponent(this.sessionId)}?after_sequence=${maxSeq}`,
+                { headers: { 'X-API-KEY': this.apiKey } },
+              );
+              if (res.ok) {
+                const data = await res.json();
+                const newEvents = data.events || [];
+                if (newEvents.length > 0) {
+                  this.events.push(...newEvents);
+                  await this.fetchStats();
+                }
+              }
+            } catch {}
+            setTimeout(poll, 2000);
+          };
+          setTimeout(poll, 2000);
+        },
+
         renderGraph(data) {
           const container = document.getElementById('graph-container');
           if (!container) return;
 
           const nodes = data.nodes.map(n => {
-            const colors = NODE_COLORS[n.node_type] || NODE_COLORS.agent_message;
+            const c = NODE_COLORS[n.node_type] || NODE_COLORS.agent_message;
             return {
               id: n.id,
               label: `#${n.sequence_num}\n${n.node_type}`,
-              color: { background: colors.background, border: colors.border, highlight: { background: colors.background, border: '#1f2937' } },
+              color: { background: c.background, border: c.border,
+                       highlight: { background: c.background, border: '#1f2937' } },
               font: { color: '#fff', size: 10 },
               shape: n.node_type === 'threat' ? 'diamond' : 'dot',
-              size: n.node_type === 'threat' ? 18 : 12,
+              size:  n.node_type === 'threat' ? 18 : 12,
             };
           });
 
@@ -231,76 +252,46 @@
             arrows: { to: { enabled: true, scaleFactor: 0.5 } },
             color: { color: e.type === 'parent' ? '#f97316' : '#9ca3af' },
             dashes: e.type === 'parent',
-            width: e.type === 'parent' ? 1.5 : 1,
+            width:  e.type === 'parent' ? 1.5 : 1,
           }));
-
-          this._graphNodes = new vis.DataSet(nodes);
-          this._graphEdges = new vis.DataSet(edges);
 
           this._network = new vis.Network(
             container,
-            { nodes: this._graphNodes, edges: this._graphEdges },
+            { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) },
             {
               layout: { hierarchical: { direction: 'LR', sortMethod: 'directed', levelSeparation: 120 } },
               physics: false,
               interaction: { hover: true, tooltipDelay: 100 },
               edges: { smooth: { type: 'cubicBezier', forceDirection: 'horizontal' } },
-            }
+            },
           );
-        },
-
-        connectSSE() {
-          const url = `/events/${encodeURIComponent(this.sessionId)}/stream`
-            + `?after_sequence=${this.events.length > 0 ? Math.max(...this.events.map(e => e.sequence_num)) : 0}`
-            + `&X-API-KEY=${encodeURIComponent(this.apiKey)}`;
-
-          // SSE auth via URL param since EventSource doesn't support headers
-          this._es = new EventSource(
-            `/events/${encodeURIComponent(this.sessionId)}/stream`
-            + `?after_sequence=${this.events.length > 0 ? Math.max(...this.events.map(e => e.sequence_num)) : 0}`
-          );
-
-          this._es.onopen = () => { this.liveConnected = true; };
-          this._es.onerror = () => { this.liveConnected = false; };
-          this._es.onmessage = (e) => {
-            try {
-              const ev = JSON.parse(e.data);
-              this.events.push(ev);
-              this.$nextTick(() => this.fetchStats());
-            } catch {}
-          };
         },
 
         eventClass(ev) {
           const t = ev.event_type || '';
-          if (t === 'threat_detected') return 'event-threat';
+          if (t === 'threat_detected')   return 'event-threat';
           if (t.startsWith('interceptor')) return 'event-interceptor';
-          if (t.startsWith('tool')) return 'event-tool';
-          if (t.startsWith('turn')) return 'event-turn';
+          if (t.startsWith('tool'))      return 'event-tool';
+          if (t.startsWith('turn'))      return 'event-turn';
           return 'event-default';
         },
 
         payloadSummary(ev) {
           const p = ev.payload || {};
-          if (ev.event_type === 'threat_detected') {
+          if (ev.event_type === 'threat_detected')
             return `score=${p.score} | reason=${p.reason || ''}`;
-          }
-          if (ev.event_type === 'interceptor_before') {
-            const inp = p.input_data || {};
-            const text = inp.input || JSON.stringify(inp).slice(0, 80);
-            return `action=${p.action} | input="${text}"`;
-          }
-          if (ev.event_type === 'interceptor_after') {
-            const out = p.output_data || {};
-            return `action=${p.action} | output=${JSON.stringify(out).slice(0, 80)}`;
-          }
+          if (ev.event_type === 'interceptor_before')
+            return `action=${p.action} | input="${(p.input_data || {}).input || JSON.stringify(p.input_data).slice(0, 80)}"`;
+          if (ev.event_type === 'interceptor_after')
+            return `action=${p.action} | output=${JSON.stringify(p.output_data || {}).slice(0, 80)}`;
           return JSON.stringify(p).slice(0, 100);
         },
 
         formatTime(iso) {
           if (!iso) return '';
-          const d = new Date(iso);
-          return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          return new Date(iso).toLocaleTimeString(undefined, {
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+          });
         },
       };
     }

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+
+from dotenv import load_dotenv
+load_dotenv()
 from contextlib import asynccontextmanager
 from pathlib import Path
 
