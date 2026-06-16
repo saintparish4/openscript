@@ -31,7 +31,7 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://openscript:openscript@postgres:5432/openscript
-      OPENSCRIPT_API_KEY: ${OPENSCRIPT_API_KEY:-changeme}
+      OPENSCRIPT_API_KEY: ${OPENSCRIPT_API_KEY:-demo}
       OPENSCRIPT_LOG_FORMAT: json
     depends_on:
       postgres:

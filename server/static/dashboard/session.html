@@ -23,7 +23,27 @@
     .event-default     { border-left: 3px solid #9ca3af; }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-900 min-h-screen">
+<body class="bg-gray-50 text-gray-900 min-h-screen" x-data="sessionApp()" x-init="init()" x-cloak>
+
+  <!-- API key modal -->
+  <div x-show="showKeyModal"
+       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-2xl p-6 w-96">
+      <h2 class="text-lg font-semibold mb-3">Set API Key</h2>
+      <p class="text-sm text-gray-500 mb-4">
+        Enter your <code class="bg-gray-100 px-1 rounded">OPENSCRIPT_API_KEY</code> to authenticate requests.
+      </p>
+      <input x-model="inputKey" type="password" placeholder="API key"
+             @keydown.enter="saveKey()"
+             class="w-full border rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      <div class="flex gap-2 justify-end">
+        <button x-show="apiKey" @click="showKeyModal = false"
+                class="px-4 py-2 text-sm rounded-lg border hover:bg-gray-50">Cancel</button>
+        <button @click="saveKey()"
+                class="px-4 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700">Save</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Header -->
   <header class="bg-gray-900 text-white px-6 py-4 flex items-center gap-3">
@@ -33,12 +53,13 @@
         d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
     </svg>
     <span class="text-lg font-semibold tracking-tight">OpenScript</span>
+    <button @click="showKeyModal = true; inputKey = apiKey"
+            class="ml-auto text-sm px-3 py-1.5 rounded-lg border border-gray-600 hover:border-gray-400 text-gray-300 hover:text-white">
+      🔑 API Key
+    </button>
   </header>
 
-  <main class="max-w-7xl mx-auto px-6 py-8"
-        x-data="sessionApp()"
-        x-init="init()"
-        x-cloak>
+  <main class="max-w-7xl mx-auto px-6 py-8">
 
     <!-- Error banner -->
     <div x-show="error"
@@ -153,14 +174,26 @@
         loading: true,
         graphLoading: true,
         error: '',
+        showKeyModal: false,
+        inputKey: '',
         _network: null,
 
         get apiKey() {
           return localStorage.getItem('openscript_api_key') || '';
         },
 
+        saveKey() {
+          const key = this.inputKey.trim();
+          if (!key) return;
+          localStorage.setItem('openscript_api_key', key);
+          this.showKeyModal = false;
+          this.error = '';
+          this.init();
+        },
+
         async init() {
           if (!this.sessionId) return;
+          if (!this.apiKey) { this.showKeyModal = true; return; }
           await Promise.all([this.fetchEvents(), this.fetchStats()]);
           await this.fetchGraph();
           this.startPolling();
@@ -172,10 +205,15 @@
             const res = await fetch(`/events/${encodeURIComponent(this.sessionId)}`, {
               headers: { 'X-API-KEY': this.apiKey },
             });
-            if (res.status === 401) { this.error = 'Invalid API key — go back and reset your key'; return; }
-            if (!res.ok) return;
+            if (res.status === 401) { this.showKeyModal = true; return; }
+            if (!res.ok) { this.error = `Events endpoint returned ${res.status} — check server logs`; return; }
             const data = await res.json();
             this.events = data.events || [];
+            if (this.events.length === 0) {
+              this.error = 'No events found for this session. Was DATABASE_URL set when the demo ran?';
+            }
+          } catch (e) {
+            this.error = `Cannot reach server: ${e.message}`;
           } finally {
             this.loading = false;
           }
@@ -196,8 +234,9 @@
             const res = await fetch(`/sessions/${encodeURIComponent(this.sessionId)}/graph`, {
               headers: { 'X-API-KEY': this.apiKey },
             });
-            if (!res.ok) return;
+            if (!res.ok) { this.error = `Graph endpoint returned ${res.status} — check server logs`; return; }
             const data = await res.json();
+            if (data.node_count === 0) return;
             this.$nextTick(() => this.renderGraph(data));
           } finally {
             this.graphLoading = false;

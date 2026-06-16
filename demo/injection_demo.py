@@ -56,14 +56,38 @@ class InMemorySink:
         self.events.extend(events)
 
 
-def _build_sink():
+class _CountingProxy:
+    """Wraps EventStore to expose a .events list for the summary table."""
+
+    def __init__(self, inner):
+        self._inner = inner
+        self.events: list[Event] = []
+
+    async def insert_events(self, events: list[Event]) -> None:
+        self.events.extend(events)
+        await self._inner.insert_events(events)
+
+
+async def _build_sink():
     db_url = os.environ.get("DATABASE_URL")
     if db_url:
+        from sqlalchemy import text
         from sqlalchemy.ext.asyncio import create_async_engine
         from events.store import EventStore
 
         engine = create_async_engine(db_url)
-        return EventStore(engine), True
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1 FROM events LIMIT 1"))
+        except Exception as exc:
+            await engine.dispose()
+            console.print(
+                f"[yellow]⚠ Cannot connect to database ({exc.__class__.__name__}: {exc})[/yellow]\n"
+                "[yellow]  Falling back to in-memory mode — events won't be persisted.[/yellow]\n"
+                "[dim]  Start Postgres and run alembic upgrade head, then re-run the demo.[/dim]"
+            )
+            return InMemorySink(), False
+        return _CountingProxy(EventStore(engine)), True
     return InMemorySink(), False
 
 
@@ -119,7 +143,7 @@ PII_TRIGGER = "Tell me about something sensitive"
 
 async def run_demo() -> None:
     session_id = f"demo-{uuid.uuid4().hex[:8]}"
-    sink, persisted = _build_sink()
+    sink, persisted = await _build_sink()
     writer = EventWriter(store=sink, flush_interval=0.05)
     await writer.start()
 
