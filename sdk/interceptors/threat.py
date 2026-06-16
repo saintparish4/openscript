@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -267,7 +267,7 @@ class ThreatInterceptor:
         return count
 
 
-def _extract_text(input_data: dict) -> str:
+def _extract_text(input_data: dict[str, Any]) -> str:
     """Pull a single string from common input_data shapes."""
     if "input" in input_data:
         return str(input_data["input"])
