@@ -20,6 +20,7 @@ def _ctx(output: str, session_id: str = "s1") -> ActionContext:
 # _find_pii unit tests
 # ---------------------------------------------------------------------------
 
+
 def test_detects_email():
     found = _find_pii("Contact us at alice@example.com for more info.")
     labels = [label for _, label in found]
@@ -66,6 +67,7 @@ def test_clean_text_returns_empty():
 # _redact_text unit tests
 # ---------------------------------------------------------------------------
 
+
 def test_redact_email():
     text, labels = _redact_text("Email me at bob@test.org")
     assert "[REDACTED:email]" in text
@@ -96,6 +98,7 @@ def test_no_pii_returns_original():
 # ---------------------------------------------------------------------------
 # PIIInterceptor integration tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_redact_mode_replaces_pii():

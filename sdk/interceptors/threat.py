@@ -20,6 +20,7 @@ logger = structlog.get_logger(__name__)
 # Weights are additive; total is capped at 1.0.
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class _Pattern:
     regex: re.Pattern[str]
@@ -33,52 +34,129 @@ def _p(pattern: str, category: str, weight: float) -> _Pattern:
 
 _PATTERNS: list[_Pattern] = [
     # Role / persona injection
-    _p(r"\bignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|context|rules?)\b", "role_injection", 0.45),
+    _p(
+        r"\bignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|context|rules?)\b",
+        "role_injection",
+        0.45,
+    ),
     _p(r"\byou\s+are\s+now\b", "role_injection", 0.35),
-    _p(r"\bact\s+as\b.{0,30}\b(without|ignore|no)\b.{0,30}\b(restriction|limit|filter|rule|guideline)\b", "role_injection", 0.40),
+    _p(
+        r"\bact\s+as\b.{0,30}\b(without|ignore|no)\b.{0,30}\b(restriction|limit|filter|rule|guideline)\b",
+        "role_injection",
+        0.40,
+    ),
     _p(r"\bnew\s+persona\b", "role_injection", 0.30),
-    _p(r"\bdan\s+mode\b|\bjailbreak\b|\bunrestricted\s+mode\b|\bgod\s+mode\b", "role_injection", 0.50),
+    _p(
+        r"\bdan\s+mode\b|\bjailbreak\b|\bunrestricted\s+mode\b|\bgod\s+mode\b",
+        "role_injection",
+        0.50,
+    ),
     _p(r"\bdo\s+anything\s+now\b|\bdeveloper\s+mode\b", "role_injection", 0.40),
     _p(r"\byou\s+have\s+no\s+(restrictions?|limits?|rules?|guidelines?)\b", "role_injection", 0.40),
-
     # Prompt / system instruction extraction
-    _p(r"\breveal\s+(your\s+)?(system\s+)?(prompt|instructions?|rules?|context)\b", "prompt_extraction", 0.40),
-    _p(r"\bshow\s+(me\s+)?(your\s+)?(system\s+)?(prompt|instructions?|rules?|constraints?)\b", "prompt_extraction", 0.35),
-    _p(r"\bprint\s+(your\s+)?(system\s+)?(prompt|instructions?|context)\b", "prompt_extraction", 0.40),
+    _p(
+        r"\breveal\s+(your\s+)?(system\s+)?(prompt|instructions?|rules?|context)\b",
+        "prompt_extraction",
+        0.40,
+    ),
+    _p(
+        r"\bshow\s+(me\s+)?(your\s+)?(system\s+)?(prompt|instructions?|rules?|constraints?)\b",
+        "prompt_extraction",
+        0.35,
+    ),
+    _p(
+        r"\bprint\s+(your\s+)?(system\s+)?(prompt|instructions?|context)\b",
+        "prompt_extraction",
+        0.40,
+    ),
     _p(r"\brepeat\s+(everything|all\s+text)\s+(above|before|prior)\b", "prompt_extraction", 0.55),
-    _p(r"\bwhat\s+(are\s+)?(your\s+)?(instructions?|rules?|guidelines?|system\s+prompt)\b", "prompt_extraction", 0.25),
-    _p(r"\boutput\s+(your\s+)?(initial|original|full)\s+(prompt|instructions?|context)\b", "prompt_extraction", 0.40),
-
+    _p(
+        r"\bwhat\s+(are\s+)?(your\s+)?(instructions?|rules?|guidelines?|system\s+prompt)\b",
+        "prompt_extraction",
+        0.25,
+    ),
+    _p(
+        r"\boutput\s+(your\s+)?(initial|original|full)\s+(prompt|instructions?|context)\b",
+        "prompt_extraction",
+        0.40,
+    ),
     # Goal hijacking
     _p(r"\bnew\s+(task|instruction|directive|command|objective)\s*:", "goal_hijacking", 0.40),
-    _p(r"\bactually\s+(your\s+)?(real|true|actual)\s+(goal|purpose|objective|task)\b", "goal_hijacking", 0.40),
-    _p(r"\bforget\s+(what|everything)\s+(you\s+)?(were\s+)?(told|instructed|given|asked)\b", "goal_hijacking", 0.45),
-    _p(r"\bdisregard\s+(all\s+)?(previous|prior|above|earlier|your|every)\b", "goal_hijacking", 0.45),
-    _p(r"\bignore\s+the\s+(user\b|user's\b|original\s+request\b|system\s+prompt\b)", "goal_hijacking", 0.35),
-    _p(r"\boverride\s+(your\s+)?(instructions?|rules?|guidelines?|programming)\b", "goal_hijacking", 0.45),
-    _p(r"\byour\s+(real|true|actual|secret)\s+(purpose|mission|goal|function)\b", "goal_hijacking", 0.35),
+    _p(
+        r"\bactually\s+(your\s+)?(real|true|actual)\s+(goal|purpose|objective|task)\b",
+        "goal_hijacking",
+        0.40,
+    ),
+    _p(
+        r"\bforget\s+(what|everything)\s+(you\s+)?(were\s+)?(told|instructed|given|asked)\b",
+        "goal_hijacking",
+        0.45,
+    ),
+    _p(
+        r"\bdisregard\s+(all\s+)?(previous|prior|above|earlier|your|every)\b",
+        "goal_hijacking",
+        0.45,
+    ),
+    _p(
+        r"\bignore\s+the\s+(user\b|user's\b|original\s+request\b|system\s+prompt\b)",
+        "goal_hijacking",
+        0.35,
+    ),
+    _p(
+        r"\boverride\s+(your\s+)?(instructions?|rules?|guidelines?|programming)\b",
+        "goal_hijacking",
+        0.45,
+    ),
+    _p(
+        r"\byour\s+(real|true|actual|secret)\s+(purpose|mission|goal|function)\b",
+        "goal_hijacking",
+        0.35,
+    ),
     _p(r"\bstop\s+being\s+an?\s+\w+\s+(and\s+)?(instead|now)\b", "goal_hijacking", 0.30),
-
     # Delimiter / format injection
     _p(r"^#{3,}\s*(system|instruction|prompt|admin|override)", "delimiter_injection", 0.35),
-    _p(r"---+\s*(system|instruction|prompt|end\s+of\s+(prompt|context))\s*---+", "delimiter_injection", 0.40),
+    _p(
+        r"---+\s*(system|instruction|prompt|end\s+of\s+(prompt|context))\s*---+",
+        "delimiter_injection",
+        0.40,
+    ),
     _p(r"\[INST\]|\[/?SYS\]|<\|system\|>|<\|im_start\|>|<\|im_end\|>", "delimiter_injection", 0.40),
     _p(r"^(USER|HUMAN|ASSISTANT|SYSTEM|AI)\s*:\s*\n", "delimiter_injection", 0.30),
     _p(r"```\s*(system|instruction|prompt)\b", "delimiter_injection", 0.30),
-
     # Indirect / document injection
-    _p(r"\bthe\s+(document|file|webpage?|article|text|content|pdf)\s+(says?|instructs?|tells?|asks?)\s+(?:(?:you|the\s+(?:ai|model|assistant))\s+)?to\b", "indirect_injection", 0.45),
+    _p(
+        r"\bthe\s+(document|file|webpage?|article|text|content|pdf)\s+(says?|instructs?|tells?|asks?)\s+(?:(?:you|the\s+(?:ai|model|assistant))\s+)?to\b",
+        "indirect_injection",
+        0.45,
+    ),
     _p(r"\btranslate\s+this\s+and\s+then\b", "indirect_injection", 0.35),
-    _p(r"\bsummariz\w+\s+this\s+and\s+(also|then|additionally)\b.{0,60}\b(ignore|disregard|forget)\b", "indirect_injection", 0.40),
-    _p(r"\bwhen\s+(the\s+)?user\s+(asks?|says?|mentions?|types?)\b.{0,60}\b(instead|secretly|actually)\b", "indirect_injection", 0.35),
-
+    _p(
+        r"\bsummariz\w+\s+this\s+and\s+(also|then|additionally)\b.{0,60}\b(ignore|disregard|forget)\b",
+        "indirect_injection",
+        0.40,
+    ),
+    _p(
+        r"\bwhen\s+(the\s+)?user\s+(asks?|says?|mentions?|types?)\b.{0,60}\b(instead|secretly|actually)\b",
+        "indirect_injection",
+        0.35,
+    ),
     # Social engineering / context manipulation
     _p(r"\bas\s+a\s+(test|drill|simulation|exercise|demo)\b", "social_engineering", 0.20),
-    _p(r"\bfor\s+(research|educational|academic|testing)\s+purposes?\b", "social_engineering", 0.15),
+    _p(
+        r"\bfor\s+(research|educational|academic|testing)\s+purposes?\b", "social_engineering", 0.15
+    ),
     _p(r"\bhypothetically\s+(speaking|if|assuming)\b", "social_engineering", 0.15),
-    _p(r"\bin\s+a\s+(fictional|hypothetical|alternate|parallel)\s+(world|universe|scenario|story)\b", "social_engineering", 0.20),
+    _p(
+        r"\bin\s+a\s+(fictional|hypothetical|alternate|parallel)\s+(world|universe|scenario|story)\b",
+        "social_engineering",
+        0.20,
+    ),
     _p(r"\bpretend\s+(you\s+)?(are|have\s+no|don't\s+have)\b", "social_engineering", 0.30),
-    _p(r"\bimagine\s+you\s+(have\s+no|are\s+(not|without|free\s+from))\b", "social_engineering", 0.25),
+    _p(
+        r"\bimagine\s+you\s+(have\s+no|are\s+(not|without|free\s+from))\b",
+        "social_engineering",
+        0.25,
+    ),
 ]
 
 

@@ -12,6 +12,7 @@ To view the session graph in the dashboard afterward:
     OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload
     # open http://localhost:8000/dashboard/
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -24,6 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from rich.console import Console
@@ -45,6 +47,7 @@ console = Console()
 # Event sink — Postgres when DATABASE_URL is set, otherwise in-memory
 # ---------------------------------------------------------------------------
 
+
 class InMemorySink:
     def __init__(self):
         self.events: list[Event] = []
@@ -58,6 +61,7 @@ def _build_sink():
     if db_url:
         from sqlalchemy.ext.asyncio import create_async_engine
         from events.store import EventStore
+
         engine = create_async_engine(db_url)
         return EventStore(engine), True
     return InMemorySink(), False
@@ -66,6 +70,7 @@ def _build_sink():
 # ---------------------------------------------------------------------------
 # Mock agent — echoes input, optionally includes PII in response
 # ---------------------------------------------------------------------------
+
 
 class MockAgent:
     """Echoes the user's message.  Adds synthetic PII when the keyword 'sensitive' appears."""
@@ -111,6 +116,7 @@ PII_TRIGGER = "Tell me about something sensitive"
 # Main demo
 # ---------------------------------------------------------------------------
 
+
 async def run_demo() -> None:
     session_id = f"demo-{uuid.uuid4().hex[:8]}"
     sink, persisted = _build_sink()
@@ -118,8 +124,8 @@ async def run_demo() -> None:
     await writer.start()
 
     threat = ThreatInterceptor(writer=writer)  # uses default threshold=0.5
-    pii    = PIIInterceptor(mode=PIIMode.REDACT, writer=writer)
-    ew     = EventWriterInterceptor(writer=writer)
+    pii = PIIInterceptor(mode=PIIMode.REDACT, writer=writer)
+    ew = EventWriterInterceptor(writer=writer)
 
     agent = MockAgent()
     mw = OpenScriptMiddleware(
@@ -128,11 +134,13 @@ async def run_demo() -> None:
     )
 
     console.print()
-    console.print(Panel.fit(
-        "[bold white]OpenScript — Prompt Injection Demo[/bold white]\n"
-        f"[dim]Session: {session_id}[/dim]",
-        border_style="blue",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold white]OpenScript — Prompt Injection Demo[/bold white]\n"
+            f"[dim]Session: {session_id}[/dim]",
+            border_style="blue",
+        )
+    )
     console.print()
 
     results: list[dict] = []
@@ -150,9 +158,7 @@ async def run_demo() -> None:
             output = str(e)[:60]
 
         short_text = text[:55] + "..." if len(text) > 55 else text
-        console.print(
-            f"  {status}  score=[yellow]{score:.3f}[/yellow]  [dim]{short_text}[/dim]"
-        )
+        console.print(f"  {status}  score=[yellow]{score:.3f}[/yellow]  [dim]{short_text}[/dim]")
         results.append({"text": text, "score": score, "blocked": False, "type": "normal"})
 
     console.print()
@@ -172,10 +178,9 @@ async def run_demo() -> None:
         signal_str = ", ".join(signals.keys()) if signals else "none"
         short = text[:50] + "..." if len(text) > 50 else text
         console.print(
-            f"  {status}  score=[red]{score:.3f}[/red]  "
-            f"signals=[dim]{signal_str}[/dim]"
+            f"  {status}  score=[red]{score:.3f}[/red]  " f"signals=[dim]{signal_str}[/dim]"
         )
-        console.print(f"         [dim italic]\"{short}\"[/dim italic]")
+        console.print(f'         [dim italic]"{short}"[/dim italic]')
         results.append({"text": text, "score": score, "blocked": blocked, "type": "injection"})
 
     console.print()
@@ -183,7 +188,9 @@ async def run_demo() -> None:
     # --- PII trigger ---
     console.print("[bold magenta]── PII redaction ──[/bold magenta]")
     try:
-        pii_result = await mw.invoke({"input": PII_TRIGGER}, session_id=session_id, agent_id="mock-agent")
+        pii_result = await mw.invoke(
+            {"input": PII_TRIGGER}, session_id=session_id, agent_id="mock-agent"
+        )
         output = pii_result.get("output", "")
         console.print(f"  [green]✓ REDACTED[/green]  output: [dim]{output[:100]}[/dim]")
     except ActionBlockedError as e:
@@ -228,27 +235,31 @@ async def run_demo() -> None:
 
     console.print()
     if persisted:
-        console.print(Panel(
-            f"[bold]Session saved to Postgres.[/bold] Open the dashboard to visualize it:\n\n"
-            f"  [cyan]http://localhost:8000/dashboard/session.html?session_id={session_id}[/cyan]\n\n"
-            "[dim]Make sure the server is running: "
-            "OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload[/dim]",
-            border_style="green",
-            title="[dim]Visualize[/dim]",
-        ))
+        console.print(
+            Panel(
+                f"[bold]Session saved to Postgres.[/bold] Open the dashboard to visualize it:\n\n"
+                f"  [cyan]http://localhost:8000/dashboard/session.html?session_id={session_id}[/cyan]\n\n"
+                "[dim]Make sure the server is running: "
+                "OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload[/dim]",
+                border_style="green",
+                title="[dim]Visualize[/dim]",
+            )
+        )
     else:
-        console.print(Panel(
-            "[bold]To visualize this session in the dashboard:[/bold]\n\n"
-            "  1. [cyan]docker compose up -d[/cyan]\n"
-            "  2. [cyan]alembic upgrade head[/cyan]\n"
-            "  3. [cyan]DATABASE_URL=postgresql+asyncpg://openscript:openscript@localhost:5432/openscript \\\n"
-            "     OPENSCRIPT_API_KEY=demo python demo/injection_demo.py[/cyan]\n"
-            "  4. [cyan]OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload[/cyan]\n"
-            "  5. Open [link=http://localhost:8000/dashboard/]http://localhost:8000/dashboard/[/link]\n\n"
-            "[dim]Re-running with DATABASE_URL set persists events so the dashboard has data.[/dim]",
-            border_style="dim",
-            title="[dim]Next steps[/dim]",
-        ))
+        console.print(
+            Panel(
+                "[bold]To visualize this session in the dashboard:[/bold]\n\n"
+                "  1. [cyan]docker compose up -d[/cyan]\n"
+                "  2. [cyan]alembic upgrade head[/cyan]\n"
+                "  3. [cyan]DATABASE_URL=postgresql+asyncpg://openscript:openscript@localhost:5432/openscript \\\n"
+                "     OPENSCRIPT_API_KEY=demo python demo/injection_demo.py[/cyan]\n"
+                "  4. [cyan]OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload[/cyan]\n"
+                "  5. Open [link=http://localhost:8000/dashboard/]http://localhost:8000/dashboard/[/link]\n\n"
+                "[dim]Re-running with DATABASE_URL set persists events so the dashboard has data.[/dim]",
+                border_style="dim",
+                title="[dim]Next steps[/dim]",
+            )
+        )
     console.print()
 
 

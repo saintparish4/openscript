@@ -23,7 +23,11 @@ class ActionBlockedError(RuntimeError):
     def __init__(self, reason: str = "", interceptor: str = "") -> None:
         self.reason = reason
         self.interceptor = interceptor
-        msg = f"Action blocked by {interceptor}: {reason}" if interceptor else f"Action blocked: {reason}"
+        msg = (
+            f"Action blocked by {interceptor}: {reason}"
+            if interceptor
+            else f"Action blocked: {reason}"
+        )
         super().__init__(msg)
 
 

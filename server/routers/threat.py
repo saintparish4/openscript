@@ -64,9 +64,7 @@ async def policy_evaluate(req: PolicyEvalRequest) -> PolicyEvalResponse:
             evaluated.append(policy_name)
             agent_has_cap = req.capabilities.get(capability, False)
             if not agent_has_cap:
-                denied_reasons.append(
-                    f"action '{req.action}' requires capability '{capability}'"
-                )
+                denied_reasons.append(f"action '{req.action}' requires capability '{capability}'")
 
     if denied_reasons:
         return PolicyEvalResponse(

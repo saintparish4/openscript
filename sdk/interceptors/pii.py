@@ -38,7 +38,9 @@ _PII_PATTERNS: list[_PIIPattern] = [
     # API / bearer tokens — must appear before generic patterns
     _p(r"\b(sk-|Bearer\s+|token[=:\s]+|api[_\-]?key[=:\s]+)[A-Za-z0-9\-_]{20,}\b", "api_key"),
     # IPv4 addresses
-    _p(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b", "ip_address"),
+    _p(
+        r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b", "ip_address"
+    ),
 ]
 
 # Credit card: 13-16 digits optionally separated by spaces or dashes.
@@ -50,8 +52,7 @@ def _luhn(number: str) -> bool:
     digits = [int(d) for d in number if d.isdigit()]
     digits.reverse()
     total = sum(
-        d if i % 2 == 0 else (d * 2 - 9 if d * 2 > 9 else d * 2)
-        for i, d in enumerate(digits)
+        d if i % 2 == 0 else (d * 2 - 9 if d * 2 > 9 else d * 2) for i, d in enumerate(digits)
     )
     return total % 10 == 0
 
@@ -89,9 +90,11 @@ def _redact_text(text: str) -> tuple[str, list[str]]:
     text = _CC_RE.sub(_cc_replace, text)
 
     for pat in _PII_PATTERNS:
+
         def _replace(m: re.Match[str], label: str = pat.label) -> str:
             found_labels.append(label)
             return f"[REDACTED:{label}]"
+
         text = pat.regex.sub(_replace, text)
 
     return text, list(dict.fromkeys(found_labels))  # deduplicate, preserve order
