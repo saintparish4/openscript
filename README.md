@@ -4,7 +4,7 @@
 
 OpenScript provides an **Interceptor protocol** and **middleware pipeline** that wraps any LLM agent. You register interceptors that run before and after every agent action. The SDK ships with a `NoopInterceptor` for wiring and testing — proprietary security interceptors are available separately via `openscript-server`.
 
-## Getting Started in 5 Minutes
+## Getting Started in 5 Minutes    
 
 ### 1. Install
 
