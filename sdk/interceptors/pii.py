@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -123,7 +124,7 @@ def _walk_redact(obj: Any) -> tuple[Any, list[str]]:
     return obj, []
 
 
-class PIIInterceptor:
+class PIIPolicy:
     """Scans agent output for PII and either redacts or blocks.
 
     Runs in after_action. before_action is a pass-through.
@@ -193,3 +194,15 @@ class PIIInterceptor:
         count = self._sequence_counters.get(session_id, 0) + 1
         self._sequence_counters[session_id] = count
         return count
+
+
+class PIIInterceptor(PIIPolicy):
+    """Deprecated — use PIIPolicy instead."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        warnings.warn(
+            "PIIInterceptor is deprecated; use PIIPolicy instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)

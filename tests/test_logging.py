@@ -7,7 +7,7 @@ import pytest
 import structlog
 
 import sdk.logging as sdk_logging
-from sdk import OpenScriptMiddleware, configure_logging
+from sdk import SecureAgent, configure_logging
 
 
 class FakeAgent:
@@ -77,20 +77,20 @@ class TestEnsureConfigured:
         assert sdk_logging._configured is True
 
 
-class TestMiddlewareAutoConfigures:
+class TestSecureAgentAutoConfigures:
     @pytest.mark.asyncio
-    async def test_middleware_init_triggers_configure(self):
+    async def test_secure_agent_init_triggers_configure(self):
         assert sdk_logging._configured is False
         agent = FakeAgent()
-        OpenScriptMiddleware(agent=agent, interceptors=[])
+        SecureAgent(agent=agent, policies=[])
         assert sdk_logging._configured is True
 
     @pytest.mark.asyncio
-    async def test_middleware_logs_in_json_when_configured(self, capsys):
+    async def test_secure_agent_logs_in_json_when_configured(self, capsys):
         configure_logging(json_output=True)
         agent = FakeAgent()
-        mw = OpenScriptMiddleware(agent=agent, interceptors=[])
-        await mw.invoke({"input": "test"})
+        sa = SecureAgent(agent=agent, policies=[])
+        await sa.invoke({"input": "test"})
 
         root = logging.getLogger()
         assert any(

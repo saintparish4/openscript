@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-class EventType(str, Enum):  # noqa: UP042
+class EventType(str, Enum):
     TURN_STARTED = "turn_start"
     TURN_END = "turn_end"
     TOOL_CALL = "tool_call"

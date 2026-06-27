@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -180,7 +181,7 @@ def score_text(text: str) -> tuple[float, dict[str, float]]:
     return total, category_totals
 
 
-class ThreatInterceptor:
+class PromptInjectionPolicy:
     """Scores input text for prompt-injection signals and blocks on threshold breach.
 
     Stateless scoring runs on every before_action call. after_action is a pass-through.
@@ -280,3 +281,15 @@ def _extract_text(input_data: dict[str, Any]) -> str:
                 parts.append(str(msg))
         return " ".join(parts)
     return " ".join(str(v) for v in input_data.values())
+
+
+class ThreatInterceptor(PromptInjectionPolicy):
+    """Deprecated — use PromptInjectionPolicy instead."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        warnings.warn(
+            "ThreatInterceptor is deprecated; use PromptInjectionPolicy instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)

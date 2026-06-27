@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import warnings
+from typing import Any
+
 import structlog
 
 from contracts.server_types import Event, EventType
@@ -9,10 +12,10 @@ from events.writer import EventWriter
 logger = structlog.get_logger(__name__)
 
 
-class EventWriterInterceptor:
+class AuditPolicy:
     """Writes before/after events to the event store for every agent action.
 
-    Satisfies the contracts/Interceptor protocol. Lives alongside
+    Satisfies the contracts/Policy protocol. Lives alongside
     NoopInterceptor in sdk/interceptors/.
     """
 
@@ -61,3 +64,15 @@ class EventWriterInterceptor:
         count = self._sequence_counters.get(session_id, 0) + 1
         self._sequence_counters[session_id] = count
         return count
+
+
+class EventWriterInterceptor(AuditPolicy):
+    """Deprecated — use AuditPolicy instead."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        warnings.warn(
+            "EventWriterInterceptor is deprecated; use AuditPolicy instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
