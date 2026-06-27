@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from contracts.types import ActionContext, FailureMode, InterceptorDecision
-from sdk.interceptors.pii import PIIInterceptor, PIIMode, _find_pii, _redact_text
+from sdk.interceptors.pii import PIIMode, PIIPolicy, _find_pii, _redact_text
 
 
 def _ctx(output: str, session_id: str = "s1") -> ActionContext:
@@ -76,7 +76,7 @@ def test_redact_email():
 
 
 def test_redact_ssn():
-    text, labels = _redact_text("His SSN is 987-65-4321.")
+    text, _labels = _redact_text("His SSN is 987-65-4321.")
     assert "[REDACTED:ssn]" in text
 
 
@@ -96,15 +96,15 @@ def test_no_pii_returns_original():
 
 
 # ---------------------------------------------------------------------------
-# PIIInterceptor integration tests
+# PIIPolicy integration tests
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_redact_mode_replaces_pii():
-    interceptor = PIIInterceptor(mode=PIIMode.REDACT)
+    policy = PIIPolicy(mode=PIIMode.REDACT)
     ctx = _ctx("Your email is alice@example.com")
-    result = await interceptor.after_action(ctx)
+    result = await policy.after_action(ctx)
     assert "[REDACTED:email]" in result.output_data["output"]
     assert result.decision == InterceptorDecision.ALLOW
     assert result.metadata["pii"]["redacted"] is True
@@ -112,9 +112,9 @@ async def test_redact_mode_replaces_pii():
 
 @pytest.mark.asyncio
 async def test_deny_mode_sets_decision():
-    interceptor = PIIInterceptor(mode=PIIMode.DENY)
+    policy = PIIPolicy(mode=PIIMode.DENY)
     ctx = _ctx("SSN: 123-45-6789")
-    result = await interceptor.after_action(ctx)
+    result = await policy.after_action(ctx)
     assert result.decision == InterceptorDecision.DENY
     assert result.metadata["pii"]["redacted"] is False
     assert "ssn" in result.metadata["pii"]["found"]
@@ -122,9 +122,9 @@ async def test_deny_mode_sets_decision():
 
 @pytest.mark.asyncio
 async def test_clean_output_untouched():
-    interceptor = PIIInterceptor()
+    policy = PIIPolicy()
     ctx = _ctx("The answer is 42.")
-    result = await interceptor.after_action(ctx)
+    result = await policy.after_action(ctx)
     assert result.output_data["output"] == "The answer is 42."
     assert result.metadata["pii"]["found"] == []
     assert result.metadata["pii"]["redacted"] is False
@@ -132,23 +132,23 @@ async def test_clean_output_untouched():
 
 @pytest.mark.asyncio
 async def test_before_action_passthrough():
-    interceptor = PIIInterceptor()
+    policy = PIIPolicy()
     ctx = _ctx("some output")
     ctx.input_data = {"input": "my email is me@example.com"}
-    result = await interceptor.before_action(ctx)
+    result = await policy.before_action(ctx)
     # before_action should NOT scan input — only after_action scans output
     assert result.input_data == ctx.input_data
 
 
 @pytest.mark.asyncio
 async def test_failure_mode_is_fail_open():
-    interceptor = PIIInterceptor()
-    assert interceptor.failure_mode == FailureMode.FAIL_OPEN
+    policy = PIIPolicy()
+    assert policy.failure_mode == FailureMode.FAIL_OPEN
 
 
 @pytest.mark.asyncio
 async def test_nested_dict_output_redacted():
-    interceptor = PIIInterceptor(mode=PIIMode.REDACT)
+    policy = PIIPolicy(mode=PIIMode.REDACT)
     ctx = ActionContext(
         action="invoke",
         agent_id="agent",
@@ -156,17 +156,17 @@ async def test_nested_dict_output_redacted():
         input_data={"input": "q"},
         output_data={"result": {"user": "alice@example.com", "note": "call 555-867-5309"}},
     )
-    result = await interceptor.after_action(ctx)
+    result = await policy.after_action(ctx)
     assert "[REDACTED:email]" in result.output_data["result"]["user"]
     assert "[REDACTED:phone]" in result.output_data["result"]["note"]
 
 
 @pytest.mark.asyncio
 async def test_multiple_pii_types_all_found():
-    interceptor = PIIInterceptor(mode=PIIMode.REDACT)
+    policy = PIIPolicy(mode=PIIMode.REDACT)
     raw = "email: user@example.com | SSN: 123-45-6789 | card: 4111 1111 1111 1111"
     ctx = _ctx(raw)
-    result = await interceptor.after_action(ctx)
+    result = await policy.after_action(ctx)
     found = result.metadata["pii"]["found"]
     assert "email" in found
     assert "ssn" in found

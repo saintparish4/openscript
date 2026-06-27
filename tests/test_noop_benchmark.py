@@ -4,7 +4,7 @@ import warnings
 
 import pytest
 
-from sdk import NoopInterceptor, OpenScriptMiddleware
+from sdk import NoopInterceptor, SecureAgent
 
 WARMUP_ROUNDS = 5
 BENCH_ROUNDS = 50
@@ -16,17 +16,17 @@ class FakeAgent:
         return {"output": "ok"}
 
 
-def _run_once(mw):
-    return asyncio.run(mw.invoke({"input": "bench"}))
+def _run_once(sa):
+    return asyncio.run(sa.invoke({"input": "bench"}))
 
 
 @pytest.mark.benchmark
 def test_noop_overhead(benchmark):
-    """Baseline benchmark for NoopInterceptor middleware overhead."""
+    """Baseline benchmark for NoopInterceptor policy overhead."""
     agent = FakeAgent()
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[NoopInterceptor()])
+    sa = SecureAgent(agent=agent, policies=[NoopInterceptor()])
 
-    result = benchmark(_run_once, mw)
+    result = benchmark(_run_once, sa)
     assert result["output"] == "ok"
 
 
@@ -34,15 +34,15 @@ def test_noop_overhead(benchmark):
 def test_noop_overhead_baseline():
     """Records per-call overhead as a visible baseline in test output."""
     agent = FakeAgent()
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[NoopInterceptor()])
+    sa = SecureAgent(agent=agent, policies=[NoopInterceptor()])
 
     for _ in range(WARMUP_ROUNDS):
-        _run_once(mw)
+        _run_once(sa)
 
     elapsed = []
     for _ in range(BENCH_ROUNDS):
         start = time.perf_counter()
-        result = _run_once(mw)
+        result = _run_once(sa)
         elapsed.append(time.perf_counter() - start)
 
     assert result["output"] == "ok"

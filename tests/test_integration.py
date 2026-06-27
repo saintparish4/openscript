@@ -13,7 +13,7 @@ import pytest
 
 from sdk import (
     NoopInterceptor,
-    OpenScriptMiddleware,
+    SecureAgent,
     wrap_agent,
     wrap_graph_agent,
 )
@@ -62,7 +62,7 @@ class TestLangChainIntegration:
     async def test_wrap_agent_invoke_with_noop(self):
         """wrap_agent + NoopInterceptor produces correct output from mock LLM."""
         llm = MockLLMAgent(responses=[{"output": "Hello from LLM"}])
-        secure = wrap_agent(llm, interceptors=[NoopInterceptor()])
+        secure = wrap_agent(llm, policies=[NoopInterceptor()])
         result = await secure.invoke({"input": "hello"})
         assert result == {"output": "Hello from LLM"}
 
@@ -70,7 +70,7 @@ class TestLangChainIntegration:
     async def test_wrap_agent_stream_with_noop(self):
         """wrap_agent streaming path collects all tokens from mock LLM."""
         llm = MockLLMAgent(responses=[{"output": "token1 token2 token3"}])
-        secure = wrap_agent(llm, interceptors=[NoopInterceptor()])
+        secure = wrap_agent(llm, policies=[NoopInterceptor()])
         tokens = [chunk async for chunk in secure.stream({"input": "hello"})]
         assert tokens == [
             {"token": "token1"},
@@ -89,7 +89,7 @@ class TestLangGraphIntegration:
     async def test_wrap_graph_agent_invoke_with_noop(self):
         """wrap_graph_agent + NoopInterceptor runs mock graph end-to-end."""
         graph = MockLLMAgent(responses=[{"messages": [{"role": "assistant", "content": "Hi!"}]}])
-        secure = wrap_graph_agent(graph, interceptors=[NoopInterceptor()])
+        secure = wrap_graph_agent(graph, policies=[NoopInterceptor()])
         result = await secure.invoke({"messages": [{"role": "user", "content": "hello"}]})
         assert result["messages"] == [{"role": "assistant", "content": "Hi!"}]
 
@@ -97,36 +97,36 @@ class TestLangGraphIntegration:
     async def test_wrap_graph_agent_stream_with_noop(self):
         """wrap_graph_agent streaming collects tokens from mock graph."""
         graph = MockLLMAgent(responses=[{"output": "graph stream"}])
-        secure = wrap_graph_agent(graph, interceptors=[NoopInterceptor()])
+        secure = wrap_graph_agent(graph, policies=[NoopInterceptor()])
         tokens = [chunk async for chunk in secure.stream({"input": "run"})]
         assert len(tokens) == 2
         assert tokens[0] == {"token": "graph"}
 
 
 # ---------------------------------------------------------------------------
-# PRD § Direct OpenScriptMiddleware usage
+# PRD § Direct SecureAgent usage
 # ---------------------------------------------------------------------------
 
 
-class TestDirectMiddlewareIntegration:
+class TestDirectSecureAgentIntegration:
     @pytest.mark.asyncio
-    async def test_middleware_invoke_default_noop(self):
-        """Middleware with no interceptors defaults to NoopInterceptor."""
+    async def test_secure_agent_invoke_default_noop(self):
+        """SecureAgent with no policies defaults to NoopInterceptor."""
         llm = MockLLMAgent(responses=[{"output": "default noop"}])
-        mw = OpenScriptMiddleware(agent=llm)
-        result = await mw.invoke({"input": "test"})
+        sa = SecureAgent(agent=llm)
+        result = await sa.invoke({"input": "test"})
         assert result["output"] == "default noop"
 
     @pytest.mark.asyncio
-    async def test_middleware_invoke_explicit_noop(self):
-        """Mirrors PRD: OpenScriptMiddleware(agent=agent, interceptors=[...])."""
+    async def test_secure_agent_invoke_explicit_noop(self):
+        """Mirrors PRD: SecureAgent(agent=agent, policies=[...])."""
         llm = MockLLMAgent(responses=[{"output": "secured response"}])
-        mw = OpenScriptMiddleware(agent=llm, interceptors=[NoopInterceptor()])
-        result = await mw.invoke({"input": "user prompt"})
+        sa = SecureAgent(agent=llm, policies=[NoopInterceptor()])
+        result = await sa.invoke({"input": "user prompt"})
         assert result["output"] == "secured response"
 
     @pytest.mark.asyncio
-    async def test_middleware_multi_turn_conversation(self):
+    async def test_secure_agent_multi_turn_conversation(self):
         """Simulates multiple invoke calls (multi-turn) against same agent."""
         llm = MockLLMAgent(
             responses=[
@@ -135,19 +135,19 @@ class TestDirectMiddlewareIntegration:
                 {"output": "Goodbye!"},
             ]
         )
-        mw = OpenScriptMiddleware(agent=llm, interceptors=[NoopInterceptor()])
+        sa = SecureAgent(agent=llm, policies=[NoopInterceptor()])
 
-        r1 = await mw.invoke({"input": "hi"})
+        r1 = await sa.invoke({"input": "hi"})
         assert r1["output"] == "Hello! How can I help?"
 
-        r2 = await mw.invoke({"input": "what's the weather?"})
+        r2 = await sa.invoke({"input": "what's the weather?"})
         assert r2["output"] == "Here is the weather forecast."
 
-        r3 = await mw.invoke({"input": "bye"})
+        r3 = await sa.invoke({"input": "bye"})
         assert r3["output"] == "Goodbye!"
 
     @pytest.mark.asyncio
-    async def test_middleware_passes_kwargs(self):
+    async def test_secure_agent_passes_kwargs(self):
         """Kwargs like agent_id and session_id flow through to the agent."""
 
         class KwargsCapturingAgent:
@@ -159,8 +159,8 @@ class TestDirectMiddlewareIntegration:
                 return {"output": "ok"}
 
         agent = KwargsCapturingAgent()
-        mw = OpenScriptMiddleware(agent=agent, interceptors=[NoopInterceptor()])
-        await mw.invoke({"input": "test"}, agent_id="agent-1", session_id="sess-42")
+        sa = SecureAgent(agent=agent, policies=[NoopInterceptor()])
+        await sa.invoke({"input": "test"}, agent_id="agent-1", session_id="sess-42")
         assert agent.captured_kwargs["agent_id"] == "agent-1"
         assert agent.captured_kwargs["session_id"] == "sess-42"
 
@@ -173,6 +173,6 @@ class TestDirectMiddlewareIntegration:
                 return {"output": "sync agent reply"}
 
         agent = SyncOnlyAgent()
-        mw = OpenScriptMiddleware(agent=agent, interceptors=[NoopInterceptor()])
-        result = await mw.invoke({"input": "hello"})
+        sa = SecureAgent(agent=agent, policies=[NoopInterceptor()])
+        result = await sa.invoke({"input": "hello"})
         assert result["output"] == "sync agent reply"

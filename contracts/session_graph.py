@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from events.store import EventStore
 
 
-class NodeType(str, Enum):  # noqa: UP042
+class NodeType(str, Enum):
     TURN = "turn"
     TOOL_CALL = "tool_call"
     MEMORY_WRITE = "memory_write"

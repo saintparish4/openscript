@@ -1,4 +1,4 @@
-from contracts.interceptor import Interceptor
+from contracts.interceptor import BasePolicy, Interceptor, Policy
 from contracts.types import (
     ActionBlockedError,
     ActionContext,
@@ -10,24 +10,32 @@ from contracts.types import (
 from sdk.integrations.langchain import wrap_agent
 from sdk.integrations.langgraph import wrap_graph_agent
 from sdk.interceptors.base import NoopInterceptor
-from sdk.interceptors.pii import PIIInterceptor, PIIMode
-from sdk.interceptors.threat import ThreatInterceptor
+from sdk.interceptors.event_writer import AuditPolicy, EventWriterInterceptor
+from sdk.interceptors.pii import PIIInterceptor, PIIMode, PIIPolicy
+from sdk.interceptors.threat import PromptInjectionPolicy, ThreatInterceptor
 from sdk.logging import configure_logging
-from sdk.middleware.middleware import OpenScriptMiddleware
+from sdk.middleware.middleware import OpenScriptMiddleware, SecureAgent
 
 __all__ = [
     "ActionBlockedError",
     "ActionContext",
     "AgentCapabilities",
+    "AuditPolicy",
+    "BasePolicy",
+    "EventWriterInterceptor",  # deprecated alias
     "FailureMode",
-    "Interceptor",
+    "Interceptor",  # deprecated alias
     "InterceptorDecision",
     "InterceptorResult",
     "NoopInterceptor",
-    "OpenScriptMiddleware",
-    "PIIInterceptor",
+    "OpenScriptMiddleware",  # deprecated alias
+    "PIIInterceptor",  # deprecated alias
     "PIIMode",
-    "ThreatInterceptor",
+    "PIIPolicy",
+    "Policy",
+    "PromptInjectionPolicy",
+    "SecureAgent",
+    "ThreatInterceptor",  # deprecated alias
     "configure_logging",
     "wrap_agent",
     "wrap_graph_agent",

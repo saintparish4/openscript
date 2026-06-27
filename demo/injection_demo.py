@@ -28,12 +28,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich import box
 
-from contracts.server_types import Event, EventType
+from contracts.server_types import Event
 from contracts.types import ActionBlockedError
 from events.writer import EventWriter
 from sdk import OpenScriptMiddleware
@@ -73,6 +73,7 @@ async def _build_sink():
     if db_url:
         from sqlalchemy import text
         from sqlalchemy.ext.asyncio import create_async_engine
+
         from events.store import EventStore
 
         engine = create_async_engine(db_url)
@@ -104,9 +105,9 @@ class MockAgent:
         if "sensitive" in user_text.lower():
             return {
                 "output": (
-                    f"Here is the info you asked for: "
-                    f"user@example.com | SSN: 123-45-6789 | "
-                    f"card: 4111 1111 1111 1111 | phone: 555-867-5309"
+                    "Here is the info you asked for: "
+                    "user@example.com | SSN: 123-45-6789 | "
+                    "card: 4111 1111 1111 1111 | phone: 555-867-5309"
                 )
             }
         return {"output": f"Understood: {user_text}"}
@@ -178,7 +179,7 @@ async def run_demo() -> None:
             status = "[green]✓ ALLOWED[/green]"
             output = result.get("output", "")[:60]
         except ActionBlockedError as e:
-            status = f"[red]✗ BLOCKED[/red]"
+            status = "[red]✗ BLOCKED[/red]"
             output = str(e)[:60]
 
         short_text = text[:55] + "..." if len(text) > 55 else text

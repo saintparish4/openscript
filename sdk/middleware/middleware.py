@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import warnings
 from collections.abc import AsyncGenerator, Sequence
 from typing import Any
 
 import structlog
 
-from contracts.interceptor import Interceptor
+from contracts.interceptor import Policy
 from contracts.types import ActionBlockedError, ActionContext, FailureMode, InterceptorDecision
 from sdk.interceptors.base import NoopInterceptor
 from sdk.logging import _ensure_configured
@@ -14,21 +15,32 @@ from sdk.logging import _ensure_configured
 logger = structlog.get_logger(__name__)
 
 
-class OpenScriptMiddleware:
-    """Thin orchestrator that runs a list of Interceptors around agent actions.
+class SecureAgent:
+    """Orchestrates a list of Policies around agent actions.
 
     Contains zero detection or security logic — all behavior is provided by
-    the registered Interceptor implementations.
+    the registered Policy implementations.
     """
 
     def __init__(
         self,
         agent: Any,
-        interceptors: Sequence[Interceptor] | None = None,
+        policies: Sequence[Policy] | None = None,
+        *,
+        interceptors: Sequence[Policy] | None = None,
     ) -> None:
         _ensure_configured()
+        if interceptors is not None:
+            warnings.warn(
+                "interceptors= is deprecated; use policies= instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if policies is not None:
+                raise ValueError("Cannot specify both policies= and interceptors=.")
+            policies = interceptors
         self._agent = agent
-        self._interceptors: Sequence[Interceptor] = interceptors or [NoopInterceptor()]
+        self._policies: Sequence[Policy] = policies or [NoopInterceptor()]
 
     async def invoke(self, input_data: dict[str, Any], **kwargs: Any) -> Any:
         context = ActionContext(
@@ -46,7 +58,7 @@ class OpenScriptMiddleware:
         context.output_data = result if isinstance(result, dict) else {"output": result}
         context = await self._run_after(context)
 
-        # Return context.output_data so after_action interceptors (e.g. PIIInterceptor)
+        # Return context.output_data so after_action policies (e.g. PIIPolicy)
         # can modify the output that callers receive.
         if isinstance(result, dict):
             return context.output_data
@@ -69,38 +81,38 @@ class OpenScriptMiddleware:
         await self._run_after(context)
 
     async def _run_before(self, context: ActionContext) -> ActionContext:
-        for interceptor in self._interceptors:
+        for policy in self._policies:
             try:
-                context = await interceptor.before_action(context)
+                context = await policy.before_action(context)
             except Exception as exc:
-                context = self._handle_failure(interceptor, exc, context, "before_action")
+                context = self._handle_failure(policy, exc, context, "before_action")
                 continue
             if context.decision in (InterceptorDecision.DENY, InterceptorDecision.REQUIRE_APPROVAL):
                 raise ActionBlockedError(
                     reason=context.decision_reason,
-                    interceptor=type(interceptor).__name__,
+                    interceptor=type(policy).__name__,
                 )
         return context
 
     async def _run_after(self, context: ActionContext) -> ActionContext:
-        for interceptor in self._interceptors:
+        for policy in self._policies:
             try:
-                context = await interceptor.after_action(context)
+                context = await policy.after_action(context)
             except Exception as exc:
-                context = self._handle_failure(interceptor, exc, context, "after_action")
+                context = self._handle_failure(policy, exc, context, "after_action")
         return context
 
     def _handle_failure(
         self,
-        interceptor: Interceptor,
+        policy: Policy,
         exc: Exception,
         context: ActionContext,
         phase: str,
     ) -> ActionContext:
-        interceptor_name = type(interceptor).__name__
+        interceptor_name = type(policy).__name__
         log = logger.bind(interceptor=interceptor_name, phase=phase, error=str(exc))
 
-        match interceptor.failure_mode:
+        match policy.failure_mode:
             case FailureMode.FAIL_OPEN:
                 log.warning("interceptor_error_fail_open")
                 return context
@@ -137,3 +149,15 @@ class OpenScriptMiddleware:
                 yield chunk
         else:
             raise TypeError(f"Agent {type(self._agent)} has no stream or astream method")
+
+
+class OpenScriptMiddleware(SecureAgent):
+    """Deprecated — use SecureAgent instead."""
+
+    def __init__(self, agent: Any, **kwargs: Any) -> None:
+        warnings.warn(
+            "OpenScriptMiddleware is deprecated; use SecureAgent instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(agent, **kwargs)

@@ -4,13 +4,13 @@ import asyncio
 
 import pytest
 
-from contracts.interceptor import Interceptor
+from contracts.interceptor import Policy
 from contracts.server_types import Event, EventType
 from contracts.session_graph import SessionGraph
 from contracts.types import FailureMode
 from events.writer import EventWriter
-from sdk import OpenScriptMiddleware
-from sdk.interceptors.event_writer import EventWriterInterceptor
+from sdk import SecureAgent
+from sdk.interceptors.event_writer import AuditPolicy
 
 
 class FakeAgent:
@@ -44,17 +44,17 @@ class InMemoryEvents:
 
 
 @pytest.mark.asyncio
-async def test_event_writer_interceptor_writes_before_and_after():
-    """End-to-end: OpenScriptMiddleware -> EventWriterInterceptor -> events persisted."""
+async def test_audit_policy_writes_before_and_after():
+    """End-to-end: SecureAgent -> AuditPolicy -> events persisted."""
     store = InMemoryEvents()
     writer = EventWriter(store=store, flush_interval=0.05)
     await writer.start()
 
-    interceptor = EventWriterInterceptor(writer=writer)
+    policy = AuditPolicy(writer=writer)
     agent = FakeAgent()
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+    sa = SecureAgent(agent=agent, policies=[policy])
 
-    result = await mw.invoke(
+    result = await sa.invoke(
         {"input": "hello"},
         session_id="sess-1",
         agent_id="agent-1",
@@ -73,14 +73,14 @@ async def test_event_writer_interceptor_writes_before_and_after():
 
 
 @pytest.mark.asyncio
-async def test_event_writer_interceptor_satisfies_protocol():
-    """EventWriterInterceptor is a valid Interceptor per contracts."""
+async def test_audit_policy_satisfies_policy_protocol():
+    """AuditPolicy is a valid Policy per contracts."""
     store = InMemoryEvents()
     writer = EventWriter(store=store)
-    interceptor = EventWriterInterceptor(writer=writer)
+    policy = AuditPolicy(writer=writer)
 
-    assert isinstance(interceptor, Interceptor)
-    assert interceptor.failure_mode == FailureMode.FAIL_OPEN
+    assert isinstance(policy, Policy)
+    assert policy.failure_mode == FailureMode.FAIL_OPEN
 
 
 @pytest.mark.asyncio
@@ -90,12 +90,12 @@ async def test_session_graph_from_store_matches_direct_build():
     writer = EventWriter(store=store, flush_interval=0.05)
     await writer.start()
 
-    interceptor = EventWriterInterceptor(writer=writer)
+    policy = AuditPolicy(writer=writer)
     agent = FakeAgent()
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+    sa = SecureAgent(agent=agent, policies=[policy])
 
     for i in range(5):
-        await mw.invoke(
+        await sa.invoke(
             {"input": f"turn {i}"},
             session_id="sess-graph",
             agent_id="agent-1",
@@ -119,11 +119,11 @@ async def test_session_graph_from_live_stream_matches_from_store():
     writer = EventWriter(store=store, flush_interval=0.05)
     await writer.start()
 
-    interceptor = EventWriterInterceptor(writer=writer)
+    policy = AuditPolicy(writer=writer)
     agent = FakeAgent()
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+    sa = SecureAgent(agent=agent, policies=[policy])
 
-    await mw.invoke(
+    await sa.invoke(
         {"input": "test"},
         session_id="sess-live",
         agent_id="agent-1",
@@ -174,12 +174,12 @@ async def test_multi_session_events_isolated():
     writer = EventWriter(store=store, flush_interval=0.05)
     await writer.start()
 
-    interceptor = EventWriterInterceptor(writer=writer)
+    policy = AuditPolicy(writer=writer)
     agent = FakeAgent()
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+    sa = SecureAgent(agent=agent, policies=[policy])
 
-    await mw.invoke({"input": "a"}, session_id="sess-A", agent_id="agent-1")
-    await mw.invoke({"input": "b"}, session_id="sess-B", agent_id="agent-2")
+    await sa.invoke({"input": "a"}, session_id="sess-A", agent_id="agent-1")
+    await sa.invoke({"input": "b"}, session_id="sess-B", agent_id="agent-2")
 
     await asyncio.sleep(0.2)
     await writer.stop()

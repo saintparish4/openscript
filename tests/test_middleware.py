@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from contracts.types import ActionContext, FailureMode
-from sdk import OpenScriptMiddleware
+from sdk import SecureAgent
 
 
 class FakeAgent:
@@ -15,7 +15,7 @@ class FakeAgent:
             yield {"token": word}
 
 
-class RecordingInterceptor:
+class RecordingPolicy:
     failure_mode = FailureMode.FAIL_OPEN
 
     def __init__(self):
@@ -30,7 +30,7 @@ class RecordingInterceptor:
         return context
 
 
-class FailingInterceptor:
+class FailingPolicy:
     def __init__(self, failure_mode: FailureMode):
         self.failure_mode = failure_mode
 
@@ -42,31 +42,31 @@ class FailingInterceptor:
 
 
 @pytest.mark.asyncio
-async def test_empty_interceptor_list_passes_through():
+async def test_empty_policy_list_passes_through():
     agent = FakeAgent()
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[])
+    mw = SecureAgent(agent=agent, policies=[])
     result = await mw.invoke({"input": "hello"})
     assert result["output"] == "echo: hello"
 
 
 @pytest.mark.asyncio
-async def test_interceptors_called_in_order():
+async def test_policies_called_in_order():
     agent = FakeAgent()
-    i1 = RecordingInterceptor()
-    i2 = RecordingInterceptor()
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[i1, i2])
+    p1 = RecordingPolicy()
+    p2 = RecordingPolicy()
+    mw = SecureAgent(agent=agent, policies=[p1, p2])
     await mw.invoke({"input": "test"})
-    assert i1.calls[0] == ("before", "invoke")
-    assert i2.calls[0] == ("before", "invoke")
-    assert i1.calls[1] == ("after", "invoke")
-    assert i2.calls[1] == ("after", "invoke")
+    assert p1.calls[0] == ("before", "invoke")
+    assert p2.calls[0] == ("before", "invoke")
+    assert p1.calls[1] == ("after", "invoke")
+    assert p2.calls[1] == ("after", "invoke")
 
 
 @pytest.mark.asyncio
 async def test_fail_closed_blocks_action():
     agent = FakeAgent()
-    interceptor = FailingInterceptor(FailureMode.FAIL_CLOSED)
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+    policy = FailingPolicy(FailureMode.FAIL_CLOSED)
+    mw = SecureAgent(agent=agent, policies=[policy])
     with pytest.raises(RuntimeError, match="Action blocked"):
         await mw.invoke({"input": "test"})
 
@@ -74,8 +74,8 @@ async def test_fail_closed_blocks_action():
 @pytest.mark.asyncio
 async def test_fail_open_allows_action():
     agent = FakeAgent()
-    interceptor = FailingInterceptor(FailureMode.FAIL_OPEN)
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+    policy = FailingPolicy(FailureMode.FAIL_OPEN)
+    mw = SecureAgent(agent=agent, policies=[policy])
     result = await mw.invoke({"input": "hello"})
     assert result["output"] == "echo: hello"
 
@@ -83,13 +83,13 @@ async def test_fail_open_allows_action():
 @pytest.mark.asyncio
 async def test_stream_and_invoke_same_interception():
     agent = FakeAgent()
-    invoke_rec = RecordingInterceptor()
-    stream_rec = RecordingInterceptor()
+    invoke_rec = RecordingPolicy()
+    stream_rec = RecordingPolicy()
 
-    mw_invoke = OpenScriptMiddleware(agent=agent, interceptors=[invoke_rec])
+    mw_invoke = SecureAgent(agent=agent, policies=[invoke_rec])
     await mw_invoke.invoke({"input": "a b"})
 
-    mw_stream = OpenScriptMiddleware(agent=agent, interceptors=[stream_rec])
+    mw_stream = SecureAgent(agent=agent, policies=[stream_rec])
     chunks = []
     async for chunk in mw_stream.stream({"input": "a b"}):
         chunks.append(chunk)
@@ -101,10 +101,10 @@ async def test_stream_and_invoke_same_interception():
 
 
 @pytest.mark.asyncio
-async def test_custom_third_party_interceptor():
-    """Proves the plugin seam works for third-party interceptors."""
+async def test_custom_third_party_policy():
+    """Proves the plugin seam works for third-party policies."""
 
-    class CustomThirdPartyInterceptor:
+    class CustomThirdPartyPolicy:
         failure_mode = FailureMode.FAIL_OPEN
 
         def __init__(self):
@@ -119,18 +119,18 @@ async def test_custom_third_party_interceptor():
             return context
 
     agent = FakeAgent()
-    custom = CustomThirdPartyInterceptor()
-    mw = OpenScriptMiddleware(agent=agent, interceptors=[custom])
+    custom = CustomThirdPartyPolicy()
+    mw = SecureAgent(agent=agent, policies=[custom])
     await mw.invoke({"input": "test"})
     assert custom.seen_actions == ["invoke"]
 
 
 # ---------------------------------------------------------------------------
-# Log-emission assertions for interceptor errors
+# Log-emission assertions for policy errors
 # ---------------------------------------------------------------------------
 
 
-class TestInterceptorErrorLogging:
+class TestPolicyErrorLogging:
     """Verify that _handle_failure emits the correct structlog events."""
 
     @pytest.mark.asyncio
@@ -141,12 +141,12 @@ class TestInterceptorErrorLogging:
 
         with patch("sdk.middleware.middleware.logger", mock_logger):
             agent = FakeAgent()
-            interceptor = FailingInterceptor(FailureMode.FAIL_OPEN)
-            mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+            policy = FailingPolicy(FailureMode.FAIL_OPEN)
+            mw = SecureAgent(agent=agent, policies=[policy])
             await mw.invoke({"input": "hello"})
 
         mock_logger.bind.assert_any_call(
-            interceptor="FailingInterceptor",
+            interceptor="FailingPolicy",
             phase="before_action",
             error="interceptor failure",
         )
@@ -160,13 +160,13 @@ class TestInterceptorErrorLogging:
 
         with patch("sdk.middleware.middleware.logger", mock_logger):
             agent = FakeAgent()
-            interceptor = FailingInterceptor(FailureMode.FAIL_CLOSED)
-            mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+            policy = FailingPolicy(FailureMode.FAIL_CLOSED)
+            mw = SecureAgent(agent=agent, policies=[policy])
             with pytest.raises(RuntimeError, match="Action blocked"):
                 await mw.invoke({"input": "test"})
 
         mock_logger.bind.assert_called_once_with(
-            interceptor="FailingInterceptor",
+            interceptor="FailingPolicy",
             phase="before_action",
             error="interceptor failure",
         )
@@ -180,13 +180,13 @@ class TestInterceptorErrorLogging:
 
         with patch("sdk.middleware.middleware.logger", mock_logger):
             agent = FakeAgent()
-            interceptor = FailingInterceptor(FailureMode.FAIL_EXCEPTION)
-            mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+            policy = FailingPolicy(FailureMode.FAIL_EXCEPTION)
+            mw = SecureAgent(agent=agent, policies=[policy])
             with pytest.raises(ValueError, match="interceptor failure"):
                 await mw.invoke({"input": "test"})
 
         mock_logger.bind.assert_called_once_with(
-            interceptor="FailingInterceptor",
+            interceptor="FailingPolicy",
             phase="before_action",
             error="interceptor failure",
         )
@@ -201,8 +201,8 @@ class TestInterceptorErrorLogging:
 
         with patch("sdk.middleware.middleware.logger", mock_logger):
             agent = FakeAgent()
-            interceptor = FailingInterceptor(FailureMode.FAIL_OPEN)
-            mw = OpenScriptMiddleware(agent=agent, interceptors=[interceptor])
+            policy = FailingPolicy(FailureMode.FAIL_OPEN)
+            mw = SecureAgent(agent=agent, policies=[policy])
             await mw.invoke({"input": "hello"})
 
         bind_calls = mock_logger.bind.call_args_list
