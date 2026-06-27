@@ -7,8 +7,11 @@ from contracts.server_types import (
     PolicyEvalResponse,
     ThreatScoreRequest,
     ThreatScoreResponse,
+    ToolValidateRequest,
+    ToolValidateResponse,
 )
 from sdk.interceptors.threat import score_text
+from sdk.policies.tool_firewall import ToolRule, ToolRules, validate_tool_call
 from server.auth import require_api_key
 
 router = APIRouter(prefix="/v1", tags=["security"])
@@ -20,6 +23,21 @@ _CAPABILITY_RULES: dict[str, list[str]] = {
     "sensitive_access": ["read_database", "read_secrets", "access_pii"],
     "untrusted_input": [],  # always allowed — flag is informational
 }
+
+# BuildToolRules from _CAPABILITY_RULES so /v1/tools/validate enforces
+# the same capability-gated actions the rest of the sever knows about
+_TOOL_RULES = ToolRules(
+    default_deny=False,
+    rules={
+        action: ToolRule(
+            allowed_roles=["*"],
+            # flag actions that require sensitive_access as needing approval
+            requires_approval=(capability == "sensitive_access"),
+        )
+        for capability, actions in _CAPABILITY_RULES.items()
+        for action in actions
+    },
+)
 
 
 @router.post("/threat/score", dependencies=[Depends(require_api_key)])
@@ -79,4 +97,23 @@ async def policy_evaluate(req: PolicyEvalRequest) -> PolicyEvalResponse:
         decision="allow",
         reason="all policies passed",
         policies_evaluated=evaluated or ["default_allow"],
+    )
+
+
+@router.post("/tools/validate", dependencies=[Depends(require_api_key)])
+async def validate_tool(req: ToolValidateRequest) -> ToolValidateResponse:
+    """Validate a tool call against the server-level firewall rules.
+
+    Uses the same rules engine as ToolFirewallPolicy so SDK and server
+    behavior are always consistent.
+    """
+    result = validate_tool_call(
+        {"name": req.tool_name, "args": req.args},
+        role=req.role,
+        rules=_TOOL_RULES,
+    )
+    return ToolValidateResponse(
+        allowed=result["allowed"],
+        reason=result["reason"],
+        requires_approval=result.get("requires_approval", False),
     )
