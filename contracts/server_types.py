@@ -70,3 +70,15 @@ class DetectionResult(BaseModel):
     embedding_score: float = 0.0
     final_score: float = 0.0
     method: str = ""
+
+
+class ToolValidateRequest(BaseModel):
+    tool_name: str
+    args: dict[str, Any] = Field(default_factory=dict)
+    role: str | None = None
+
+
+class ToolValidateResponse(BaseModel):
+    allowed: bool
+    reason: str
+    requires_approval: bool = False

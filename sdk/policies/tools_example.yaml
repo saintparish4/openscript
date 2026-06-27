@@ -1,0 +1,30 @@
+Reference config — copy and edit to create your own tools.yaml.
+
+# Whether to deny tool calls for tools that have no rule.
+# false = default allow (permissive); true = default deny (strict allowlist).
+default_deny: false
+
+rules:
+  # Wildcard role — any caller may use this tool
+  get_weather:
+    allowed_roles: ["*"]
+
+  # Role-restricted, no approval needed
+  read_database:
+    allowed_roles: ["admin", "operator"]
+
+  # Role-restricted + requires human approval before execution
+  send_email:
+    allowed_roles: ["admin"]
+    requires_approval: true
+
+  # Role-restricted + approval + arg constraint
+  transfer_funds:
+    allowed_roles: ["finance"]
+    requires_approval: true
+    arg_constraints:
+      max_amount: 1000.0    # deny if args["amount"] > 1000
+
+  # Always deny, regardless of role
+  delete_record:
+    deny: true
