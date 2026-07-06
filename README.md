@@ -2,7 +2,7 @@
 
 **Prompt security SDK for LLM/agent workflows.** Detect injection risks, reduce data leaks, and validate LLM I/O — built for teams that need compliance, risk reduction, and real-time protection across any LLM provider.
 
-OpenScript provides an **Interceptor protocol** and **middleware pipeline** that wraps any LLM agent. You register interceptors that run before and after every agent action. The SDK ships with a `NoopInterceptor` for wiring and testing — proprietary security interceptors are available separately via `openscript-server`.
+OpenScript provides an **Interceptor protocol** and **middleware pipeline** that wraps any LLM agent. You register interceptors that run before and after every agent action. The SDK ships with a `NoopInterceptor` for wiring and testing — proprietary security interceptors are available separately via `openscript-server`.  
 
 ## Getting Started in 5 Minutes    
 
