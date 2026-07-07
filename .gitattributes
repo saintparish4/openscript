@@ -1,0 +1,4 @@
+# Normalize line endings: everything Git treats as text is stored and
+# checked out with LF, so Windows-side editors on /mnt/c don't generate
+# repo-wide CRLF diffs under WSL.
+* text=auto eol=lf

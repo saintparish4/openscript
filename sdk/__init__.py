@@ -15,6 +15,8 @@ from sdk.interceptors.pii import PIIInterceptor, PIIMode, PIIPolicy
 from sdk.interceptors.threat import PromptInjectionPolicy, ThreatInterceptor
 from sdk.logging import configure_logging
 from sdk.middleware.middleware import OpenScriptMiddleware, SecureAgent
+from sdk.policies.config import PolicyConfig, load_policies, register_policy
+from sdk.policies.secrets import SecretsPolicy, find_secrets
 from sdk.policies.tool_firewall import ToolFirewallPolicy, validate_tool_call
 
 __all__ = [
@@ -34,11 +36,16 @@ __all__ = [
     "PIIMode",
     "PIIPolicy",
     "Policy",
+    "PolicyConfig",
     "PromptInjectionPolicy",
+    "SecretsPolicy",
     "SecureAgent",
     "ThreatInterceptor",  # deprecated alias
     "ToolFirewallPolicy",
     "configure_logging",
+    "find_secrets",
+    "load_policies",
+    "register_policy",
     "validate_tool_call",
     "wrap_agent",
     "wrap_graph_agent",

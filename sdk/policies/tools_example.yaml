@@ -1,4 +1,4 @@
-Reference config — copy and edit to create your own tools.yaml.
+# Reference config — copy and edit to create your own tools.yaml.
 
 # Whether to deny tool calls for tools that have no rule.
 # false = default allow (permissive); true = default deny (strict allowlist).
