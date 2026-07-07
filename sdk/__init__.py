@@ -16,6 +16,7 @@ from sdk.interceptors.threat import PromptInjectionPolicy, ThreatInterceptor
 from sdk.logging import configure_logging
 from sdk.middleware.middleware import OpenScriptMiddleware, SecureAgent
 from sdk.policies.config import PolicyConfig, load_policies, register_policy
+from sdk.policies.output_schema import HallucinationMode, OnInvalid, OutputSchemaPolicy
 from sdk.policies.secrets import SecretsPolicy, find_secrets
 from sdk.policies.tool_firewall import ToolFirewallPolicy, validate_tool_call
 
@@ -27,11 +28,14 @@ __all__ = [
     "BasePolicy",
     "EventWriterInterceptor",  # deprecated alias
     "FailureMode",
+    "HallucinationMode",
     "Interceptor",  # deprecated alias
     "InterceptorDecision",
     "InterceptorResult",
     "NoopInterceptor",
+    "OnInvalid",
     "OpenScriptMiddleware",  # deprecated alias
+    "OutputSchemaPolicy",
     "PIIInterceptor",  # deprecated alias
     "PIIMode",
     "PIIPolicy",

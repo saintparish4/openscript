@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,7 @@ from sdk.interceptors.base import NoopInterceptor
 from sdk.interceptors.event_writer import AuditPolicy
 from sdk.interceptors.pii import PIIMode, PIIPolicy
 from sdk.interceptors.threat import PromptInjectionPolicy
+from sdk.policies.output_schema import OutputSchemaPolicy
 from sdk.policies.secrets import SecretsPolicy
 from sdk.policies.tool_firewall import ToolFirewallPolicy, ToolRules
 
@@ -78,6 +80,43 @@ def _build_tool_firewall(params: dict[str, Any], writer: EventWriter | None) -> 
     )
 
 
+def _resolve_model(path: str) -> type[BaseModel]:
+    """Import a pydantic model from a dotted path: "pkg.module:Class" or "pkg.module.Class"."""
+    module_name, _, attr = path.partition(":") if ":" in path else path.rpartition(".")
+    if not module_name or not attr:
+        raise ValueError(f"invalid model path {path!r}; expected 'package.module:ClassName'")
+    try:
+        model = getattr(importlib.import_module(module_name), attr)
+    except (ImportError, AttributeError) as exc:
+        raise ValueError(f"cannot import model {path!r}: {exc}") from exc
+    if not (isinstance(model, type) and issubclass(model, BaseModel)):
+        raise ValueError(f"{path!r} is not a pydantic BaseModel subclass")
+    return model
+
+
+def _build_output_schema(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(
+        params,
+        "output_schema",
+        {
+            "model",
+            "on_invalid",
+            "grounding_source",
+            "hallucination_mode",
+            "hallucination_threshold",
+        },
+    )
+    model = params.get("model")
+    return OutputSchemaPolicy(
+        model=_resolve_model(model) if isinstance(model, str) else model,
+        on_invalid=params.get("on_invalid", "deny"),
+        grounding_source=params.get("grounding_source"),
+        hallucination_mode=params.get("hallucination_mode", "keyword"),
+        hallucination_threshold=params.get("hallucination_threshold", 0.5),
+        writer=writer,
+    )
+
+
 def _build_audit(params: dict[str, Any], writer: EventWriter | None) -> Policy:
     _take(params, "audit", set())
     if writer is None:
@@ -95,6 +134,7 @@ _REGISTRY: dict[str, PolicyFactory] = {
     "pii": _build_pii,
     "secrets": _build_secrets,
     "tool_firewall": _build_tool_firewall,
+    "output_schema": _build_output_schema,
     "audit": _build_audit,
     "noop": _build_noop,
 }
