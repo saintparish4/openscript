@@ -148,6 +148,8 @@ async def test_allowed_tool_sets_allow_decision():
     result = await policy.before_action(ctx)
     assert result.decision == InterceptorDecision.ALLOW
     assert result.metadata["tool_firewall"]["allowed"] is True
+    assert result.metadata["tool_firewall"]["risk"] == 0.0
+    assert result.metadata["tool_firewall"]["category"] == "tool_firewall"
 
 
 @pytest.mark.asyncio
@@ -159,6 +161,7 @@ async def test_denied_tool_sets_deny_decision():
     assert result.decision == InterceptorDecision.DENY
     assert result.decision_reason != ""
     assert result.metadata["tool_firewall"]["allowed"] is False
+    assert result.metadata["tool_firewall"]["risk"] == 0.8
 
 
 @pytest.mark.asyncio
@@ -178,6 +181,7 @@ async def test_requires_approval_sets_require_approval_decision():
     result = await policy.before_action(ctx)
     assert result.decision == InterceptorDecision.REQUIRE_APPROVAL
     assert result.metadata["tool_firewall"]["requires_approval"] is True
+    assert result.metadata["tool_firewall"]["risk"] == 0.6
 
 
 @pytest.mark.asyncio

@@ -117,8 +117,10 @@ class ToolFirewallPolicy(BasePolicy):
     Optional context.metadata key:
       "role": str  — used for RBAC checks against allowed_roles
 
-    Results are written to context.metadata["tool_firewall"] as the same
-    {"allowed", "reason", "requires_approval"} dict returned by validate_tool_call.
+    Results are written to context.metadata["tool_firewall"] using the
+    standardized shape — the {"allowed", "reason", "requires_approval"} dict
+    returned by validate_tool_call plus "risk" (denied 0.8, requires
+    approval 0.6, allowed 0.0) and "category": "tool_firewall".
     """
 
     failure_mode: FailureMode = FailureMode.FAIL_CLOSED
@@ -146,7 +148,17 @@ class ToolFirewallPolicy(BasePolicy):
             rules=self._rules,
         )
 
-        context.metadata["tool_firewall"] = result
+        if result.get("requires_approval"):
+            risk = 0.6
+        elif not result["allowed"]:
+            risk = 0.8
+        else:
+            risk = 0.0
+        context.metadata["tool_firewall"] = {
+            "risk": risk,
+            "category": "tool_firewall",
+            **result,
+        }
 
         if result.get("requires_approval"):
             context.decision = InterceptorDecision.REQUIRE_APPROVAL

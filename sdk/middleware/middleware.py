@@ -11,6 +11,7 @@ from contracts.interceptor import Policy
 from contracts.types import ActionBlockedError, ActionContext, FailureMode, InterceptorDecision
 from sdk.interceptors.base import NoopInterceptor
 from sdk.logging import _ensure_configured
+from sdk.observability.risk import RiskScorer
 
 logger = structlog.get_logger(__name__)
 
@@ -28,6 +29,7 @@ class SecureAgent:
         policies: Sequence[Policy] | None = None,
         *,
         interceptors: Sequence[Policy] | None = None,
+        risk_scorer: RiskScorer | None = None,
     ) -> None:
         _ensure_configured()
         if interceptors is not None:
@@ -41,8 +43,17 @@ class SecureAgent:
             policies = interceptors
         self._agent = agent
         self._policies: Sequence[Policy] = policies or [NoopInterceptor()]
+        self._risk_scorer = risk_scorer or RiskScorer()
 
     async def invoke(self, input_data: dict[str, Any], **kwargs: Any) -> Any:
+        result, _ = await self.invoke_with_context(input_data, **kwargs)
+        return result
+
+    async def invoke_with_context(
+        self, input_data: dict[str, Any], **kwargs: Any
+    ) -> tuple[Any, ActionContext]:
+        """Like invoke(), but also returns the final ActionContext so callers
+        can read risk_score, risk_categories, and per-policy metadata."""
         context = ActionContext(
             action="invoke",
             agent_id=kwargs.get("agent_id", "default"),
@@ -57,12 +68,13 @@ class SecureAgent:
 
         context.output_data = result if isinstance(result, dict) else {"output": result}
         context = await self._run_after(context)
+        self._risk_scorer.aggregate(context)
 
         # Return context.output_data so after_action policies (e.g. PIIPolicy)
         # can modify the output that callers receive.
         if isinstance(result, dict):
-            return context.output_data
-        return context.output_data.get("output", result)
+            return context.output_data, context
+        return context.output_data.get("output", result), context
 
     async def stream(self, input_data: dict[str, Any], **kwargs: Any) -> AsyncGenerator[Any, None]:
         context = ActionContext(
@@ -78,7 +90,8 @@ class SecureAgent:
         async for chunk in self._stream_agent(input_data, **kwargs):
             yield chunk
 
-        await self._run_after(context)
+        context = await self._run_after(context)
+        self._risk_scorer.aggregate(context)
 
     async def _run_before(self, context: ActionContext) -> ActionContext:
         for policy in self._policies:
@@ -88,18 +101,35 @@ class SecureAgent:
                 context = self._handle_failure(policy, exc, context, "before_action")
                 continue
             if context.decision in (InterceptorDecision.DENY, InterceptorDecision.REQUIRE_APPROVAL):
+                self._risk_scorer.aggregate(context)
                 raise ActionBlockedError(
                     reason=context.decision_reason,
                     interceptor=type(policy).__name__,
+                    context=context,
+                    risk_score=context.risk_score,
                 )
         return context
 
     async def _run_after(self, context: ActionContext) -> ActionContext:
+        blocked_by = ""
         for policy in self._policies:
             try:
                 context = await policy.after_action(context)
             except Exception as exc:
                 context = self._handle_failure(policy, exc, context, "after_action")
+                continue
+            if not blocked_by and context.decision != InterceptorDecision.ALLOW:
+                blocked_by = type(policy).__name__
+        # Unlike the before phase, all policies run to completion (so audit and
+        # metadata are complete) before an output-side DENY blocks the response.
+        if context.decision in (InterceptorDecision.DENY, InterceptorDecision.REQUIRE_APPROVAL):
+            self._risk_scorer.aggregate(context)
+            raise ActionBlockedError(
+                reason=context.decision_reason,
+                interceptor=blocked_by,
+                context=context,
+                risk_score=context.risk_score,
+            )
         return context
 
     def _handle_failure(

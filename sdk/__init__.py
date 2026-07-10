@@ -15,10 +15,13 @@ from sdk.interceptors.pii import PIIInterceptor, PIIMode, PIIPolicy
 from sdk.interceptors.threat import PromptInjectionPolicy, ThreatInterceptor
 from sdk.logging import configure_logging
 from sdk.middleware.middleware import OpenScriptMiddleware, SecureAgent
+from sdk.observability.risk import RiskScorer, aggregate_risk
+from sdk.policies.compliance import CompliancePolicy, PHIMode, find_phi
 from sdk.policies.config import PolicyConfig, load_policies, register_policy
 from sdk.policies.output_schema import HallucinationMode, OnInvalid, OutputSchemaPolicy
-from sdk.policies.secrets import SecretsPolicy, find_secrets
+from sdk.policies.secrets import InternalURLMode, SecretsPolicy, find_secrets
 from sdk.policies.tool_firewall import ToolFirewallPolicy, validate_tool_call
+from sdk.policies.toxicity import ToxicityPolicy
 
 __all__ = [
     "ActionBlockedError",
@@ -26,6 +29,7 @@ __all__ = [
     "AgentCapabilities",
     "AuditPolicy",
     "BasePolicy",
+    "CompliancePolicy",
     "EventWriterInterceptor",  # deprecated alias
     "FailureMode",
     "HallucinationMode",
@@ -37,16 +41,22 @@ __all__ = [
     "OpenScriptMiddleware",  # deprecated alias
     "OutputSchemaPolicy",
     "PIIInterceptor",  # deprecated alias
+    "InternalURLMode",
+    "PHIMode",
     "PIIMode",
     "PIIPolicy",
     "Policy",
     "PolicyConfig",
     "PromptInjectionPolicy",
+    "RiskScorer",
     "SecretsPolicy",
     "SecureAgent",
     "ThreatInterceptor",  # deprecated alias
     "ToolFirewallPolicy",
+    "ToxicityPolicy",
+    "aggregate_risk",
     "configure_logging",
+    "find_phi",
     "find_secrets",
     "load_policies",
     "register_policy",

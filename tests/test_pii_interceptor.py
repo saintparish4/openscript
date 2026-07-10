@@ -108,6 +108,8 @@ async def test_redact_mode_replaces_pii():
     assert "[REDACTED:email]" in result.output_data["output"]
     assert result.decision == InterceptorDecision.ALLOW
     assert result.metadata["pii"]["redacted"] is True
+    assert result.metadata["pii"]["risk"] == 0.4  # email is not high-severity
+    assert result.metadata["pii"]["category"] == "pii"
 
 
 @pytest.mark.asyncio
@@ -118,6 +120,7 @@ async def test_deny_mode_sets_decision():
     assert result.decision == InterceptorDecision.DENY
     assert result.metadata["pii"]["redacted"] is False
     assert "ssn" in result.metadata["pii"]["found"]
+    assert result.metadata["pii"]["risk"] == 0.8  # ssn is high-severity
 
 
 @pytest.mark.asyncio
@@ -128,6 +131,7 @@ async def test_clean_output_untouched():
     assert result.output_data["output"] == "The answer is 42."
     assert result.metadata["pii"]["found"] == []
     assert result.metadata["pii"]["redacted"] is False
+    assert result.metadata["pii"]["risk"] == 0.0
 
 
 @pytest.mark.asyncio

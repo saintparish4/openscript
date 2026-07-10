@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -111,10 +113,25 @@ _INTERNAL_URL_PATTERNS: list[_SecretPattern] = [
 _ALL_PATTERNS: list[_SecretPattern] = _SECRET_PATTERNS + _INTERNAL_URL_PATTERNS
 
 
+class InternalURLMode(str, Enum):
+    """How SecretsPolicy treats internal URL / private address findings.
+
+    Internal hostnames like localhost and *.local appear constantly in
+    legitimate agent output (code snippets, dev instructions), so the
+    default only annotates metadata instead of mutating or blocking.
+    """
+
+    ANNOTATE = "annotate"
+    REDACT = "redact"
+    DENY = "deny"
+    OFF = "off"
+
+
 def find_secrets(text: str) -> list[tuple[str, str]]:
     """Return list of (matched_text, label) pairs found in *text*.
 
-    Standalone helper — callable outside a policy pipeline.
+    Standalone helper — callable outside a policy pipeline. Scans both
+    secret and internal-URL pattern banks, with no allowlist applied.
     """
     found: list[tuple[str, str]] = []
     for pat in _ALL_PATTERNS:
@@ -127,19 +144,28 @@ def _mask_match(match: str) -> str:
     return match[:_MASK_PREFIX_LEN] + _MASK
 
 
-def _redact_text(text: str) -> tuple[str, list[str]]:
-    """Replace secret matches with masked/redacted forms.
+def _redact_text(
+    text: str,
+    patterns: list[_SecretPattern],
+    allowlist: Sequence[str] = (),
+) -> tuple[str, list[str]]:
+    """Replace matches of *patterns* with masked/redacted forms.
 
-    Returns (redacted_text, list_of_found_labels).
+    Matches containing an allowlisted substring (case-insensitive) are
+    left untouched and unreported. Returns (redacted_text, found_labels).
     """
     found_labels: list[str] = []
+    allow_lower = [a.lower() for a in allowlist]
 
-    for pat in _ALL_PATTERNS:
+    for pat in patterns:
 
         def _replace(m: re.Match[str], pat: _SecretPattern = pat) -> str:
+            matched = m.group()
+            if any(a in matched.lower() for a in allow_lower):
+                return matched
             found_labels.append(pat.label)
             if pat.mask:
-                return _mask_match(m.group())
+                return _mask_match(matched)
             return f"[REDACTED:{pat.label}]"
 
         text = pat.regex.sub(_replace, text)
@@ -147,23 +173,27 @@ def _redact_text(text: str) -> tuple[str, list[str]]:
     return text, list(dict.fromkeys(found_labels))  # deduplicate, preserve order
 
 
-def _walk_redact(obj: Any) -> tuple[Any, list[str]]:
-    """Recursively redact secrets from strings inside dicts/lists."""
+def _walk_redact(
+    obj: Any,
+    patterns: list[_SecretPattern],
+    allowlist: Sequence[str] = (),
+) -> tuple[Any, list[str]]:
+    """Recursively redact pattern matches from strings inside dicts/lists."""
     all_labels: list[str] = []
     if isinstance(obj, str):
-        redacted, labels = _redact_text(obj)
+        redacted, labels = _redact_text(obj, patterns, allowlist)
         all_labels.extend(labels)
         return redacted, all_labels
     if isinstance(obj, dict):
         result = {}
         for k, v in obj.items():
-            result[k], labels = _walk_redact(v)
+            result[k], labels = _walk_redact(v, patterns, allowlist)
             all_labels.extend(labels)
         return result, all_labels
     if isinstance(obj, list):
         result_list = []
         for item in obj:
-            redacted_item, labels = _walk_redact(item)
+            redacted_item, labels = _walk_redact(item, patterns, allowlist)
             all_labels.extend(labels)
             result_list.append(redacted_item)
         return result_list, all_labels
@@ -181,8 +211,16 @@ class SecretsPolicy(BasePolicy):
     internal URLs leaking in responses is the primary concern, but secrets
     pasted into input should not reach the agent either.
 
-    Results accumulate in context.metadata["secrets"]:
-      {"found": [labels...], "redacted": bool}
+    Secrets follow *mode* (redact/deny). Internal URLs follow the separate
+    *internal_url_mode* toggle, defaulting to ANNOTATE (metadata only, no
+    mutation or blocking) because localhost and *.local appear routinely in
+    legitimate output; matches containing an *internal_url_allowlist* entry
+    (case-insensitive substring, e.g. "docs.local") are ignored entirely.
+
+    Results accumulate in context.metadata["secrets"] using the standardized
+    shape (risk keeps the max across input and output phases; a leaked
+    credential scores 0.9, an internal-URL-only finding 0.5):
+      {"risk": float, "category": "secrets", "found": [labels...], "redacted": bool}
     """
 
     failure_mode: FailureMode = FailureMode.FAIL_OPEN
@@ -191,8 +229,12 @@ class SecretsPolicy(BasePolicy):
         self,
         mode: PIIMode | str = PIIMode.REDACT,
         writer: EventWriter | None = None,
+        internal_url_mode: InternalURLMode | str = InternalURLMode.ANNOTATE,
+        internal_url_allowlist: Sequence[str] = (),
     ) -> None:
         self._mode = PIIMode(mode)
+        self._internal_url_mode = InternalURLMode(internal_url_mode)
+        self._internal_url_allowlist = tuple(internal_url_allowlist)
         self._writer = writer
         self._sequence_counters: dict[str, int] = {}
 
@@ -207,14 +249,41 @@ class SecretsPolicy(BasePolicy):
     async def _scan(
         self, context: ActionContext, data: dict[str, Any], phase: str
     ) -> dict[str, Any]:
-        redacted_data, found_labels = _walk_redact(data)
+        meta = context.metadata.setdefault(
+            "secrets", {"risk": 0.0, "category": "secrets", "found": [], "redacted": False}
+        )
 
-        meta = context.metadata.setdefault("secrets", {"found": [], "redacted": False})
+        result = data
+        redacted = False
+        deny_labels: list[str] = []
 
+        secret_redacted, secret_labels = _walk_redact(data, _SECRET_PATTERNS)
+        if secret_labels:
+            if self._mode == PIIMode.DENY:
+                deny_labels.extend(secret_labels)
+            else:
+                result = secret_redacted
+                redacted = True
+
+        internal_labels: list[str] = []
+        if self._internal_url_mode != InternalURLMode.OFF:
+            internal_redacted, internal_labels = _walk_redact(
+                result, _INTERNAL_URL_PATTERNS, self._internal_url_allowlist
+            )
+            if internal_labels:
+                if self._internal_url_mode == InternalURLMode.DENY:
+                    deny_labels.extend(internal_labels)
+                elif self._internal_url_mode == InternalURLMode.REDACT:
+                    result = internal_redacted
+                    redacted = True
+                # ANNOTATE: metadata/event only, data untouched
+
+        found_labels = list(dict.fromkeys([*secret_labels, *internal_labels]))
         if not found_labels:
             return data
 
         meta["found"] = list(dict.fromkeys([*meta["found"], *found_labels]))
+        meta["risk"] = max(meta["risk"], 0.9 if secret_labels else 0.5)
 
         logger.warning(
             "secrets_detected",
@@ -223,21 +292,22 @@ class SecretsPolicy(BasePolicy):
             types=found_labels,
             phase=phase,
             mode=self._mode.value,
+            internal_url_mode=self._internal_url_mode.value,
         )
 
-        if self._mode == PIIMode.DENY:
+        if deny_labels:
             context.decision = InterceptorDecision.DENY
             context.decision_reason = (
-                f"Secrets detected in {phase}: {', '.join(sorted(set(found_labels)))}"
+                f"Secrets detected in {phase}: {', '.join(sorted(set(deny_labels)))}"
             )
-        else:
+            result = data  # deny preserves data unmutated
+        elif redacted:
             meta["redacted"] = True
-            data = redacted_data
 
         if self._writer is not None:
             await self._emit_secrets_event(context, found_labels, phase)
 
-        return data
+        return result
 
     async def _emit_secrets_event(
         self, context: ActionContext, found_labels: list[str], phase: str

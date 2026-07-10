@@ -160,8 +160,12 @@ class OutputSchemaPolicy(BasePolicy):
          sentence-transformers (``pip install openscript[ml]``) and falls
          back to keyword scoring when unavailable.
 
-    Results land in ``context.metadata["output_validation"]``. When invalid
-    and ``on_invalid=DENY``, sets ``decision=DENY``.
+    Results land in ``context.metadata["output_validation"]`` using the
+    standardized shape (``risk``: dangerous content 0.8, schema errors or
+    missing fields 0.5, valid 0.0; ``category``: "output_validation").
+    Grounding results land in ``context.metadata["hallucination"]`` with
+    ``risk`` set to the grounding score. When invalid and
+    ``on_invalid=DENY``, sets ``decision=DENY``.
     """
 
     failure_mode: FailureMode = FailureMode.FAIL_OPEN
@@ -198,7 +202,15 @@ class OutputSchemaPolicy(BasePolicy):
         dangerous = sorted({label for _, label in find_secrets(output_text)})
 
         valid = not errors and not missing_fields and not dangerous
+        if dangerous:
+            risk = 0.8
+        elif errors or missing_fields:
+            risk = 0.5
+        else:
+            risk = 0.0
         context.metadata["output_validation"] = {
+            "risk": risk,
+            "category": "output_validation",
             "valid": valid,
             "errors": errors,
             "missing_fields": missing_fields,
@@ -287,7 +299,8 @@ class OutputSchemaPolicy(BasePolicy):
 
         flagged = score >= self._hallucination_threshold
         context.metadata["hallucination"] = {
-            "score": round(score, 4),
+            "risk": round(score, 4),
+            "category": "hallucination",
             "mode": mode.value,
             "flagged": flagged,
             "threshold": self._hallucination_threshold,

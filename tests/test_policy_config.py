@@ -12,9 +12,11 @@ from sdk.interceptors.base import NoopInterceptor
 from sdk.interceptors.event_writer import AuditPolicy
 from sdk.interceptors.pii import PIIMode, PIIPolicy
 from sdk.interceptors.threat import PromptInjectionPolicy
+from sdk.policies.compliance import CompliancePolicy, PHIMode
 from sdk.policies.config import PolicyConfig, load_policies, register_policy
 from sdk.policies.secrets import SecretsPolicy
 from sdk.policies.tool_firewall import ToolFirewallPolicy
+from sdk.policies.toxicity import ToxicityPolicy
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -100,6 +102,26 @@ def test_tool_firewall_inline_rules():
     assert policy._rules.rules["nuke"].deny is True
 
 
+def test_toxicity_threshold_applied():
+    (policy,) = load_policies({"toxicity": {"threshold": 0.8}})
+    assert isinstance(policy, ToxicityPolicy)
+    assert policy._threshold == 0.8
+
+
+def test_compliance_rules_and_mode_applied():
+    (policy,) = load_policies(
+        {"compliance": {"rules": ["phi_detection", "data_access_audit"], "phi_mode": "deny"}}
+    )
+    assert isinstance(policy, CompliancePolicy)
+    assert policy._rules == ["phi_detection", "data_access_audit"]
+    assert policy._phi_mode is PHIMode.DENY
+
+
+def test_compliance_without_rules_rejected():
+    with pytest.raises(ValueError, match="at least one"):
+        load_policies({"compliance": None})
+
+
 # ---------------------------------------------------------------------------
 # load_policies — YAML file
 # ---------------------------------------------------------------------------
@@ -142,8 +164,8 @@ def test_shipped_example_config_loads():
 
 
 def test_unknown_policy_name_raises():
-    with pytest.raises(ValueError, match="unknown policy 'toxicity'"):
-        load_policies({"toxicity": None})
+    with pytest.raises(ValueError, match="unknown policy 'profanity'"):
+        load_policies({"profanity": None})
 
 
 def test_unknown_param_raises():

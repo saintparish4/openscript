@@ -48,6 +48,16 @@ _PII_PATTERNS: list[_PIIPattern] = [
 # Validated with Luhn check to reduce false positives.
 _CC_RE = re.compile(r"\b(?:\d[ \-]?){13,16}\b")
 
+# Labels whose exposure is directly exploitable (identity theft, account
+# takeover); the rest are contact/network identifiers.
+_HIGH_SEVERITY_LABELS = frozenset({"ssn", "credit_card", "api_key"})
+
+
+def _pii_risk(found_labels: list[str]) -> float:
+    if not found_labels:
+        return 0.0
+    return 0.8 if any(label in _HIGH_SEVERITY_LABELS for label in found_labels) else 0.4
+
 
 def _luhn(number: str) -> bool:
     digits = [int(d) for d in number if d.isdigit()]
@@ -130,6 +140,9 @@ class PIIPolicy:
     Runs in after_action. before_action is a pass-through.
     Default mode is REDACT so observability is preserved; use DENY for
     strict environments.
+
+    Results land in context.metadata["pii"] using the standardized shape:
+      {"risk": float, "category": "pii", "found": [labels...], "redacted": bool}
     """
 
     failure_mode: FailureMode = FailureMode.FAIL_OPEN
@@ -150,7 +163,12 @@ class PIIPolicy:
         redacted_output, found_labels = _walk_redact(context.output_data)
 
         if not found_labels:
-            context.metadata["pii"] = {"found": [], "redacted": False}
+            context.metadata["pii"] = {
+                "risk": 0.0,
+                "category": "pii",
+                "found": [],
+                "redacted": False,
+            }
             return context
 
         logger.warning(
@@ -161,13 +179,24 @@ class PIIPolicy:
             mode=self._mode.value,
         )
 
+        risk = _pii_risk(found_labels)
         if self._mode == PIIMode.DENY:
-            context.metadata["pii"] = {"found": found_labels, "redacted": False}
+            context.metadata["pii"] = {
+                "risk": risk,
+                "category": "pii",
+                "found": found_labels,
+                "redacted": False,
+            }
             context.decision = InterceptorDecision.DENY
             context.decision_reason = f"PII detected in output: {', '.join(set(found_labels))}"
         else:
             context.output_data = redacted_output
-            context.metadata["pii"] = {"found": found_labels, "redacted": True}
+            context.metadata["pii"] = {
+                "risk": risk,
+                "category": "pii",
+                "found": found_labels,
+                "redacted": True,
+            }
 
         if self._writer is not None:
             await self._emit_pii_event(context, found_labels)

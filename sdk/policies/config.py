@@ -13,9 +13,11 @@ from sdk.interceptors.base import NoopInterceptor
 from sdk.interceptors.event_writer import AuditPolicy
 from sdk.interceptors.pii import PIIMode, PIIPolicy
 from sdk.interceptors.threat import PromptInjectionPolicy
+from sdk.policies.compliance import CompliancePolicy, PHIMode
 from sdk.policies.output_schema import OutputSchemaPolicy
-from sdk.policies.secrets import SecretsPolicy
+from sdk.policies.secrets import InternalURLMode, SecretsPolicy
 from sdk.policies.tool_firewall import ToolFirewallPolicy, ToolRules
+from sdk.policies.toxicity import ToxicityPolicy
 
 if TYPE_CHECKING:
     from events.writer import EventWriter
@@ -67,8 +69,13 @@ def _build_pii(params: dict[str, Any], writer: EventWriter | None) -> Policy:
 
 
 def _build_secrets(params: dict[str, Any], writer: EventWriter | None) -> Policy:
-    _take(params, "secrets", {"mode"})
-    return SecretsPolicy(mode=PIIMode(params.get("mode", "redact")), writer=writer)
+    _take(params, "secrets", {"mode", "internal_url_mode", "internal_url_allowlist"})
+    return SecretsPolicy(
+        mode=PIIMode(params.get("mode", "redact")),
+        writer=writer,
+        internal_url_mode=InternalURLMode(params.get("internal_url_mode", "annotate")),
+        internal_url_allowlist=params.get("internal_url_allowlist", ()),
+    )
 
 
 def _build_tool_firewall(params: dict[str, Any], writer: EventWriter | None) -> Policy:
@@ -117,6 +124,20 @@ def _build_output_schema(params: dict[str, Any], writer: EventWriter | None) -> 
     )
 
 
+def _build_toxicity(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "toxicity", {"threshold"})
+    return ToxicityPolicy(threshold=params.get("threshold", 0.5), writer=writer)
+
+
+def _build_compliance(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "compliance", {"rules", "phi_mode"})
+    return CompliancePolicy(
+        rules=params.get("rules", []),
+        phi_mode=PHIMode(params.get("phi_mode", "annotate")),
+        writer=writer,
+    )
+
+
 def _build_audit(params: dict[str, Any], writer: EventWriter | None) -> Policy:
     _take(params, "audit", set())
     if writer is None:
@@ -131,8 +152,10 @@ def _build_noop(params: dict[str, Any], writer: EventWriter | None) -> Policy:
 
 _REGISTRY: dict[str, PolicyFactory] = {
     "prompt_injection": _build_prompt_injection,
+    "toxicity": _build_toxicity,
     "pii": _build_pii,
     "secrets": _build_secrets,
+    "compliance": _build_compliance,
     "tool_firewall": _build_tool_firewall,
     "output_schema": _build_output_schema,
     "audit": _build_audit,

@@ -93,7 +93,8 @@ async def test_clean_input_allows():
     result = await policy.before_action(ctx)
     assert result.decision == InterceptorDecision.ALLOW
     assert result.metadata["threat"]["flagged"] is False
-    assert result.metadata["threat"]["score"] == 0.0
+    assert result.metadata["threat"]["risk"] == 0.0
+    assert result.metadata["threat"]["category"] == "prompt_injection"
 
 
 @pytest.mark.asyncio
@@ -103,7 +104,7 @@ async def test_injection_sets_deny():
     result = await policy.before_action(ctx)
     assert result.decision == InterceptorDecision.DENY
     assert result.metadata["threat"]["flagged"] is True
-    assert result.metadata["threat"]["score"] >= 0.7
+    assert result.metadata["threat"]["risk"] >= 0.7
     assert result.decision_reason != ""
 
 

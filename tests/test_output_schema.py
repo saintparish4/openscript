@@ -57,6 +57,8 @@ async def test_valid_output_passes():
 
     assert result.decision == InterceptorDecision.ALLOW
     assert result.metadata["output_validation"] == {
+        "risk": 0.0,
+        "category": "output_validation",
         "valid": True,
         "errors": [],
         "missing_fields": [],
@@ -72,6 +74,7 @@ async def test_missing_field_denied_by_default():
     result = await policy.after_action(ctx)
 
     assert result.metadata["output_validation"]["missing_fields"] == ["total"]
+    assert result.metadata["output_validation"]["risk"] == 0.5
     assert result.decision == InterceptorDecision.DENY
     assert "missing field: total" in result.decision_reason
 
@@ -139,6 +142,7 @@ async def test_dangerous_content_detected_without_model():
     result = await policy.after_action(ctx)
 
     assert result.metadata["output_validation"]["dangerous_content"] == ["api_key"]
+    assert result.metadata["output_validation"]["risk"] == 0.8
     assert result.decision == InterceptorDecision.DENY
     assert "dangerous content" in result.decision_reason
 
@@ -192,7 +196,8 @@ async def test_ungrounded_output_flagged_but_not_blocked():
 
     hallucination = result.metadata["hallucination"]
     assert hallucination["flagged"] is True
-    assert hallucination["score"] == 1.0
+    assert hallucination["risk"] == 1.0
+    assert hallucination["category"] == "hallucination"
     # hallucination is annotation-only; it never blocks on its own
     assert result.decision == InterceptorDecision.ALLOW
 

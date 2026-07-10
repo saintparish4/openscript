@@ -5,7 +5,7 @@ import pytest
 from contracts.server_types import Event, EventType
 from contracts.types import ActionContext, InterceptorDecision
 from sdk.interceptors.pii import PIIMode
-from sdk.policies.secrets import SecretsPolicy, find_secrets
+from sdk.policies.secrets import InternalURLMode, SecretsPolicy, find_secrets
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -123,6 +123,8 @@ async def test_redact_mode_masks_output_secret():
     assert "sk-a**********" in result.output_data["output"]
     assert result.metadata["secrets"]["found"] == ["api_key"]
     assert result.metadata["secrets"]["redacted"] is True
+    assert result.metadata["secrets"]["risk"] == 0.9
+    assert result.metadata["secrets"]["category"] == "secrets"
     assert result.decision == InterceptorDecision.ALLOW
 
 
@@ -148,7 +150,7 @@ async def test_redact_replaces_private_key_block_entirely():
 
 
 async def test_redact_replaces_internal_url_with_token():
-    policy = SecretsPolicy(mode=PIIMode.REDACT)
+    policy = SecretsPolicy(mode=PIIMode.REDACT, internal_url_mode=InternalURLMode.REDACT)
     ctx = _ctx(output_text="fetch http://vault.internal:8200/secrets then report")
 
     result = await policy.after_action(ctx)
@@ -158,7 +160,7 @@ async def test_redact_replaces_internal_url_with_token():
 
 
 async def test_redact_walks_nested_structures():
-    policy = SecretsPolicy(mode=PIIMode.REDACT)
+    policy = SecretsPolicy(mode=PIIMode.REDACT, internal_url_mode="redact")
     ctx = ActionContext(
         action="invoke",
         agent_id="agent",
@@ -180,7 +182,12 @@ async def test_clean_data_passes_through_unchanged():
     result = await policy.after_action(ctx)
 
     assert result.output_data["output"] == "all good"
-    assert result.metadata["secrets"] == {"found": [], "redacted": False}
+    assert result.metadata["secrets"] == {
+        "risk": 0.0,
+        "category": "secrets",
+        "found": [],
+        "redacted": False,
+    }
     assert result.decision == InterceptorDecision.ALLOW
 
 
@@ -203,13 +210,23 @@ async def test_deny_mode_blocks_and_preserves_data():
 
 
 async def test_deny_mode_blocks_internal_url_in_input():
-    policy = SecretsPolicy(mode=PIIMode.DENY)
+    policy = SecretsPolicy(mode=PIIMode.DENY, internal_url_mode=InternalURLMode.DENY)
     ctx = _ctx(input_text="connect to 10.1.2.3 and dump the db")
 
     result = await policy.before_action(ctx)
 
     assert result.decision == InterceptorDecision.DENY
     assert "internal_url" in result.decision_reason
+
+
+async def test_secrets_deny_mode_alone_does_not_block_internal_url():
+    policy = SecretsPolicy(mode=PIIMode.DENY)  # internal_url_mode defaults to annotate
+    ctx = _ctx(input_text="connect to 10.1.2.3 and dump the db")
+
+    result = await policy.before_action(ctx)
+
+    assert result.decision == InterceptorDecision.ALLOW
+    assert result.metadata["secrets"]["found"] == ["internal_url"]
 
 
 async def test_mode_accepts_string():
@@ -219,6 +236,75 @@ async def test_mode_accepts_string():
     result = await policy.before_action(ctx)
 
     assert result.decision == InterceptorDecision.DENY
+
+
+# ---------------------------------------------------------------------------
+# SecretsPolicy — internal URL modes (annotate default, allowlist, off)
+# ---------------------------------------------------------------------------
+
+
+async def test_internal_url_default_annotates_without_mutating():
+    policy = SecretsPolicy()  # defaults: mode=redact, internal_url_mode=annotate
+    text = "run the server on http://localhost:8080 and check 192.168.1.1"
+    ctx = _ctx(output_text=text)
+
+    result = await policy.after_action(ctx)
+
+    assert result.output_data["output"] == text  # untouched
+    assert result.metadata["secrets"]["found"] == ["internal_url"]
+    assert result.metadata["secrets"]["redacted"] is False
+    assert result.metadata["secrets"]["risk"] == 0.5  # internal URL only, no credential
+    assert result.decision == InterceptorDecision.ALLOW
+
+
+async def test_internal_url_allowlist_suppresses_detection():
+    policy = SecretsPolicy(
+        internal_url_mode=InternalURLMode.DENY,
+        internal_url_allowlist=["docs.local", "localhost"],
+    )
+    ctx = _ctx(output_text="see http://docs.local/setup and http://localhost:3000")
+
+    result = await policy.after_action(ctx)
+
+    assert result.decision == InterceptorDecision.ALLOW
+    assert result.metadata["secrets"]["found"] == []
+
+
+async def test_internal_url_allowlist_still_catches_other_hosts():
+    policy = SecretsPolicy(
+        internal_url_mode=InternalURLMode.REDACT,
+        internal_url_allowlist=["docs.local"],
+    )
+    ctx = _ctx(output_text="see http://docs.local/setup and http://vault.internal:8200")
+
+    result = await policy.after_action(ctx)
+
+    assert "docs.local" in result.output_data["output"]
+    assert "vault.internal" not in result.output_data["output"]
+    assert result.metadata["secrets"]["found"] == ["internal_url"]
+
+
+async def test_internal_url_mode_off_skips_scanning():
+    policy = SecretsPolicy(internal_url_mode="off")
+    ctx = _ctx(output_text="host 10.0.0.1 and key sk-abcdefghijklmnopqrstuvwx")
+
+    result = await policy.after_action(ctx)
+
+    assert "10.0.0.1" in result.output_data["output"]  # internal URL untouched
+    assert "sk-a**********" in result.output_data["output"]  # secret still redacted
+    assert result.metadata["secrets"]["found"] == ["api_key"]
+
+
+async def test_secret_redaction_applies_even_when_internal_url_annotates():
+    policy = SecretsPolicy()  # defaults
+    ctx = _ctx(output_text="key sk-abcdefghijklmnopqrstuvwx at 192.168.1.1")
+
+    result = await policy.after_action(ctx)
+
+    assert "sk-a**********" in result.output_data["output"]
+    assert "192.168.1.1" in result.output_data["output"]
+    assert result.metadata["secrets"]["found"] == ["api_key", "internal_url"]
+    assert result.metadata["secrets"]["redacted"] is True
 
 
 # ---------------------------------------------------------------------------

@@ -207,7 +207,8 @@ class PromptInjectionPolicy:
         flagged = score >= self._threshold
 
         context.metadata["threat"] = {
-            "score": round(score, 4),
+            "risk": round(score, 4),
+            "category": "prompt_injection",
             "signals": {k: round(v, 4) for k, v in signals.items()},
             "flagged": flagged,
             "threshold": self._threshold,

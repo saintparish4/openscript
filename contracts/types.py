@@ -18,11 +18,23 @@ class InterceptorDecision(Enum):
 
 
 class ActionBlockedError(RuntimeError):
-    """Raised by middleware when an interceptor sets decision=DENY or REQUIRE_APPROVAL."""
+    """Raised by middleware when an interceptor sets decision=DENY or REQUIRE_APPROVAL.
 
-    def __init__(self, reason: str = "", interceptor: str = "") -> None:
+    Carries the final ActionContext and aggregated risk_score so blocked
+    calls surface the same risk signal as allowed ones.
+    """
+
+    def __init__(
+        self,
+        reason: str = "",
+        interceptor: str = "",
+        context: ActionContext | None = None,
+        risk_score: float = 0.0,
+    ) -> None:
         self.reason = reason
         self.interceptor = interceptor
+        self.context = context
+        self.risk_score = risk_score
         msg = (
             f"Action blocked by {interceptor}: {reason}"
             if interceptor
@@ -49,6 +61,8 @@ class ActionContext:
     capabilities: AgentCapabilities = field(default_factory=AgentCapabilities)
     decision: InterceptorDecision = field(default=InterceptorDecision.ALLOW)
     decision_reason: str = ""
+    risk_score: float = 0.0
+    risk_categories: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

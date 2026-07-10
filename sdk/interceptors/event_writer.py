@@ -8,6 +8,7 @@ import structlog
 from contracts.server_types import Event, EventType
 from contracts.types import ActionContext, FailureMode
 from events.writer import EventWriter
+from sdk.observability.risk import aggregate_risk
 
 logger = structlog.get_logger(__name__)
 
@@ -46,6 +47,10 @@ class AuditPolicy:
         return context
 
     async def after_action(self, context: ActionContext) -> ActionContext:
+        # Computed here (not read from context) because SecureAgent's final
+        # aggregation runs after the policy loop; place AuditPolicy last in
+        # policies=[...] so the recorded score covers every other policy.
+        risk_score, risk_categories = aggregate_risk(context)
         seq = self._next_sequence(context.session_id)
         event = Event(
             session_id=context.session_id,
@@ -54,6 +59,8 @@ class AuditPolicy:
             payload={
                 "action": context.action,
                 "output_data": context.output_data,
+                "risk_score": risk_score,
+                "risk_categories": risk_categories,
             },
             sequence_num=seq,
         )
