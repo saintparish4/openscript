@@ -176,9 +176,7 @@ class CompliancePolicy(BasePolicy):
                 meta["credentials"] = list(dict.fromkeys([*meta["credentials"], *credentials]))
                 meta["risk"] = max(meta["risk"], _CREDENTIAL_RISK)
                 context.decision = InterceptorDecision.DENY
-                context.decision_reason = (
-                    f"Credential material in output: {', '.join(credentials)}"
-                )
+                context.decision_reason = f"Credential material in output: {', '.join(credentials)}"
                 logger.warning(
                     "credential_output_blocked",
                     session_id=context.session_id,

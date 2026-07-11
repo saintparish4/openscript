@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from contracts.interceptor import GuardScan, StreamGuard
 from contracts.server_types import Event, EventType
 from contracts.types import ActionContext, FailureMode, InterceptorDecision
 
@@ -82,16 +83,22 @@ def _find_pii(text: str) -> list[tuple[str, str]]:
     return found
 
 
-def _redact_text(text: str) -> tuple[str, list[str]]:
+def _redact_text(text: str, final: bool = True) -> tuple[str, list[str]]:
     """Replace PII matches with [REDACTED:<label>] tokens.
 
-    Returns (redacted_text, list_of_found_labels).
+    final=False (guarded streaming) defers matches ending exactly at the end
+    of *text* — they may extend with the next chunk, and acting early would
+    leak the extension as plain text. Returns (redacted_text, found_labels).
     """
     found_labels: list[str] = []
 
     # Credit cards first (before phone regex can partially match)
+    cc_len = len(text)
+
     def _cc_replace(m: re.Match[str]) -> str:
         raw = m.group()
+        if not final and m.end() == cc_len:
+            return raw  # tentative — could extend with the next chunk
         digits_only = re.sub(r"[ \-]", "", raw)
         if len(digits_only) >= 13 and _luhn(digits_only):
             found_labels.append("credit_card")
@@ -101,8 +108,13 @@ def _redact_text(text: str) -> tuple[str, list[str]]:
     text = _CC_RE.sub(_cc_replace, text)
 
     for pat in _PII_PATTERNS:
+        current_len = len(text)
 
-        def _replace(m: re.Match[str], label: str = pat.label) -> str:
+        def _replace(
+            m: re.Match[str], label: str = pat.label, current_len: int = current_len
+        ) -> str:
+            if not final and m.end() == current_len:
+                return m.group()  # tentative — could extend with the next chunk
             found_labels.append(label)
             return f"[REDACTED:{label}]"
 
@@ -134,6 +146,33 @@ def _walk_redact(obj: Any) -> tuple[Any, list[str]]:
     return obj, []
 
 
+class _PIIStreamGuard:
+    """Incremental scanner backing PIIPolicy in guarded streams."""
+
+    name = "PIIPolicy"
+    # generous bound: the longest realistic PII match (emails, spaced card
+    # numbers) is well under this
+    max_match_len = 256
+
+    def __init__(self, mode: PIIMode) -> None:
+        self._mode = mode
+
+    def scan(self, text: str, final: bool = False) -> GuardScan:
+        redacted, labels = _redact_text(text, final=final)
+        if not labels:
+            return GuardScan(text=text)
+        risk = _pii_risk(labels)
+        if self._mode == PIIMode.DENY:
+            return GuardScan(
+                text=text,
+                labels=labels,
+                risk=risk,
+                deny=True,
+                reason=f"PII detected in stream: {', '.join(set(labels))}",
+            )
+        return GuardScan(text=redacted, labels=labels, risk=risk)
+
+
 class PIIPolicy:
     """Scans agent output for PII and either redacts or blocks.
 
@@ -158,6 +197,9 @@ class PIIPolicy:
 
     async def before_action(self, context: ActionContext) -> ActionContext:
         return context
+
+    def stream_guard(self) -> StreamGuard:
+        return _PIIStreamGuard(self._mode)
 
     async def after_action(self, context: ActionContext) -> ActionContext:
         redacted_output, found_labels = _walk_redact(context.output_data)

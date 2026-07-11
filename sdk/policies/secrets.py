@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from contracts.interceptor import BasePolicy
+from contracts.interceptor import BasePolicy, GuardScan, StreamGuard
 from contracts.server_types import Event, EventType
 from contracts.types import ActionContext, FailureMode, InterceptorDecision
 from sdk.interceptors.pii import PIIMode
@@ -113,6 +113,13 @@ _INTERNAL_URL_PATTERNS: list[_SecretPattern] = [
 _ALL_PATTERNS: list[_SecretPattern] = _SECRET_PATTERNS + _INTERNAL_URL_PATTERNS
 
 
+# Guarded streaming: longest realistic bounded secret (fat JWTs run long;
+# everything else is well under 100 chars). PEM blocks are unbounded and are
+# handled by their header instead.
+_GUARD_MAX_MATCH_LEN = 512
+_PEM_HEADER_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY( BLOCK)?-----")
+
+
 class InternalURLMode(str, Enum):
     """How SecretsPolicy treats internal URL / private address findings.
 
@@ -148,19 +155,28 @@ def _redact_text(
     text: str,
     patterns: list[_SecretPattern],
     allowlist: Sequence[str] = (),
+    final: bool = True,
 ) -> tuple[str, list[str]]:
     """Replace matches of *patterns* with masked/redacted forms.
 
     Matches containing an allowlisted substring (case-insensitive) are
-    left untouched and unreported. Returns (redacted_text, found_labels).
+    left untouched and unreported. final=False (guarded streaming) defers
+    matches ending exactly at the end of *text* — they may extend with the
+    next chunk, and acting early would leak the extension as plain text.
+    Returns (redacted_text, found_labels).
     """
     found_labels: list[str] = []
     allow_lower = [a.lower() for a in allowlist]
 
     for pat in patterns:
+        current_len = len(text)
 
-        def _replace(m: re.Match[str], pat: _SecretPattern = pat) -> str:
+        def _replace(
+            m: re.Match[str], pat: _SecretPattern = pat, current_len: int = current_len
+        ) -> str:
             matched = m.group()
+            if not final and m.end() == current_len:
+                return matched  # tentative — could extend with the next chunk
             if any(a in matched.lower() for a in allow_lower):
                 return matched
             found_labels.append(pat.label)
@@ -198,6 +214,64 @@ def _walk_redact(
             result_list.append(redacted_item)
         return result_list, all_labels
     return obj, []
+
+
+class _SecretsStreamGuard:
+    """Incremental scanner backing SecretsPolicy in guarded streams."""
+
+    name = "SecretsPolicy"
+    max_match_len = _GUARD_MAX_MATCH_LEN
+
+    def __init__(
+        self,
+        mode: PIIMode,
+        internal_url_mode: InternalURLMode,
+        allowlist: Sequence[str],
+    ) -> None:
+        self._mode = mode
+        self._internal_url_mode = internal_url_mode
+        self._allowlist = allowlist
+
+    def scan(self, text: str, final: bool = False) -> GuardScan:
+        # A private-key header aborts outright, even in redact mode: the
+        # block is unbounded, so chunkwise redaction can't contain it.
+        if _PEM_HEADER_RE.search(text):
+            return GuardScan(
+                text=text,
+                labels=["private_key"],
+                risk=0.9,
+                deny=True,
+                reason="private key block in streamed output",
+            )
+
+        labels: list[str] = []
+        risk = 0.0
+        deny = False
+
+        redacted, secret_labels = _redact_text(text, _SECRET_PATTERNS, final=final)
+        if secret_labels:
+            labels.extend(secret_labels)
+            risk = 0.9
+            if self._mode == PIIMode.DENY:
+                deny = True
+            else:
+                text = redacted
+
+        if self._internal_url_mode != InternalURLMode.OFF:
+            redacted, internal_labels = _redact_text(
+                text, _INTERNAL_URL_PATTERNS, self._allowlist, final=final
+            )
+            if internal_labels:
+                labels.extend(internal_labels)
+                risk = max(risk, 0.5)
+                if self._internal_url_mode == InternalURLMode.DENY:
+                    deny = True
+                elif self._internal_url_mode == InternalURLMode.REDACT:
+                    text = redacted
+
+        labels = list(dict.fromkeys(labels))
+        reason = f"Secrets detected in stream: {', '.join(sorted(set(labels)))}" if deny else ""
+        return GuardScan(text=text, labels=labels, risk=risk, deny=deny, reason=reason)
 
 
 class SecretsPolicy(BasePolicy):
@@ -245,6 +319,11 @@ class SecretsPolicy(BasePolicy):
     async def after_action(self, context: ActionContext) -> ActionContext:
         context.output_data = await self._scan(context, context.output_data, phase="output")
         return context
+
+    def stream_guard(self) -> StreamGuard:
+        return _SecretsStreamGuard(
+            self._mode, self._internal_url_mode, self._internal_url_allowlist
+        )
 
     async def _scan(
         self, context: ActionContext, data: dict[str, Any], phase: str

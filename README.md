@@ -1,10 +1,10 @@
 # OpenScript
 
-**Prompt security SDK for LLM/agent workflows.** Detect injection risks, reduce data leaks, and validate LLM I/O — built for teams that need compliance, risk reduction, and real-time protection across any LLM provider.
+**Security gateway SDK for LLM/agent workflows.** Block prompt injection, redact PII and secrets, firewall tool calls, gate risky actions behind human approval, and score every action's risk — across any LLM provider.
 
-OpenScript provides an **Interceptor protocol** and **middleware pipeline** that wraps any LLM agent. You register interceptors that run before and after every agent action. The SDK ships with a `NoopInterceptor` for wiring and testing — proprietary security interceptors are available separately via `openscript-server`.  
+OpenScript wraps any agent in a **policy pipeline**: policies run before and after every action, and each one can allow, mutate (redact), deny, or require human approval. The pipeline itself contains zero detection logic — everything is a `Policy` you can swap, configure from YAML, or write yourself.
 
-## Getting Started in 5 Minutes    
+## Getting Started in 5 Minutes
 
 ### 1. Install
 
@@ -24,21 +24,26 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+Optional extras: `openscript[redis]` (shared approval store), `openscript[metrics]` (Prometheus), `openscript[otel]` (tracing), `openscript[ml]` (embedding-based checks).
+
 ### 2. Wrap an Agent
 
 ```python
 import asyncio
-from sdk import OpenScriptMiddleware, NoopInterceptor
+from sdk import PIIPolicy, PromptInjectionPolicy, SecretsPolicy, SecureAgent
 
 class MyAgent:
     async def ainvoke(self, input_data, **kwargs):
         return {"output": f"Hello, {input_data.get('input', 'world')}!"}
 
 async def main():
-    agent = MyAgent()
-    secure = OpenScriptMiddleware(
-        agent=agent,
-        interceptors=[NoopInterceptor()],
+    secure = SecureAgent(
+        agent=MyAgent(),
+        policies=[
+            PromptInjectionPolicy(threshold=0.5),  # blocks injection attempts
+            PIIPolicy(mode="redact"),              # redacts PII from output
+            SecretsPolicy(mode="redact"),          # redacts credentials, flags internal URLs
+        ],
     )
     result = await secure.invoke({"input": "OpenScript"})
     print(result)  # {"output": "Hello, OpenScript!"}
@@ -46,37 +51,133 @@ async def main():
 asyncio.run(main())
 ```
 
-### 3. Use the LangChain Convenience Wrapper
+A blocked action raises `ActionBlockedError` with the reason, the policy that blocked it, and the action's aggregated `risk_score`.
 
-```python
-from sdk import wrap_agent, NoopInterceptor
+### 3. Or Configure Policies from YAML
 
-# agent = ... your LangChain AgentExecutor ...
-secure = wrap_agent(agent, interceptors=[NoopInterceptor()])
-result = await secure.invoke({"input": "What is prompt injection?"})
+```yaml
+# policies.yaml
+policies:
+  prompt_injection:
+    threshold: 0.6
+  toxicity:
+    threshold: 0.5
+  pii:
+    mode: redact
+  secrets:
+    mode: deny
+    internal_url_mode: annotate
+  compliance:
+    rules: [phi_detection, credential_output_guard]
+  tool_firewall:
+    rules_path: tools.yaml
 ```
 
-### 4. Write a Custom Interceptor
+```python
+from sdk import SecureAgent, load_policies
+
+secure = SecureAgent(agent, policies=load_policies("policies.yaml"))
+```
+
+## Built-in Policies
+
+| Policy | Phase | What it does |
+|--------|-------|--------------|
+| `PromptInjectionPolicy` | input | Scores role injection, prompt extraction, goal hijacking, delimiter/indirect injection; denies on threshold |
+| `ToxicityPolicy` | input | Detects threats, hate speech, harassment, self-harm content; denies on threshold |
+| `PIIPolicy` | output | Redacts or denies emails, phones, SSNs, credit cards (Luhn-checked), API keys, IPs |
+| `SecretsPolicy` | input + output | Redacts or denies AWS/GitHub/Slack tokens, JWTs, private-key blocks; separately flags internal URLs/private IPs (`internal_url_mode`: annotate by default, plus allowlist) |
+| `CompliancePolicy` | input + output | Honestly-scoped presets: `phi_detection`, `credential_output_guard`, `data_access_audit` — see [Compliance positioning](#compliance-positioning) |
+| `ToolFirewallPolicy` | input | Allowlist/deny/RBAC/argument constraints for tool calls; can require human approval. Also usable standalone via `validate_tool_call()` or `POST /v1/tools/validate` |
+| `OutputSchemaPolicy` | output | Pydantic schema validation, dangerous-content scan, optional hallucination/grounding check against a source |
+| `AuditPolicy` | both | Writes every action to the event store; place it **last** so its events carry the final risk score |
+
+Every policy writes standardized metadata — `{"risk": float, "category": str, ...}` — which the built-in `RiskScorer` aggregates into a single `risk_score` per action:
 
 ```python
-from contracts.types import ActionContext, FailureMode
+result, ctx = await secure.invoke_with_context({"input": "..."})
+print(ctx.risk_score)        # 0.0 – 1.0
+print(ctx.risk_categories)   # {"pii": 0.4, "prompt_injection": 0.0, ...}
+```
 
-class LoggingInterceptor:
-    failure_mode = FailureMode.FAIL_OPEN
+## Human Approval (retry-after-approval)
 
+When a policy returns `REQUIRE_APPROVAL` (e.g. a firewalled tool call), the action is blocked and a pending approval record is created:
+
+```python
+from sdk import ActionBlockedError, RedisApprovalStore, SecureAgent
+
+secure = SecureAgent(
+    agent,
+    policies=[...],
+    # Redis is REQUIRED when approvals are decided via the server API —
+    # the default in-memory store only works within a single process.
+    approval_store=RedisApprovalStore("redis://localhost:6379/0"),
+)
+
+try:
+    await secure.invoke({"input": "transfer $5,000"})
+except ActionBlockedError as e:
+    approval_id = e.approval_id  # a human decides via POST /v1/approvals/{id}/decide
+
+# after approval, retry the SAME action with the approval id:
+result = await secure.invoke({"input": "transfer $5,000"}, approval_id=approval_id)
+```
+
+Approvals are **single-use**, expire after 1 hour, and are bound to the exact action + input hash — an approval granted for one transfer cannot be replayed against a different one.
+
+## Streaming
+
+`stream()` supports three protection modes (`stream_output=` on the constructor or per call):
+
+| Mode | Protection | Latency | Use for |
+|------|-----------|---------|---------|
+| `buffer` (default) | Full — output policies see, redact, and can block the complete response before anything is yielded | Full response time | Machine-consumed output |
+| `guarded` | Full for bounded patterns (secrets, PII) via incremental scanning with a hold-back window; a deny aborts with nothing of the match emitted. Schema/grounding checks run at stream end | ~One window (tens of tokens) | Human-facing chat UIs (text streams) |
+| `passthrough` | **None** — chunks are delivered unscanned; policies run post-hoc for metadata/audit only, and a post-hoc deny raises after the fact | None | Observability-only setups, consciously |
+
+```python
+async for chunk in secure.stream({"input": "..."}, stream_output="guarded"):
+    print(chunk, end="")
+```
+
+Custom policies can participate in guarded streaming by implementing `stream_guard()` (see `contracts.interceptor.StreamGuard`).
+
+## Observability
+
+```python
+from sdk import MetricsRecorder, SecureAgent
+
+secure = SecureAgent(agent, policies=[...], metrics=MetricsRecorder())
+```
+
+Prometheus metrics (`pip install openscript[metrics]`): actions by decision, a `risk_score` histogram, per-category violation counters, injection/tool-denial/PII-redaction counters, and per-policy latency histograms. The server exposes them at `GET /metrics` (API-key gated).
+
+OpenTelemetry (`pip install openscript[otel]`): set `OPENSCRIPT_OTEL=1` for one span per action carrying the final decision and risk score; configure your OTLP exporter via standard `OTEL_*` env vars.
+
+## Write a Custom Policy
+
+```python
+from contracts.types import ActionContext, InterceptorDecision
+from sdk import BasePolicy
+
+class BusinessHoursPolicy(BasePolicy):
     async def before_action(self, context: ActionContext) -> ActionContext:
-        print(f"[BEFORE] action={context.action} input={context.input_data}")
+        if not is_business_hours():
+            context.decision = InterceptorDecision.DENY
+            context.decision_reason = "agent actions are restricted to business hours"
         return context
-
-    async def after_action(self, context: ActionContext) -> ActionContext:
-        print(f"[AFTER] action={context.action} output={context.output_data}")
-        return context
-
-# Register it:
-secure = OpenScriptMiddleware(agent=agent, interceptors=[LoggingInterceptor()])
 ```
 
-Any class that implements `before_action`, `after_action`, and `failure_mode` satisfies the `Interceptor` protocol — no base class inheritance required.
+Any object with `before_action`, `after_action`, and `failure_mode` satisfies the `Policy` protocol — subclassing `BasePolicy` just gives you pass-through defaults. Declare `failure_mode` to control error handling:
+
+| Mode | Behavior |
+|------|----------|
+| `FAIL_OPEN` | Log warning, allow action to proceed |
+| `FAIL_CLOSED` | Log error, block action |
+| `FAIL_EXCEPTION` | Re-raise the original exception |
+
+Security policies default to `FAIL_CLOSED`; observability policies to `FAIL_OPEN`.
 
 ## Architecture
 
@@ -84,41 +185,64 @@ Any class that implements `before_action`, `after_action`, and `failure_mode` sa
 User Request
     │
     ▼
-┌───────────────────────────┐
-│  OpenScriptMiddleware     │
-│                           │
-│  ┌─ before_action ──────┐ │
-│  │  Interceptor 1       │ │
-│  │  Interceptor 2       │ │
-│  │  ...                 │ │
-│  └──────────────────────┘ │
-│           │               │
-│     Agent.invoke()        │
-│           │               │
-│  ┌─ after_action ───────┐ │
-│  │  Interceptor 1       │ │
-│  │  Interceptor 2       │ │
-│  │  ...                 │ │
-│  └──────────────────────┘ │
-└───────────────────────────┘
+┌────────────────────────────────────────────┐
+│  SecureAgent                               │
+│                                            │
+│  ┌─ before_action ─────────────────────┐   │
+│  │  PromptInjectionPolicy   ──► DENY?  │   │
+│  │  ToxicityPolicy          ──► DENY?  │   │
+│  │  ToolFirewallPolicy ──► APPROVAL?   │   │
+│  └─────────────────────────────────────┘   │
+│                  │                         │
+│      Agent.invoke() / stream()             │
+│                  │                         │
+│  ┌─ after_action ──────────────────────┐   │
+│  │  OutputSchemaPolicy      ──► DENY?  │   │
+│  │  PIIPolicy / SecretsPolicy (redact) │   │
+│  │  CompliancePolicy                   │   │
+│  │  AuditPolicy (events + risk)        │   │
+│  └─────────────────────────────────────┘   │
+│                  │                         │
+│   RiskScorer ──► risk_score, metrics       │
+└────────────────────────────────────────────┘
     │
     ▼
-  Response
+  Response (or ActionBlockedError with
+  reason, risk_score, approval_id)
 ```
 
-The middleware is a **dumb pipeline** — zero detection or security logic built in. All policy is provided by interceptor implementations. This makes the SDK genuinely usable standalone with custom interceptors.
+The pipeline is deliberately dumb — all detection lives in the policies. Deny in the *before* phase blocks before the agent runs; deny in the *after* phase blocks the response after all policies (including audit) complete.
 
-## FailureMode
+## Framework Integrations
 
-Each interceptor declares how the middleware handles errors:
+LangChain and LangGraph wrappers ship today:
 
-| Mode | Behavior |
-|------|----------|
-| `FAIL_OPEN` | Log warning, allow action to proceed |
-| `FAIL_CLOSED` | Log error, block action (raises `RuntimeError`) |
-| `FAIL_EXCEPTION` | Re-raise the original exception |
+```python
+from sdk import wrap_agent, wrap_graph_agent, load_policies
 
-Default for observability interceptors: `FAIL_OPEN`. Default for security interceptors: `FAIL_CLOSED`.
+secure = wrap_agent(langchain_agent, policies=load_policies("policies.yaml"))
+result = await secure.invoke({"input": "What is prompt injection?"})
+```
+
+CrewAI, PydanticAI, AutoGen, and OpenAI Agents SDK adapters are on the roadmap (each as an optional extra, built on the frameworks' official guardrail/callback hooks).
+
+## Compliance Positioning
+
+`CompliancePolicy` **assists** compliance programs — its checks (PHI identifier detection, credential-output guarding, data-access auditing) map onto common GDPR/HIPAA/SOC 2 controls. It does **not** confer or certify compliance with any regulation, and its presets are deliberately named after what they check, not after regulations.
+
+## Server
+
+An optional FastAPI server (`uvicorn server.app:app`) provides the event store, SSE feeds, a session dashboard (`/dashboard/`), stateless scoring endpoints (`/v1/threat/score`, `/v1/tools/validate`), the approval queue (`/v1/approvals`), and Prometheus metrics (`/metrics`). All endpoints except `/health` require the `X-API-KEY` header (`OPENSCRIPT_API_KEY`).
+
+Try the full pipeline end-to-end:
+
+```bash
+python demo/injection_demo.py
+```
+
+## Migrating from the Interceptor API
+
+The pre-1.0 names still work but emit `DeprecationWarning`: `OpenScriptMiddleware` → `SecureAgent`, `interceptors=` → `policies=`, `ThreatInterceptor` → `PromptInjectionPolicy`, `PIIInterceptor` → `PIIPolicy`, `EventWriterInterceptor` → `AuditPolicy`, `Interceptor` protocol → `Policy`.
 
 ## Development
 

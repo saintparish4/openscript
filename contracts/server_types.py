@@ -20,6 +20,8 @@ class EventType(str, Enum):
     THREAT_DETECTED = "threat_detected"
     POLICY_EVALUATED = "policy_evaluated"
     AGENT_MESSAGE = "agent_message"
+    APPROVAL_REQUESTED = "approval_requested"
+    APPROVAL_RESOLVED = "approval_resolved"
 
 
 class Event(BaseModel):

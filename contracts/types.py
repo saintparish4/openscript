@@ -21,7 +21,9 @@ class ActionBlockedError(RuntimeError):
     """Raised by middleware when an interceptor sets decision=DENY or REQUIRE_APPROVAL.
 
     Carries the final ActionContext and aggregated risk_score so blocked
-    calls surface the same risk signal as allowed ones.
+    calls surface the same risk signal as allowed ones. When the block is a
+    REQUIRE_APPROVAL, approval_id names the pending approval record — once
+    a human approves it, retry the action with invoke(..., approval_id=...).
     """
 
     def __init__(
@@ -30,11 +32,13 @@ class ActionBlockedError(RuntimeError):
         interceptor: str = "",
         context: ActionContext | None = None,
         risk_score: float = 0.0,
+        approval_id: str = "",
     ) -> None:
         self.reason = reason
         self.interceptor = interceptor
         self.context = context
         self.risk_score = risk_score
+        self.approval_id = approval_id
         msg = (
             f"Action blocked by {interceptor}: {reason}"
             if interceptor
