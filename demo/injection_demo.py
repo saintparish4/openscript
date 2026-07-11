@@ -1,4 +1,4 @@
-"""OpenScript security gateway demo.
+"""OpenScript security gateway demo — cinematic edition.
 
 Walks the full pipeline: prompt-injection and toxicity blocking, PII and
 secrets redaction with risk scoring, hallucination/grounding checks,
@@ -9,7 +9,8 @@ Runs in-memory by default. Set DATABASE_URL to persist events to Postgres
 so the dashboard can visualize the session afterward.
 
 Usage:
-    python demo/injection_demo.py
+    python demo/injection_demo.py           # full animated experience
+    python demo/injection_demo.py --fast    # skip animations (CI-friendly)
 
 To view the session graph in the dashboard afterward:
     docker compose up -d
@@ -35,9 +36,13 @@ load_dotenv()
 
 from prometheus_client import CollectorRegistry
 from rich import box
-from rich.console import Console
+from rich.align import Align
+from rich.console import Console, Group
+from rich.live import Live
 from rich.panel import Panel
+from rich.rule import Rule
 from rich.table import Table
+from rich.text import Text
 
 from contracts.server_types import Event
 from contracts.types import ActionBlockedError, ActionContext, InterceptorDecision
@@ -60,6 +65,62 @@ from sdk.interceptors.threat import score_text
 from sdk.policies.tool_firewall import ToolRule, ToolRules
 
 console = Console()
+
+FAST = "--fast" in sys.argv or bool(os.environ.get("OPENSCRIPT_DEMO_FAST"))
+
+
+# ---------------------------------------------------------------------------
+# Animation helpers (all become no-ops with --fast)
+# ---------------------------------------------------------------------------
+
+
+async def beat(seconds: float = 0.6) -> None:
+    """A dramatic pause."""
+    if not FAST:
+        await asyncio.sleep(seconds)
+
+
+async def typewriter(text: str, style: str = "", prefix: str = "  ", cps: float = 90.0) -> None:
+    """Print text one character at a time, like someone typing it."""
+    if FAST:
+        console.print(Text(prefix + text, style=style))
+        return
+    line = Text(prefix, style=style)
+    with Live(line, console=console, refresh_per_second=30, transient=False) as live:
+        for ch in text:
+            line.append(ch, style=style)
+            live.update(line)
+            await asyncio.sleep(1.0 / cps)
+
+
+class scanning:
+    """Async context manager showing a spinner while policies do their thing."""
+
+    def __init__(self, label: str = "policies scanning"):
+        self._status = console.status(f"[dim]{label}…[/dim]", spinner="dots12")
+
+    async def __aenter__(self):
+        if not FAST:
+            self._status.__enter__()
+            await asyncio.sleep(0.35)
+        return self
+
+    async def __aexit__(self, *exc):
+        if not FAST:
+            self._status.__exit__(None, None, None)
+        return False
+
+
+def scene(number: int, title: str, explainer: str, color: str = "cyan") -> None:
+    """A chapter heading with a plain-English 'why you should care' blurb."""
+    console.print()
+    console.print(Rule(f"[bold {color}]Scene {number} · {title}[/bold {color}]", style=color))
+    console.print(Panel(explainer, border_style="dim", box=box.SIMPLE, padding=(0, 2)))
+
+
+def verdict_line(status: str, detail: str = "") -> None:
+    console.print(f"  {status}  {detail}")
+
 
 # ---------------------------------------------------------------------------
 # Event sink — Postgres when DATABASE_URL is set, otherwise in-memory
@@ -260,156 +321,253 @@ async def run_demo() -> None:
         metrics=metrics,
     )
 
+    # --- Title card ---
+    console.clear()
     console.print()
     console.print(
-        Panel.fit(
-            "[bold white]OpenScript — Security Gateway Demo[/bold white]\n"
-            f"[dim]Session: {session_id}[/dim]",
+        Panel(
+            Align.center(
+                Group(
+                    Text("🛡  OPENSCRIPT", style="bold white", justify="center"),
+                    Text("Security Gateway — Live Demo", style="cyan", justify="center"),
+                    Text(""),
+                    Text(
+                        "One agent. Seven policies. Every message and tool call\n"
+                        "gets inspected before and after the agent touches it.",
+                        style="dim",
+                        justify="center",
+                    ),
+                    Text(""),
+                    Text(f"session {session_id}", style="dim italic", justify="center"),
+                )
+            ),
             border_style="blue",
+            box=box.DOUBLE,
+            padding=(1, 4),
         )
     )
-    console.print()
+    await beat(1.2)
 
     results: list[dict] = []
 
-    # --- Normal messages ---
-    console.print("[bold cyan]── Normal messages ──[/bold cyan]")
+    # =====================================================================
+    scene(
+        1,
+        "Business as usual",
+        "[bold]First, the boring part.[/bold] A security layer is useless if it blocks "
+        "legitimate work. These five everyday requests should all sail through untouched.",
+        color="green",
+    )
     for text in NORMAL_INPUTS:
         score, signals = score_text(text)
-        try:
-            await secure.invoke({"input": text}, session_id=session_id, agent_id="mock-agent")
-            status = "[green]✓ ALLOWED[/green]"
-        except ActionBlockedError:
-            status = "[red]✗ BLOCKED[/red]"
-
-        short_text = text[:55] + "..." if len(text) > 55 else text
-        console.print(f"  {status}  score=[yellow]{score:.3f}[/yellow]  [dim]{short_text}[/dim]")
-        results.append({"text": text, "score": score, "blocked": False, "type": "normal"})
+        await typewriter(f'💬 "{text}"', style="italic")
+        async with scanning():
+            try:
+                await secure.invoke({"input": text}, session_id=session_id, agent_id="mock-agent")
+                blocked = False
+            except ActionBlockedError:
+                blocked = True
+        status = "[red]✗ BLOCKED[/red]" if blocked else "[green]✓ ALLOWED[/green]"
+        verdict_line(status, f"threat score [yellow]{score:.3f}[/yellow] — nothing suspicious")
+        results.append({"text": text, "score": score, "blocked": blocked, "type": "normal"})
+        await beat(0.25)
 
     console.print()
+    console.print("  [green]All five allowed — zero false positives so far.[/green]")
 
-    # --- Injection attacks ---
-    console.print("[bold red]── Injection attacks ──[/bold red]")
+    # =====================================================================
+    scene(
+        2,
+        "The attackers show up",
+        "[bold]Now the fun part.[/bold] Six classic prompt-injection attacks — jailbreaks, "
+        "system-prompt extraction, goal hijacking, indirect injection hidden in a document. "
+        "The [cyan]PromptInjectionPolicy[/cyan] scores each one; anything over 0.5 gets denied "
+        "before the agent ever sees it.",
+        color="red",
+    )
     for text in INJECTION_INPUTS:
         score, signals = score_text(text)
-        try:
-            await secure.invoke({"input": text}, session_id=session_id, agent_id="mock-agent")
-            status = "[yellow]⚠ MISSED[/yellow]"
-            blocked = False
-        except ActionBlockedError:
-            status = "[green]✓ BLOCKED[/green]"
-            blocked = True
-
+        await typewriter(f'😈 "{text}"', style="italic red")
+        async with scanning("threat analysis"):
+            try:
+                await secure.invoke({"input": text}, session_id=session_id, agent_id="mock-agent")
+                blocked = False
+            except ActionBlockedError:
+                blocked = True
         signal_str = ", ".join(signals.keys()) if signals else "none"
-        short = text[:50] + "..." if len(text) > 50 else text
-        console.print(
-            f"  {status}  score=[red]{score:.3f}[/red]  " f"signals=[dim]{signal_str}[/dim]"
+        status = "[bold green]🚫 BLOCKED[/bold green]" if blocked else "[yellow]⚠ MISSED[/yellow]"
+        verdict_line(
+            status,
+            f"score [red]{score:.3f}[/red] — tripwires: [dim]{signal_str}[/dim]",
         )
-        console.print(f'         [dim italic]"{short}"[/dim italic]')
         results.append({"text": text, "score": score, "blocked": blocked, "type": "injection"})
+        await beat(0.3)
 
-    console.print()
-
-    # --- Toxic content ---
-    console.print("[bold red]── Toxic content ──[/bold red]")
+    # =====================================================================
+    scene(
+        3,
+        "Toxicity",
+        "Threats and harassment get the same treatment — the [cyan]ToxicityPolicy[/cyan] "
+        "denies them on the way in.",
+        color="red",
+    )
     for text in TOXIC_INPUTS:
+        await typewriter(f'🤬 "{text}"', style="italic red")
+        async with scanning("toxicity analysis"):
+            try:
+                await secure.invoke({"input": text}, session_id=session_id, agent_id="mock-agent")
+                caught = None
+            except ActionBlockedError as e:
+                caught = e
+        if caught:
+            verdict_line("[bold green]🚫 BLOCKED[/bold green]", f"[dim]{caught.reason}[/dim]")
+        else:
+            verdict_line("[yellow]⚠ MISSED[/yellow]")
+        await beat(0.3)
+
+    # =====================================================================
+    scene(
+        4,
+        "The agent leaks personal data",
+        "This time the [bold]input is innocent[/bold] — but our (deliberately naughty) mock "
+        "agent responds with an email, an SSN, a credit card, and a phone number. "
+        "The [cyan]PIIPolicy[/cyan] catches the response on the way [bold]out[/bold] and "
+        "redacts it before anyone sees it.",
+        color="magenta",
+    )
+    await typewriter(f'💬 "{PII_TRIGGER}"', style="italic")
+    async with scanning("agent responding… output policies scanning"):
         try:
-            await secure.invoke({"input": text}, session_id=session_id, agent_id="mock-agent")
-            console.print(f'  [yellow]⚠ MISSED[/yellow]  [dim italic]"{text}"[/dim italic]')
+            pii_result, ctx = await secure.invoke_with_context(
+                {"input": PII_TRIGGER}, session_id=session_id, agent_id="mock-agent"
+            )
+            pii_error = None
         except ActionBlockedError as e:
-            console.print(f'  [green]✓ BLOCKED[/green]  [dim italic]"{text}"[/dim italic]')
-            console.print(f"         [dim]{e.reason}[/dim]")
-
-    console.print()
-
-    # --- PII trigger ---
-    console.print("[bold magenta]── PII redaction + risk score ──[/bold magenta]")
-    try:
-        pii_result, ctx = await secure.invoke_with_context(
-            {"input": PII_TRIGGER}, session_id=session_id, agent_id="mock-agent"
+            pii_error = e
+    if pii_error is None:
+        console.print(
+            "  [dim]agent wanted to say:[/dim] [strike dim]user@example.com | SSN: 123-45-6789 "
+            "| card: 4111 1111 1111 1111 | …[/strike dim]"
         )
+        await beat(0.6)
         output = pii_result.get("output", "")
-        console.print(f"  [green]✓ REDACTED[/green]  output: [dim]{output[:100]}[/dim]")
+        verdict_line("[bold green]🧹 REDACTED[/bold green]", "what actually went out:")
+        await typewriter(output[:110], style="dim", prefix="     ")
         console.print(
-            f"  risk_score=[yellow]{ctx.risk_score}[/yellow]  "
-            f"pii found=[dim]{ctx.metadata['pii']['found']}[/dim]"
+            f"  risk score climbed to [yellow]{ctx.risk_score}[/yellow]  "
+            f"[dim](PII found: {ctx.metadata['pii']['found']})[/dim]"
         )
-    except ActionBlockedError as e:
-        console.print(f"  [red]✗ BLOCKED[/red]  {e}")
+    else:
+        verdict_line("[red]✗ BLOCKED[/red]", str(pii_error))
 
-    console.print()
-
-    # --- Secrets + internal URLs ---
-    console.print("[bold magenta]── Secrets redaction + internal URL annotation ──[/bold magenta]")
-    leak_result, ctx = await secure.invoke_with_context(
-        {"input": SECRETS_TRIGGER}, session_id=session_id, agent_id="mock-agent"
+    # =====================================================================
+    scene(
+        5,
+        "The agent leaks credentials",
+        "Worse: the agent dumps an AWS key, a GitHub token, and an internal vault URL. "
+        "The [cyan]SecretsPolicy[/cyan] scrubs the credentials but only [bold]annotates[/bold] "
+        "the internal URL — redacting every mention of localhost would be a false-positive "
+        "nightmare.",
+        color="magenta",
     )
-    console.print(f"  [green]✓ REDACTED[/green]  output: [dim]{leak_result['output']}[/dim]")
+    await typewriter(f'💬 "{SECRETS_TRIGGER}"', style="italic")
+    async with scanning("agent responding… secrets scan"):
+        leak_result, ctx = await secure.invoke_with_context(
+            {"input": SECRETS_TRIGGER}, session_id=session_id, agent_id="mock-agent"
+        )
+    verdict_line("[bold green]🧹 REDACTED[/bold green]", "what actually went out:")
+    await typewriter(str(leak_result["output"]), style="dim", prefix="     ")
     console.print(
-        f"  risk_score=[yellow]{ctx.risk_score}[/yellow]  "
-        f"secrets found=[dim]{ctx.metadata['secrets']['found']}[/dim]"
-    )
-    console.print(
-        "  [dim]internal URL left visible but annotated — internal_url_mode='annotate' "
-        "avoids false-positive redaction of localhost/*.local[/dim]"
+        f"  risk score [yellow]{ctx.risk_score}[/yellow]  "
+        f"[dim](secrets found: {ctx.metadata['secrets']['found']}; "
+        "internal URL left visible but flagged)[/dim]"
     )
 
+    # =====================================================================
+    scene(
+        6,
+        "Is the agent making things up?",
+        "Give OpenScript a [bold]grounding source[/bold] and the "
+        "[cyan]OutputSchemaPolicy[/cyan] checks whether the agent's claims are actually "
+        "supported by it — a cheap hallucination tripwire.",
+        color="blue",
+    )
+    console.print(f'  📖 source of truth: [italic]"{GROUNDING_SOURCE}"[/italic]')
     console.print()
-
-    # --- Hallucination / grounding ---
-    console.print("[bold blue]── Hallucination check (grounding source) ──[/bold blue]")
-    console.print(f'  source: [dim italic]"{GROUNDING_SOURCE}"[/dim italic]')
     for query, _expected_grounded in GROUNDING_QUERIES:
-        _, ctx = await secure.invoke_with_context(
-            {"input": query},
-            grounding_source=GROUNDING_SOURCE,
-            session_id=session_id,
-            agent_id="mock-agent",
-        )
+        await typewriter(f'🤖 claims: "{query}"', style="italic")
+        async with scanning("grounding check"):
+            _, ctx = await secure.invoke_with_context(
+                {"input": query},
+                grounding_source=GROUNDING_SOURCE,
+                session_id=session_id,
+                agent_id="mock-agent",
+            )
         h = ctx.metadata.get("hallucination", {})
-        status = (
-            "[red]⚠ UNGROUNDED[/red]" if h.get("flagged") else "[green]✓ GROUNDED[/green]"
-        )
-        console.print(
-            f"  {status}  score=[yellow]{h.get('risk', '—')}[/yellow]  "
-            f'[dim italic]"{query}"[/dim italic]'
-        )
+        if h.get("flagged"):
+            verdict_line(
+                "[bold red]🔍 UNGROUNDED[/bold red]",
+                f"risk [yellow]{h.get('risk', '—')}[/yellow] — the source says nothing about this",
+            )
+        else:
+            verdict_line(
+                "[green]✓ GROUNDED[/green]",
+                f"risk [yellow]{h.get('risk', '—')}[/yellow] — supported by the source",
+            )
+        await beat(0.3)
 
-    console.print()
-
-    # --- Tool firewall ---
-    console.print("[bold yellow]── Tool firewall ──[/bold yellow]")
+    # =====================================================================
+    scene(
+        7,
+        "The tool firewall",
+        "Agents don't just talk — they call tools. The firewall is "
+        "[bold]default-deny[/bold]: unknown tools are rejected, dangerous ones are banned "
+        "outright, and money-movers need a human plus an amount cap.",
+        color="yellow",
+    )
     for name, args, role in TOOL_CALLS:
-        verdict = validate_tool_call({"name": name, "args": args}, role=role, rules=TOOL_RULES)
+        await typewriter(f"🔧 {name}({args})" + (f"  as role={role}" if role else ""), style="bold")
+        async with scanning("checking firewall rules"):
+            verdict = validate_tool_call({"name": name, "args": args}, role=role, rules=TOOL_RULES)
         if verdict["requires_approval"]:
-            status = "[yellow]⏸ NEEDS APPROVAL[/yellow]"
+            status = "[yellow]⏸ NEEDS HUMAN APPROVAL[/yellow]"
         elif verdict["allowed"]:
             status = "[green]✓ ALLOWED[/green]"
         else:
-            status = "[red]✗ DENIED[/red]"
-        console.print(f"  {status}  [bold]{name}[/bold]({args})  [dim]{verdict['reason']}[/dim]")
+            status = "[bold red]⛔ DENIED[/bold red]"
+        verdict_line(status, f"[dim]{verdict['reason']}[/dim]")
+        await beat(0.3)
 
-    console.print()
-
-    # --- Retry-after-approval flow ---
-    console.print("[bold green]── Human approval flow ──[/bold green]")
-    console.print(f'  request: [dim italic]"{TRANSFER_REQUEST}"[/dim italic]')
+    # =====================================================================
+    scene(
+        8,
+        "A human in the loop",
+        "The agent is asked to wire money. Policy says: [bold]not without sign-off[/bold]. "
+        "Watch the full loop — blocked, a human approves, the retry succeeds, and a replay "
+        "of the same approval is rejected because approvals are single-use.",
+        color="green",
+    )
+    await typewriter(f'💬 "{TRANSFER_REQUEST}"', style="italic")
     approval_id = ""
-    try:
-        await secure.invoke(
-            {"input": TRANSFER_REQUEST}, session_id=session_id, agent_id="mock-agent"
-        )
-    except ActionBlockedError as e:
-        approval_id = e.approval_id
-        console.print(
-            f"  [yellow]⏸ BLOCKED[/yellow] pending approval [cyan]{approval_id}[/cyan]"
-            f"  [dim]({e.reason})[/dim]"
-        )
+    async with scanning("policy check"):
+        try:
+            await secure.invoke(
+                {"input": TRANSFER_REQUEST}, session_id=session_id, agent_id="mock-agent"
+            )
+        except ActionBlockedError as e:
+            approval_id = e.approval_id
+    verdict_line(
+        "[yellow]⏸ HELD[/yellow]",
+        f"pending approval [cyan]{approval_id}[/cyan]  [dim](wire transfers require human approval)[/dim]",
+    )
+    await beat(0.8)
 
     # In production a human decides via POST /v1/approvals/{id}/decide
     # (with a Redis-backed store shared between SDK and server).
-    await approval_store.decide(approval_id, approved=True, decided_by="demo-human")
-    console.print("  [dim]… human approves via /v1/approvals …[/dim]")
+    async with scanning("waiting for a human"):
+        await approval_store.decide(approval_id, approved=True, decided_by="demo-human")
+    console.print("  👤 [bold]demo-human[/bold] clicks [green]Approve[/green] [dim]via POST /v1/approvals/{id}/decide[/dim]")
+    await beat(0.5)
 
     result = await secure.invoke(
         {"input": TRANSFER_REQUEST},
@@ -417,8 +575,11 @@ async def run_demo() -> None:
         session_id=session_id,
         agent_id="mock-agent",
     )
-    console.print(f"  [green]✓ APPROVED RETRY[/green]  output: [dim]{result['output']}[/dim]")
+    verdict_line("[bold green]✓ RETRY SUCCEEDS[/bold green]", f"[dim]{result['output']}[/dim]")
+    await beat(0.5)
 
+    console.print("  [dim]…now let's try to sneakily reuse that same approval…[/dim]")
+    await beat(0.6)
     try:
         await secure.invoke(
             {"input": TRANSFER_REQUEST},
@@ -426,14 +587,23 @@ async def run_demo() -> None:
             session_id=session_id,
             agent_id="mock-agent",
         )
-        console.print("  [red]⚠ replay was not blocked[/red]")
+        verdict_line("[red]⚠ replay was not blocked[/red]")
     except ActionBlockedError:
-        console.print("  [green]✓ REPLAY BLOCKED[/green]  [dim]approvals are single-use[/dim]")
+        verdict_line(
+            "[bold green]🚫 REPLAY BLOCKED[/bold green]",
+            "[dim]approvals are single-use and bound to the exact action[/dim]",
+        )
 
-    console.print()
-
-    # --- Guarded streaming ---
-    console.print("[bold cyan]── Guarded streaming (near-real-time redaction) ──[/bold cyan]")
+    # =====================================================================
+    scene(
+        9,
+        "Guarded streaming — the grand finale",
+        "Streaming is where most gateways give up: tokens arrive in fragments, so "
+        "[bold]no single chunk ever contains a scannable secret[/bold]. OpenScript holds back "
+        "a small sliding window, scans the assembled text, and releases it clean. Watch the "
+        "stream below — the API key never makes it to the screen.",
+        color="cyan",
+    )
     stream_secure = SecureAgent(
         StreamingMockAgent(),
         policies=[SecretsPolicy(mode=PIIMode.REDACT)],
@@ -442,18 +612,33 @@ async def run_demo() -> None:
         metrics=metrics,
     )
     releases: list[str] = []
-    async for release in stream_secure.stream(
-        {"input": "stream the deploy notes"}, session_id=session_id, agent_id="stream-agent"
-    ):
-        releases.append(release)
-    console.print(f"  streamed [bold]{len(releases)}[/bold] incremental releases:")
-    console.print(f"  [dim]{'[cyan]⎸[/cyan]'.join(releases)}[/dim]")
+    console.print("  [dim]streaming live:[/dim]")
+    stream_text = Text("  🖥  ", style="")
+    with Live(stream_text, console=console, refresh_per_second=30) as live:
+        async for release in stream_secure.stream(
+            {"input": "stream the deploy notes"}, session_id=session_id, agent_id="stream-agent"
+        ):
+            releases.append(release)
+            for ch in release:
+                style = "bold yellow" if "[" in release or "REDACTED" in release else "white"
+                stream_text.append(ch, style=style)
+                live.update(stream_text)
+                if not FAST:
+                    await asyncio.sleep(0.02)
     assert "sk-abcdefghijklmnopqrstuvwx" not in "".join(releases)
-    console.print(
-        "  [green]✓ key redacted mid-stream[/green] "
-        "[dim](split across chunk boundaries — no single chunk was scannable)[/dim]"
+    console.print()
+    verdict_line(
+        "[bold green]🧹 KEY REDACTED MID-STREAM[/bold green]",
+        f"[dim]{len(releases)} incremental releases; the key was split across chunk "
+        "boundaries, so only the assembled window could catch it[/dim]",
     )
+    await beat(0.8)
 
+    console.print()
+    console.print(
+        "  [bold]One more:[/bold] an agent starts streaming an RSA [bold]private key[/bold]. "
+        "Redaction isn't enough — the stream is [bold red]killed[/bold red]."
+    )
     abort_secure = SecureAgent(
         KeyLeakStreamAgent(),
         policies=[SecretsPolicy(mode=PIIMode.REDACT)],  # even redact mode aborts on PEM
@@ -461,24 +646,45 @@ async def run_demo() -> None:
         metrics=metrics,
     )
     emitted: list[str] = []
-    try:
-        async for release in abort_secure.stream(
-            {"input": "give me the server key"}, session_id=session_id, agent_id="stream-agent"
-        ):
-            emitted.append(release)
-        console.print("  [red]⚠ private key was not caught[/red]")
-    except ActionBlockedError as e:
-        console.print(
-            f"  [green]✓ STREAM ABORTED[/green]  [dim]{e.reason} — "
-            f"{len(''.join(emitted))} chars emitted before abort[/dim]"
+    abort_reason = ""
+    stream_text = Text("  🖥  ")
+    with Live(stream_text, console=console, refresh_per_second=30) as live:
+        try:
+            async for release in abort_secure.stream(
+                {"input": "give me the server key"},
+                session_id=session_id,
+                agent_id="stream-agent",
+            ):
+                emitted.append(release)
+                for ch in release:
+                    stream_text.append(ch, style="white")
+                    live.update(stream_text)
+                    if not FAST:
+                        await asyncio.sleep(0.02)
+        except ActionBlockedError as e:
+            abort_reason = e.reason
+            stream_text.append("  ✂ ── CONNECTION TERMINATED ──", style="bold red blink")
+            live.update(stream_text)
+            await beat(0.8)
+    if abort_reason:
+        verdict_line(
+            "[bold green]🔌 STREAM ABORTED[/bold green]",
+            f"[dim]{abort_reason} — only {len(''.join(emitted))} harmless chars escaped, "
+            "zero bytes of the key[/dim]",
         )
+    else:
+        verdict_line("[red]⚠ private key was not caught[/red]")
 
     # Flush events
     await asyncio.sleep(0.3)
     await writer.stop()
 
-    # --- Summary tables ---
+    # =====================================================================
+    # --- Final scoreboard ---
     console.print()
+    console.print(Rule("[bold]📊 Final scoreboard[/bold]", style="blue"))
+    await beat(0.5)
+
     table = Table(title="Session Summary", box=box.ROUNDED, show_lines=True)
     table.add_column("Type", style="bold")
     table.add_column("Total")
@@ -572,7 +778,16 @@ async def run_demo() -> None:
             )
         )
     console.print()
+    console.print(
+        Align.center(
+            Text("🎬 That's the whole pipeline. Wrap your own agent in 6 lines — see the README.", style="bold dim")
+        )
+    )
+    console.print()
 
 
 if __name__ == "__main__":
-    asyncio.run(run_demo())
+    try:
+        asyncio.run(run_demo())
+    except KeyboardInterrupt:
+        console.print("\n[dim]demo interrupted — bye 👋[/dim]")

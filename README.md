@@ -4,6 +4,8 @@
 
 OpenScript wraps any agent in a **policy pipeline**: policies run before and after every action, and each one can allow, mutate (redact), deny, or require human approval. The pipeline itself contains zero detection logic — everything is a `Policy` you can swap, configure from YAML, or write yourself.
 
+![OpenScript demo](demo/injection_demo.gif)
+
 ## Getting Started in 5 Minutes
 
 ### 1. Install
