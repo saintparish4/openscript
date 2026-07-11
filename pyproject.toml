@@ -63,11 +63,13 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.black]
-target-version = ["py312"]
+target-version = ["py310"]
 line-length = 100
 
+# Match requires-python (>=3.10): keeps pyupgrade (UP017 etc.) from suggesting
+# 3.11+ only APIs like datetime.UTC, which mypy rejects under python_version 3.10.
 [tool.ruff] 
-target-version = "py312" 
+target-version = "py310" 
 line-length = 100 
 
 [tool.ruff.lint]
@@ -93,6 +95,7 @@ known-first-party = ["sdk", "contracts"]
 # load_dotenv() must run before downstream imports that read env vars at import time.
 [tool.ruff.lint.per-file-ignores]
 "server/app.py" = ["B008", "E402"]
+"server/routers/approvals.py" = ["B008"]
 "server/routers/sessions.py" = ["B008"]
 "server/routers/sse.py" = ["B008"]
 "demo/injection_demo.py" = ["E402"]
@@ -115,6 +118,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["sentence_transformers"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["opentelemetry.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

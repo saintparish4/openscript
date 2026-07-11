@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
@@ -223,16 +223,19 @@ class CompliancePolicy(BasePolicy):
             )
 
     def _meta(self, context: ActionContext) -> dict[str, Any]:
-        return context.metadata.setdefault(
-            "compliance",
-            {
-                "risk": 0.0,
-                "category": "compliance",
-                "rules": self._rules,
-                "phi": [],
-                "credentials": [],
-                "audited": False,
-            },
+        return cast(
+            dict[str, Any],
+            context.metadata.setdefault(
+                "compliance",
+                {
+                    "risk": 0.0,
+                    "category": "compliance",
+                    "rules": self._rules,
+                    "phi": [],
+                    "credentials": [],
+                    "audited": False,
+                },
+            ),
         )
 
     async def _emit_event(

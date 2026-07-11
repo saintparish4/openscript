@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid
 from dataclasses import asdict, dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Protocol
 
@@ -36,7 +36,7 @@ def action_hash(action: str, input_data: dict[str, Any]) -> str:
 
 
 def _new_expiry(ttl_seconds: int = DEFAULT_TTL_SECONDS) -> datetime:
-    return datetime.now(UTC) + timedelta(seconds=ttl_seconds)
+    return datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
 
 
 @dataclass
@@ -48,13 +48,13 @@ class ApprovalRecord:
     action_hash: str
     approval_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     status: ApprovalStatus = ApprovalStatus.PENDING
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: datetime = field(default_factory=_new_expiry)
     decided_by: str = ""
 
     @property
     def expired(self) -> bool:
-        return datetime.now(UTC) >= self.expires_at
+        return datetime.now(timezone.utc) >= self.expires_at
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -186,7 +186,7 @@ class RedisApprovalStore:
 
     @staticmethod
     def _ttl_seconds(record: ApprovalRecord) -> int:
-        return max(1, int((record.expires_at - datetime.now(UTC)).total_seconds()))
+        return max(1, int((record.expires_at - datetime.now(timezone.utc)).total_seconds()))
 
     async def create(self, record: ApprovalRecord) -> None:
         await self._redis.set(
@@ -203,7 +203,7 @@ class RedisApprovalStore:
     async def list_pending(self) -> list[ApprovalRecord]:
         pending: list[ApprovalRecord] = []
         for approval_id in await self._redis.smembers(self._pending_key):
-            record = await self.get(approval_id)
+            record = await self.get(str(approval_id))
             if record is None or record.status != ApprovalStatus.PENDING:
                 # expired (key TTL fired) or already decided — clean the set
                 await self._redis.srem(self._pending_key, approval_id)

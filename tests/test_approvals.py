@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -108,7 +108,7 @@ async def test_list_pending_excludes_decided_and_expired():
     store = InMemoryApprovalStore()
     pending = _record()
     decided = _record()
-    expired = _record(expires_at=datetime.now(UTC) - timedelta(seconds=1))
+    expired = _record(expires_at=datetime.now(timezone.utc) - timedelta(seconds=1))
     for r in (pending, decided, expired):
         await store.create(r)
     await store.decide(decided.approval_id, approved=True)
@@ -135,7 +135,7 @@ async def test_decide_twice_raises():
 
 async def test_decide_expired_raises():
     store = InMemoryApprovalStore()
-    record = _record(expires_at=datetime.now(UTC) - timedelta(seconds=1))
+    record = _record(expires_at=datetime.now(timezone.utc) - timedelta(seconds=1))
     await store.create(record)
 
     with pytest.raises(ValueError, match="not pending"):
@@ -167,10 +167,12 @@ async def test_consume_rejects_wrong_hash_without_burning_record():
 
 async def test_consume_rejects_expired_approval():
     store = InMemoryApprovalStore()
-    record = _record(expires_at=datetime.now(UTC) + timedelta(seconds=60))
+    record = _record(expires_at=datetime.now(timezone.utc) + timedelta(seconds=60))
     await store.create(record)
     await store.decide(record.approval_id, approved=True)
-    store._records[record.approval_id].expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    store._records[record.approval_id].expires_at = datetime.now(timezone.utc) - timedelta(
+        seconds=1
+    )
 
     assert await store.consume(record.approval_id, record.action_hash) is False
 

@@ -51,14 +51,14 @@ __all__ = [
     "Interceptor",  # deprecated alias
     "InterceptorDecision",
     "InterceptorResult",
+    "InternalURLMode",
     "MetricsRecorder",
     "NoopInterceptor",
     "OnInvalid",
     "OpenScriptMiddleware",  # deprecated alias
     "OutputSchemaPolicy",
-    "PIIInterceptor",  # deprecated alias
-    "InternalURLMode",
     "PHIMode",
+    "PIIInterceptor",  # deprecated alias
     "PIIMode",
     "PIIPolicy",
     "Policy",
