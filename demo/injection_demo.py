@@ -566,7 +566,9 @@ async def run_demo() -> None:
     # (with a Redis-backed store shared between SDK and server).
     async with scanning("waiting for a human"):
         await approval_store.decide(approval_id, approved=True, decided_by="demo-human")
-    console.print("  👤 [bold]demo-human[/bold] clicks [green]Approve[/green] [dim]via POST /v1/approvals/{id}/decide[/dim]")
+    console.print(
+        "  👤 [bold]demo-human[/bold] clicks [green]Approve[/green] [dim]via POST /v1/approvals/{id}/decide[/dim]"
+    )
     await beat(0.5)
 
     result = await secure.invoke(
@@ -741,9 +743,7 @@ async def run_demo() -> None:
     )
     mtable.add_row("injections blocked", f"{_metric('openscript_injections_blocked_total'):.0f}")
     mtable.add_row("pii redactions", f"{_metric('openscript_pii_redacted_total'):.0f}")
-    mtable.add_row(
-        "mean risk score", f"{(risk_sum / risk_count) if risk_count else 0:.3f}"
-    )
+    mtable.add_row("mean risk score", f"{(risk_sum / risk_count) if risk_count else 0:.3f}")
     mtable.add_row(
         "violations by category",
         ", ".join(f"{k}={v:.0f}" for k, v in sorted(violations.items())) or "—",
@@ -780,7 +780,10 @@ async def run_demo() -> None:
     console.print()
     console.print(
         Align.center(
-            Text("🎬 That's the whole pipeline. Wrap your own agent in 6 lines — see the README.", style="bold dim")
+            Text(
+                "🎬 That's the whole pipeline. Wrap your own agent in 6 lines — see the README.",
+                style="bold dim",
+            )
         )
     )
     console.print()

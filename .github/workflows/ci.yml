@@ -97,6 +97,47 @@ jobs:
       - name: Phase 1 gate — every policy under WASM
         run: node web/probe.mjs
 
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" build
+
+      # site/public/wheels/ is generated rather than committed, so until this
+      # runs the export has no package for the page to install.
+      - name: Build the browser wheel bundle
+        run: bash tools/build_browser_wheels.sh
+        env:
+          PYTHON: python
+
+      - name: Install the demo app
+        run: npm ci
+        working-directory: site
+
+      - name: Type-check the demo app
+        run: npm run typecheck
+        working-directory: site
+
+      - name: Export the demo app
+        run: npm run build
+        working-directory: site
+
+      - name: Phase 2 gate — every gallery example behaves as advertised
+        run: npm run verify
+        working-directory: site
+
   build:
     runs-on: ubuntu-latest
     needs: [lint, type-check, test] 

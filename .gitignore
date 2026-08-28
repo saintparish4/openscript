@@ -10,8 +10,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Anchored: unanchored `lib/` also matches site/lib/, the demo app's source.
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -99,3 +100,9 @@ demo/*.mp4
 # Phase 1 browser bundle — rebuilt by `make browser-wheels`
 web/wheels/
 node_modules/
+
+# Demo app build output and mirrored wheels
+site/.next/
+site/out/
+site/public/wheels/
+site/tsconfig.tsbuildinfo

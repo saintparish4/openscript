@@ -156,3 +156,33 @@ probe: browser-wheels  ## Phase 1 gate — run every policy under Pyodide, headl
 .PHONY: probe-serve
 probe-serve: browser-wheels  ## Serve the bare Pyodide page at :8080
 	$(PYTHON) -m http.server 8080 --directory web
+
+# ── Demo app (Phase 2) ────────────────────────────────────────────────────────
+
+NPM := npm
+
+# site/public/wheels/ is generated, not committed, so every target that serves
+# or exports the app builds the bundle first — otherwise the page boots the
+# interpreter and then 404s on the package it exists to demonstrate.
+
+site/node_modules:
+	cd site && $(NPM) ci
+
+.PHONY: demo-install
+demo-install: site/node_modules  ## Install the demo app's node dependencies
+
+.PHONY: demo-dev
+demo-dev: browser-wheels site/node_modules  ## Run the demo app with hot-reload on :3000
+	cd site && $(NPM) run dev
+
+.PHONY: demo-build
+demo-build: browser-wheels site/node_modules  ## Export the demo app to site/out/
+	cd site && $(NPM) run build
+
+.PHONY: demo-verify
+demo-verify: demo-build  ## Phase 2 gate — run every gallery example through the export
+	cd site && $(NPM) run verify
+
+.PHONY: demo-serve
+demo-serve: demo-build  ## Serve the exported demo at :8081
+	$(PYTHON) -m http.server 8081 --directory site/out

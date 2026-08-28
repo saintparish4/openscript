@@ -6,6 +6,19 @@ OpenScript wraps any agent in a **policy pipeline**: policies run before and aft
 
 ![OpenScript demo](demo/injection_demo.gif)
 
+## Try It in Your Browser
+
+`site/` is an interactive demo that runs **this package** — compiled to WebAssembly with
+Pyodide — entirely inside the visitor's tab. Every policy executes locally: there is no
+backend and no API endpoint, so nothing typed into it is sent anywhere, and the network tab
+proves it. That is possible because all eight built-in policies are pure-local heuristics,
+a property enforced in CI rather than merely asserted.
+
+```bash
+make demo-serve    # build the wheel bundle, export the app, serve it on :8081
+make demo-verify   # run every gallery example through the export, headless
+```
+
 ## Getting Started in 5 Minutes
 
 ### 1. Install

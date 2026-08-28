@@ -51,3 +51,13 @@ if missing:
 (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 print(json.dumps(manifest, indent=2))
 PY
+
+# The demo app serves the same wheels from its own public/ directory. Mirroring
+# rather than rebuilding keeps the probe and the page on identical bytes.
+SITE_OUT="$ROOT/site/public/wheels"
+if [ -d "$ROOT/site/public" ]; then
+  echo "==> mirroring into site/public/wheels"
+  rm -rf "$SITE_OUT"
+  mkdir -p "$SITE_OUT"
+  cp "$OUT"/*.whl "$OUT/manifest.json" "$SITE_OUT/"
+fi
