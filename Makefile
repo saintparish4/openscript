@@ -138,11 +138,11 @@ help:  ## List all available targets
 # ── Browser / Pyodide ─────────────────────────────────────────────────────────
 
 .PHONY: audit
-audit:  ## Phase 0 — regenerate the policy audit table
+audit:  ## Regenerate the policy audit table
 	$(PYTHON) tools/policy_audit.py
 
 .PHONY: wasm-deps
-wasm-deps:  ## Phase 1 — check runtime deps for Pyodide-incompatible C extensions
+wasm-deps:  ## Check runtime deps for Pyodide-incompatible C extensions
 	$(PYTHON) tools/check_wasm_deps.py
 
 .PHONY: browser-wheels
@@ -150,14 +150,14 @@ browser-wheels:  ## Build openscript + vendor structlog into web/wheels/
 	PYTHON=$(PYTHON) bash tools/build_browser_wheels.sh
 
 .PHONY: probe
-probe: browser-wheels  ## Phase 1 gate — run every policy under Pyodide, headless
+probe: browser-wheels  ## Run every policy under Pyodide, headless
 	node web/probe.mjs
 
 .PHONY: probe-serve
 probe-serve: browser-wheels  ## Serve the bare Pyodide page at :8080
 	$(PYTHON) -m http.server 8080 --directory web
 
-# ── Demo app (Phase 2) ────────────────────────────────────────────────────────
+# ── Demo app ──────────────────────────────────────────────────────────────────
 
 NPM := npm
 
@@ -180,7 +180,7 @@ demo-build: browser-wheels site/node_modules  ## Export the demo app to site/out
 	cd site && $(NPM) run build
 
 .PHONY: demo-verify
-demo-verify: demo-build  ## Phase 2 gate — run every gallery example through the export
+demo-verify: demo-build  ## Run every gallery example through the exported app
 	cd site && $(NPM) run verify
 
 .PHONY: demo-serve

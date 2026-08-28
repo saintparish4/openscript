@@ -1,6 +1,6 @@
-"""Phase 1 gate: the built wheel must be installable and importable under Pyodide.
+"""The built wheel must be installable and importable under Pyodide.
 
-These tests catch the two failures that broke Phase 1 the first time:
+These tests catch the two failures that broke the browser build the first time:
 
   1. `include = ["sdk", ...]` shipped a wheel containing only sdk/__init__.py and
      sdk/logging.py — every policy subpackage was missing. Invisible locally,

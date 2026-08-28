@@ -2,7 +2,7 @@
   "name": "openscript-web",
   "private": true,
   "version": "0.1.0",
-  "description": "Pyodide probe for the OpenScript browser build (Phase 1 gate)",
+  "description": "Pyodide probe for the OpenScript browser build",
   "type": "module",
   "scripts": {
     "probe": "node web/probe.mjs",

@@ -141,10 +141,10 @@ def main() -> int:
     print()
     if impure:
         print(
-            f"**{len(impure)} policy/policies are NOT pure-local: {impure}. Phase 3 is required.**"
+            f"**{len(impure)} policy/policies are NOT pure-local: {impure}. A backend is required.**"
         )
         return 1
-    print(f"**All {len(rows)} policies are pure-local. Phase 3 is not required.**")
+    print(f"**All {len(rows)} policies are pure-local. No backend is required.**")
     return 0
 
 

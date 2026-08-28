@@ -78,13 +78,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" build packaging
 
-      - name: Phase 0 — policy audit verdict still holds
+      - name: Confirm the policy audit verdict still holds
         run: python tools/policy_audit.py
 
-      - name: Phase 0 — audit gate
+      - name: Audit gate
         run: pytest tests/test_audit.py -v
 
-      - name: Phase 1 — wheel + dependency-floor gates
+      - name: Wheel and dependency-floor gates
         run: pytest tests/test_pyodide_compat.py -v
 
       - run: npm ci
@@ -94,7 +94,7 @@ jobs:
         env:
           PYTHON: python
 
-      - name: Phase 1 gate — every policy under WASM
+      - name: Run every policy under WASM
         run: node web/probe.mjs
 
   demo:
@@ -134,7 +134,7 @@ jobs:
         run: npm run build
         working-directory: site
 
-      - name: Phase 2 gate — every gallery example behaves as advertised
+      - name: Check every gallery example behaves as advertised
         run: npm run verify
         working-directory: site
 

@@ -1,9 +1,9 @@
-"""the demo may ship client-side only for as long as every
-built-in policy stays free of network calls and heavy runtime dependencies.
+"""The demo may ship client-side only for as long as every built-in policy
+stays free of network calls and heavy runtime dependencies.
 
-If a policy ever grows an LLM call, these tests fail and the Phase 3 backend
-comes back onto the roadmap. That is the point — the decision to delete Phase 3
-is only safe if its premise is enforced.
+If a policy ever grows an LLM call, these tests fail and a backend comes back
+onto the roadmap. That is the point: shipping without one is only safe while
+its premise holds, so the premise is enforced rather than assumed.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def test_registry_has_exactly_the_eight_audited_policies():
     found = {r["policy"] for r in audit()}
     assert found == EXPECTED_POLICIES, (
         f"policy registry changed: added={found - EXPECTED_POLICIES}, "
-        f"removed={EXPECTED_POLICIES - found}. Re-run the Phase 0 audit."
+        f"removed={EXPECTED_POLICIES - found}. Re-run the policy audit."
     )
 
 
@@ -59,7 +59,7 @@ def test_registry_has_exactly_the_eight_audited_policies():
 def test_policy_makes_no_network_call(row):
     assert not row["network_markers"], (
         f"{row['policy']} ({row['module']}) references {row['network_markers']}. "
-        "A policy that reaches the network cannot run client-side — Phase 3 is back."
+        "A policy that reaches the network cannot run client-side."
     )
 
 

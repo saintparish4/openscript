@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8" />
-<title>OpenScript — Pyodide Phase 1 probe</title>
+<title>OpenScript — Pyodide probe</title>
 <style>
   :root { color-scheme: light dark; }
   body { font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -16,7 +16,7 @@
   code { background: #8882; padding: .1rem .3rem; border-radius: 3px; word-break: break-all; }
 </style>
 
-<h1>OpenScript — Phase 1 probe</h1>
+<h1>OpenScript — Pyodide probe</h1>
 <div>Runs every built-in policy against the real package, compiled to WASM, in this tab.
   Nothing is sent anywhere. Open devtools for the raw report.</div>
 <div id="status">booting…</div>
@@ -64,8 +64,8 @@ await micropip.install("${wheels.openscript}")
     statusEl.className = failed.length ? "fail" : "pass";
     say(
       failed.length
-        ? `${failed.length}/${rows.length} checks FAILED — Phase 1 not met`
-        : `all ${rows.length} checks passed in ${since()} — Phase 1 criterion 2 met`
+        ? `${failed.length}/${rows.length} checks FAILED`
+        : `all ${rows.length} checks passed in ${since()}`
     );
 
     const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));

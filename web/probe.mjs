@@ -1,11 +1,11 @@
 /**
- * Phase 1 gate: prove the real OpenScript wheel installs and runs under Pyodide
+ * Prove the real OpenScript wheel installs and runs under Pyodide
  * using the SAME mechanism the browser page uses (micropip fetching wheels over
  * HTTP), not an Emscripten-FS shortcut.
  *
  *   node web/probe.mjs
  *
- * Exit 0 = Phase 1 criterion 2 is met. Exit non-zero = it is not.
+ * Exit 0 = every policy ran in the browser runtime. Exit non-zero = it did not.
  */
 import { loadPyodide } from "pyodide";
 import http from "node:http";
@@ -77,4 +77,4 @@ if (bad.length) {
   console.error("\nFAILED CHECKS: " + bad.map(([k, v]) => `${k} (${v.detail})`).join(", "));
   process.exit(1);
 }
-console.log("\nPHASE 1 GATE: PASS — all 8 policies ran in Pyodide.");
+console.log("\nPASS — all 8 policies ran in Pyodide.");

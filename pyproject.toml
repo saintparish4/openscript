@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     # Floor held at 2.10 so the browser build works: Pyodide 0.28.3 bundles
     # pydantic 2.10.6, and no pydantic-core between 2.28 and 2.46 publishes a
-    # WASM wheel. Raising this floor breaks the demo — see base/directive/p0-1.md.
+    # WASM wheel. Raising this floor breaks the browser build.
     "pydantic>=2.10,<3",
     "structlog>=25.5.0",
     "pyyaml>=6.0",
@@ -104,14 +104,14 @@ known-first-party = ["sdk", "contracts"]
 
 # FastAPI dependency injection uses Depends(...) in parameter defaults by design.
 # load_dotenv() must run before downstream imports that read env vars at import time.
-# The demo page's pipeline silences logging before importing the policies, which
-# configure logging at import time — the UI is the report, not the console.
 [tool.ruff.lint.per-file-ignores]
 "server/app.py" = ["B008", "E402"]
 "server/routers/approvals.py" = ["B008"]
 "server/routers/sessions.py" = ["B008"]
 "server/routers/sse.py" = ["B008"]
 "demo/injection_demo.py" = ["E402"]
+# Logging is silenced before the policies are imported so their per-finding
+# warnings stay out of the browser console; the UI is the report.
 "site/public/pipeline.py" = ["E402"]
 
 [tool.mypy]
