@@ -16,8 +16,11 @@ def wrap_graph_agent(
 ) -> SecureAgent:
     """Wrap a LangGraph compiled graph with OpenScript policies.
 
-    Hooks into node execution via the policy pipeline. The graph's
-    invoke/stream methods are proxied through policies.
+    A named alias for SecureAgent(graph, policies=...) — it proxies the
+    graph's whole invoke()/stream() call through the policy pipeline, not
+    individual node executions. Nothing here is LangGraph-specific beyond
+    the name: any object exposing that same invoke/stream shape works
+    identically via SecureAgent directly.
     """
     if interceptors is not None:
         warnings.warn(
