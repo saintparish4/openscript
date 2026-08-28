@@ -4,15 +4,21 @@
 
 OpenScript wraps any agent in a **policy pipeline**: policies run before and after every action, and each one can allow, mutate (redact), deny, or require human approval. The pipeline itself contains zero detection logic — everything is a `Policy` you can swap, configure from YAML, or write yourself.
 
+**[Try the live demo →](https://openscript-rho.vercel.app/)**
+
 ![OpenScript demo](demo/injection_demo.gif)
 
 ## Try It in Your Browser
 
-`site/` is an interactive demo that runs **this package** — compiled to WebAssembly with
-Pyodide — entirely inside the visitor's tab. Every policy executes locally: there is no
-backend and no API endpoint, so nothing typed into it is sent anywhere, and the network tab
-proves it. That is possible because all eight built-in policies are pure-local heuristics,
-a property enforced in CI rather than merely asserted.
+**[openscript-rho.vercel.app](https://openscript-rho.vercel.app/)** — an interactive demo
+that runs **this package** — compiled to WebAssembly with Pyodide — entirely inside your
+tab. Every policy executes locally: there is no backend and no API endpoint, so nothing
+typed into it is sent anywhere, and the network tab proves it. That is possible because all
+eight built-in policies are pure-local heuristics, a property enforced in CI rather than
+merely asserted. Requires a browser with WebAssembly and access to the jsDelivr CDN (which
+serves the Pyodide runtime).
+
+To run it locally instead, `site/` is the source for that demo:
 
 ```bash
 make demo-serve    # build the wheel bundle, export the app, serve it on :8081
