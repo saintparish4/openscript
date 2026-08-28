@@ -1,0 +1,200 @@
+from __future__ import annotations
+
+import importlib
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import yaml
+from pydantic import BaseModel, Field
+
+from contracts.interceptor import Policy
+from sdk.interceptors.base import NoopInterceptor
+from sdk.interceptors.event_writer import AuditPolicy
+from sdk.interceptors.pii import PIIMode, PIIPolicy
+from sdk.interceptors.threat import PromptInjectionPolicy
+from sdk.policies.compliance import CompliancePolicy, PHIMode
+from sdk.policies.output_schema import OutputSchemaPolicy
+from sdk.policies.secrets import InternalURLMode, SecretsPolicy
+from sdk.policies.tool_firewall import ToolFirewallPolicy, ToolRules
+from sdk.policies.toxicity import ToxicityPolicy
+
+if TYPE_CHECKING:
+    from events.writer import EventWriter
+
+
+class PolicyConfig(BaseModel):
+    """Declarative policy pipeline: ordered mapping of policy name -> params.
+
+    Example YAML (see policies_example.yaml):
+
+        policies:
+          prompt_injection:
+            threshold: 0.6
+          pii:
+            mode: redact
+          secrets:
+            mode: deny
+          tool_firewall:
+            rules_path: tools.yaml
+
+    Order is significant — policies run in declaration order.
+    """
+
+    policies: dict[str, dict[str, Any] | None] = Field(default_factory=dict)
+
+
+# A factory receives the (possibly empty) params dict for its entry plus the
+# shared EventWriter (None when the caller doesn't persist events).
+PolicyFactory = Callable[[dict[str, Any], "EventWriter | None"], Policy]
+
+
+def _take(params: dict[str, Any], name: str, allowed: set[str]) -> None:
+    unknown = set(params) - allowed
+    if unknown:
+        raise ValueError(
+            f"unknown parameter(s) for policy '{name}': {sorted(unknown)}; "
+            f"allowed: {sorted(allowed)}"
+        )
+
+
+def _build_prompt_injection(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "prompt_injection", {"threshold"})
+    return PromptInjectionPolicy(threshold=params.get("threshold", 0.5), writer=writer)
+
+
+def _build_pii(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "pii", {"mode"})
+    return PIIPolicy(mode=PIIMode(params.get("mode", "redact")), writer=writer)
+
+
+def _build_secrets(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "secrets", {"mode", "internal_url_mode", "internal_url_allowlist"})
+    return SecretsPolicy(
+        mode=PIIMode(params.get("mode", "redact")),
+        writer=writer,
+        internal_url_mode=InternalURLMode(params.get("internal_url_mode", "annotate")),
+        internal_url_allowlist=params.get("internal_url_allowlist", ()),
+    )
+
+
+def _build_tool_firewall(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "tool_firewall", {"rules", "rules_path"})
+    rules = params.get("rules")
+    return ToolFirewallPolicy(
+        rules=ToolRules.model_validate(rules) if rules is not None else None,
+        rules_path=params.get("rules_path"),
+    )
+
+
+def _resolve_model(path: str) -> type[BaseModel]:
+    """Import a pydantic model from a dotted path: "pkg.module:Class" or "pkg.module.Class"."""
+    module_name, _, attr = path.partition(":") if ":" in path else path.rpartition(".")
+    if not module_name or not attr:
+        raise ValueError(f"invalid model path {path!r}; expected 'package.module:ClassName'")
+    try:
+        model = getattr(importlib.import_module(module_name), attr)
+    except (ImportError, AttributeError) as exc:
+        raise ValueError(f"cannot import model {path!r}: {exc}") from exc
+    if not (isinstance(model, type) and issubclass(model, BaseModel)):
+        raise ValueError(f"{path!r} is not a pydantic BaseModel subclass")
+    return model
+
+
+def _build_output_schema(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(
+        params,
+        "output_schema",
+        {
+            "model",
+            "on_invalid",
+            "grounding_source",
+            "hallucination_mode",
+            "hallucination_threshold",
+        },
+    )
+    model = params.get("model")
+    return OutputSchemaPolicy(
+        model=_resolve_model(model) if isinstance(model, str) else model,
+        on_invalid=params.get("on_invalid", "deny"),
+        grounding_source=params.get("grounding_source"),
+        hallucination_mode=params.get("hallucination_mode", "keyword"),
+        hallucination_threshold=params.get("hallucination_threshold", 0.5),
+        writer=writer,
+    )
+
+
+def _build_toxicity(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "toxicity", {"threshold"})
+    return ToxicityPolicy(threshold=params.get("threshold", 0.5), writer=writer)
+
+
+def _build_compliance(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "compliance", {"rules", "phi_mode"})
+    return CompliancePolicy(
+        rules=params.get("rules", []),
+        phi_mode=PHIMode(params.get("phi_mode", "annotate")),
+        writer=writer,
+    )
+
+
+def _build_audit(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "audit", set())
+    if writer is None:
+        raise ValueError("policy 'audit' requires load_policies(..., writer=<EventWriter>)")
+    return AuditPolicy(writer)
+
+
+def _build_noop(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "noop", set())
+    return NoopInterceptor()
+
+
+_REGISTRY: dict[str, PolicyFactory] = {
+    "prompt_injection": _build_prompt_injection,
+    "toxicity": _build_toxicity,
+    "pii": _build_pii,
+    "secrets": _build_secrets,
+    "compliance": _build_compliance,
+    "tool_firewall": _build_tool_firewall,
+    "output_schema": _build_output_schema,
+    "audit": _build_audit,
+    "noop": _build_noop,
+}
+
+
+def register_policy(name: str, factory: PolicyFactory) -> None:
+    """Register a custom policy factory under *name* for use in load_policies configs."""
+    _REGISTRY[name] = factory
+
+
+def load_policies(
+    config: PolicyConfig | dict[str, Any] | str | Path,
+    writer: EventWriter | None = None,
+) -> list[Policy]:
+    """Assemble a ``policies=[...]`` list from a config.
+
+    *config* may be a PolicyConfig, a dict (with or without the top-level
+    "policies" key), or a path to a YAML file. *writer* is injected into
+    policies that emit events (prompt_injection, pii, secrets, audit).
+
+    Raises ValueError on unknown policy names or parameters.
+    """
+    if isinstance(config, (str, Path)):
+        with open(config) as fh:
+            raw = yaml.safe_load(fh) or {}
+        cfg = PolicyConfig.model_validate(raw)
+    elif isinstance(config, PolicyConfig):
+        cfg = config
+    else:
+        if "policies" not in config:
+            config = {"policies": config}
+        cfg = PolicyConfig.model_validate(config)
+
+    policies: list[Policy] = []
+    for name, params in cfg.policies.items():
+        factory = _REGISTRY.get(name)
+        if factory is None:
+            raise ValueError(f"unknown policy '{name}'; known policies: {sorted(_REGISTRY)}")
+        policies.append(factory(params or {}, writer))
+    return policies

@@ -1,0 +1,21 @@
+# Example policy-engine config for load_policies().
+# Policies run in declaration order. Params are per-policy; omit a mapping
+# (or leave it empty) to use defaults.
+#
+#   from sdk import load_policies, SecureAgent
+#   agent = SecureAgent(agent, policies=load_policies("policies.yaml"))
+
+policies:
+  prompt_injection:
+    threshold: 0.5        # block inputs scoring at or above this [0, 1]
+  pii:
+    mode: redact          # redact | deny
+  secrets:
+    mode: redact          # redact | deny — also covers internal URLs
+  tool_firewall:
+    rules_path: sdk/policies/tools_example.yaml
+  # output_schema:
+  #   model: myapp.schemas:ReportModel   # dotted path to a pydantic model
+  #   on_invalid: deny                   # deny | annotate
+  #   hallucination_mode: keyword        # keyword | embedding (pip install openscript[ml])
+  #   hallucination_threshold: 0.5
