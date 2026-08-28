@@ -1,0 +1,109 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+# Anchored: unanchored `lib/` also matches site/lib/, the demo app's source.
+/lib/
+/lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.python-version
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+*.cover
+*.py,cover
+.cache
+nosetests.xml
+coverage.xml
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Logs
+*.log
+logs/
+
+# Docker
+.dockerignore
+
+# Project specific
+directive/ 
+.cursor/ 
+memory/ 
+base/
+
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+.claude/
+
+# Demo recordings (keep source + README gif; ignore cast dumps)
+demo/*.cast
+demo/*.mp4
+# Phase 1 browser bundle — rebuilt by `make browser-wheels`
+web/wheels/
+node_modules/
+
+# Demo app build output and mirrored wheels
+site/.next/
+site/out/
+site/public/wheels/
+site/tsconfig.tsbuildinfo

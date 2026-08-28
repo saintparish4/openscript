@@ -1,0 +1,144 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openscript"
+version = "0.1.0" 
+description = "Python SDK for building prompt-secured LLM/agent workflows"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    # Floor held at 2.10 so the browser build works: Pyodide 0.28.3 bundles
+    # pydantic 2.10.6, and no pydantic-core between 2.28 and 2.46 publishes a
+    # WASM wheel. Raising this floor breaks the demo — see base/directive/p0-1.md.
+    "pydantic>=2.10,<3",
+    "structlog>=25.5.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+ml = [
+    "sentence-transformers>=2.2",
+]
+redis = [
+    "redis>=7.3.0",
+]
+metrics = [
+    "prometheus-client>=0.24.1",
+]
+otel = [
+    "opentelemetry-sdk>=1.27",
+    "opentelemetry-exporter-otlp>=1.27",
+]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-benchmark>=5.2.3",
+    "black>=26.1.0",
+    "ruff>=0.15.6",
+    "mypy>=1.19.1",
+    "types-PyYAML>=6.0",
+    "hypothesis>=6.151.9",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+# "sdk" without the wildcard matches ONLY sdk/__init__.py + sdk/logging.py —
+# every policy subpackage is an implicit namespace package underneath it.
+include = ["sdk*", "contracts*", "events*", "server*"]
+
+[tool.pytest.ini_options]
+# Repo root must be on path so `sdk` and `contracts` resolve when collecting tests.
+pythonpath = ["."]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.black]
+target-version = ["py310"]
+line-length = 100
+# web/smoke.py runs under Pyodide's runPythonAsync, where top-level `await` is
+# legal. It is not importable Python, so neither formatter can parse it.
+force-exclude = "web/"
+
+# Match requires-python (>=3.10): keeps pyupgrade (UP017 etc.) from suggesting
+# 3.11+ only APIs like datetime.UTC, which mypy rejects under python_version 3.10.
+[tool.ruff] 
+target-version = "py310" 
+line-length = 100 
+# See the note on [tool.black].force-exclude — top-level await outside a
+# function is a syntax error to every static tool, and correct here.
+extend-exclude = ["web"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",   # line length (black handles this)
+    "UP042",  # StrEnum requires Python 3.11+; project supports 3.10
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["sdk", "contracts"]
+
+# FastAPI dependency injection uses Depends(...) in parameter defaults by design.
+# load_dotenv() must run before downstream imports that read env vars at import time.
+# The demo page's pipeline silences logging before importing the policies, which
+# configure logging at import time — the UI is the report, not the console.
+[tool.ruff.lint.per-file-ignores]
+"server/app.py" = ["B008", "E402"]
+"server/routers/approvals.py" = ["B008"]
+"server/routers/sessions.py" = ["B008"]
+"server/routers/sse.py" = ["B008"]
+"demo/injection_demo.py" = ["E402"]
+"site/public/pipeline.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true 
+disallow_untyped_defs = true 
+disallow_incomplete_defs = true 
+check_untyped_defs = true  
+
+[[tool.mypy.overrides]]
+module = ["structlog.*"]
+ignore_missing_imports = true
+[[tool.mypy.overrides]]
+module = ["yaml"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["sentence_transformers"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["opentelemetry.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["sdk.middleware.middleware", "sdk.integrations.*"]
+disallow_any_explicit = false
+warn_return_any = false
