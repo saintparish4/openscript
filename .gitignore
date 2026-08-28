@@ -96,3 +96,6 @@ memory/
 # Demo recordings (keep source + README gif; ignore cast dumps)
 demo/*.cast
 demo/*.mp4
+# Phase 1 browser bundle — rebuilt by `make browser-wheels`
+web/wheels/
+node_modules/

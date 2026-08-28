@@ -1,0 +1,89 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>OpenScript — Pyodide Phase 1 probe</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+         max-width: 68rem; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.1rem; margin: 0 0 .25rem; }
+  #status { padding: .6rem .8rem; border-left: 3px solid currentColor; margin: 1rem 0; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #8884;
+           vertical-align: top; }
+  th { font-weight: 600; }
+  td.v { white-space: nowrap; }
+  .pass { color: #197f4a; } .fail { color: #b3261e; }
+  code { background: #8882; padding: .1rem .3rem; border-radius: 3px; word-break: break-all; }
+</style>
+
+<h1>OpenScript — Phase 1 probe</h1>
+<div>Runs every built-in policy against the real package, compiled to WASM, in this tab.
+  Nothing is sent anywhere. Open devtools for the raw report.</div>
+<div id="status">booting…</div>
+<div id="out"></div>
+
+<script type="module">
+  // Pin the Pyodide version. It determines which pydantic/pyyaml the browser
+  // gets, which is what the dependency floors in pyproject.toml must match.
+  const PYODIDE_VERSION = "0.28.3";
+  const CDN = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
+
+  const statusEl = document.getElementById("status");
+  const outEl = document.getElementById("out");
+  const say = (msg) => { statusEl.textContent = msg; console.log("[probe]", msg); };
+
+  const t0 = performance.now();
+  const since = () => ((performance.now() - t0) / 1000).toFixed(1) + "s";
+
+  try {
+    say("loading pyodide runtime (~5 MB)…");
+    const { loadPyodide } = await import(CDN + "pyodide.mjs");
+    const py = await loadPyodide({ indexURL: CDN });
+
+    say(`loading micropip, pydantic, pyyaml… (${since()})`);
+    await py.loadPackage(["micropip", "pydantic", "pyyaml"]);
+
+    // Wheels are served from ./wheels/ so the page never touches PyPI at
+    // runtime. structlog goes first: installing it up front satisfies the
+    // openscript wheel's requirement without a resolver round-trip.
+    say(`installing openscript… (${since()})`);
+    const wheels = await (await fetch("./wheels/manifest.json")).json();
+    await py.runPythonAsync(`
+import micropip
+await micropip.install("${wheels.structlog}")
+await micropip.install("${wheels.openscript}")
+`);
+
+    say(`running policies… (${since()})`);
+    const src = await (await fetch("./smoke.py")).text();
+    const report = JSON.parse(await py.runPythonAsync(src));
+    console.log(report);
+
+    const rows = Object.entries(report);
+    const failed = rows.filter(([, v]) => !v.ok);
+    statusEl.className = failed.length ? "fail" : "pass";
+    say(
+      failed.length
+        ? `${failed.length}/${rows.length} checks FAILED — Phase 1 not met`
+        : `all ${rows.length} checks passed in ${since()} — Phase 1 criterion 2 met`
+    );
+
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    outEl.innerHTML =
+      "<table><tr><th>check</th><th>result</th><th>evidence</th></tr>" +
+      rows.map(([name, v]) => {
+        const extra = Object.entries(v)
+          .filter(([k]) => k !== "ok" && k !== "detail")
+          .map(([k, val]) => `<div>${esc(k)}: <code>${esc(JSON.stringify(val))}</code></div>`)
+          .join("");
+        return `<tr><td class="v">${esc(name)}</td>` +
+               `<td class="v ${v.ok ? "pass" : "fail"}">${v.ok ? "PASS" : "FAIL"}</td>` +
+               `<td>${esc(v.detail)}${extra}</td></tr>`;
+      }).join("") + "</table>";
+  } catch (err) {
+    statusEl.className = "fail";
+    say("probe crashed — see console");
+    console.error(err);
+    outEl.innerHTML = `<pre>${String(err)}</pre>`;
+  }
+</script>

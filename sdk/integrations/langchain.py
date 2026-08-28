@@ -17,7 +17,8 @@ def wrap_agent(
     """Wrap a LangChain AgentExecutor with OpenScript policies.
 
     Usage:
-      from openscript import wrap_agent, NoopInterceptor
+      from sdk.integrations.langchain import wrap_agent
+      from sdk import NoopInterceptor
       secure = wrap_agent(agent, policies=[NoopInterceptor()])
       result = await secure.invoke({"input": "hello"})
     """

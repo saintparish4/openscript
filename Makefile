@@ -134,3 +134,25 @@ help:  ## List all available targets
 	@echo "Usage: make <target>\n"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+# ── Browser / Pyodide ─────────────────────────────────────────────────────────
+
+.PHONY: audit
+audit:  ## Phase 0 — regenerate the policy audit table
+	$(PYTHON) tools/policy_audit.py
+
+.PHONY: wasm-deps
+wasm-deps:  ## Phase 1 — check runtime deps for Pyodide-incompatible C extensions
+	$(PYTHON) tools/check_wasm_deps.py
+
+.PHONY: browser-wheels
+browser-wheels:  ## Build openscript + vendor structlog into web/wheels/
+	PYTHON=$(PYTHON) bash tools/build_browser_wheels.sh
+
+.PHONY: probe
+probe: browser-wheels  ## Phase 1 gate — run every policy under Pyodide, headless
+	node web/probe.mjs
+
+.PHONY: probe-serve
+probe-serve: browser-wheels  ## Serve the bare Pyodide page at :8080
+	$(PYTHON) -m http.server 8080 --directory web

@@ -22,8 +22,11 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "pydantic>=2.12",
-    "structlog>=25.5.0", 
+    # Floor held at 2.10 so the browser build works: Pyodide 0.28.3 bundles
+    # pydantic 2.10.6, and no pydantic-core between 2.28 and 2.46 publishes a
+    # WASM wheel. Raising this floor breaks the demo — see base/directive/p0-1.md.
+    "pydantic>=2.10,<3",
+    "structlog>=25.5.0",
     "pyyaml>=6.0",
 ]
 
@@ -54,7 +57,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["sdk", "contracts*", "events*", "server*"]  
+# "sdk" without the wildcard matches ONLY sdk/__init__.py + sdk/logging.py —
+# every policy subpackage is an implicit namespace package underneath it.
+include = ["sdk*", "contracts*", "events*", "server*"]
 
 [tool.pytest.ini_options]
 # Repo root must be on path so `sdk` and `contracts` resolve when collecting tests.
@@ -65,12 +70,18 @@ testpaths = ["tests"]
 [tool.black]
 target-version = ["py310"]
 line-length = 100
+# web/smoke.py runs under Pyodide's runPythonAsync, where top-level `await` is
+# legal. It is not importable Python, so neither formatter can parse it.
+force-exclude = "web/"
 
 # Match requires-python (>=3.10): keeps pyupgrade (UP017 etc.) from suggesting
 # 3.11+ only APIs like datetime.UTC, which mypy rejects under python_version 3.10.
 [tool.ruff] 
 target-version = "py310" 
 line-length = 100 
+# See the note on [tool.black].force-exclude — top-level await outside a
+# function is a syntax error to every static tool, and correct here.
+extend-exclude = ["web"]
 
 [tool.ruff.lint]
 select = [
