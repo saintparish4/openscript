@@ -188,10 +188,10 @@ class PIIPolicy:
 
     def __init__(
         self,
-        mode: PIIMode = PIIMode.REDACT,
+        mode: PIIMode | str = PIIMode.REDACT,
         writer: EventWriter | None = None,
     ) -> None:
-        self._mode = mode
+        self._mode = PIIMode(mode)
         self._writer = writer
         self._sequence_counters: dict[str, int] = {}
 
