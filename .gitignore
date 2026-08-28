@@ -102,8 +102,11 @@ demo/*.mp4
 web/wheels/
 node_modules/
 
-# Demo app build output and mirrored wheels
+# Demo app build output
 site/.next/
 site/out/
-site/public/wheels/
 site/tsconfig.tsbuildinfo
+# NOTE: site/public/wheels/ is intentionally tracked, not ignored — Vercel's
+# build only runs `next build`, it can't regenerate these via
+# tools/build_browser_wheels.sh, so the demo needs them committed as static
+# assets. Rebuild + recommit with `make browser-wheels` when deps change.
