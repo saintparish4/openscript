@@ -36,7 +36,7 @@ pip install openscript
 Or from source:
 
 ```bash
-git clone https://github.com/OrdinalScale/openscript.git
+git clone https://github.com/saintparish4/openscript.git
 cd openscript
 python -m venv .venv
 .venv/Scripts/activate   # Windows
