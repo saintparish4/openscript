@@ -84,6 +84,7 @@ logs/
 directive/ 
 .cursor/ 
 memory/ 
+base/
 
 
 # Temporary files
