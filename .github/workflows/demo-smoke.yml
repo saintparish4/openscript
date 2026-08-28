@@ -1,0 +1,57 @@
+name: Demo smoke check
+
+# Checks the *deployed* site, not the repo — nothing else in CI does this.
+# Catches regressions that only show up in production: Vercel config drift,
+# a missed static asset, the CDN being unreachable, etc. Decoupled from
+# pushes on purpose, since a push here doesn't control when Vercel finishes
+# deploying, and the site can also break for reasons that never touch this
+# repo at all.
+on:
+  schedule:
+    - cron: "0 13 * * *" # daily, 13:00 UTC
+  workflow_dispatch: {}
+
+env:
+  DEMO_URL: https://openscript-rho.vercel.app
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Site responds
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$DEMO_URL/")
+          echo "GET / -> $code"
+          test "$code" = "200"
+
+      - name: Wheel manifest is valid JSON with the expected packages
+        run: |
+          curl -sf "$DEMO_URL/wheels/manifest.json" -o manifest.json
+          python3 - <<'PY'
+          import json, sys
+
+          manifest = json.load(open("manifest.json"))
+          missing = {"openscript", "structlog"} - set(manifest)
+          if missing:
+              sys.exit(f"manifest.json is missing entries: {sorted(missing)}")
+          print("manifest.json OK:", manifest)
+          PY
+
+      - name: Every wheel in the manifest is actually fetchable
+        run: |
+          python3 - <<'PY' > wheel_paths.txt
+          import json
+          for path in json.load(open("manifest.json")).values():
+              print(path.lstrip("./"))
+          PY
+          while read -r path; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$DEMO_URL/$path")
+            echo "GET /$path -> $code"
+            test "$code" = "200"
+          done < wheel_paths.txt
+
+      - name: pipeline.py is fetchable
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$DEMO_URL/pipeline.py")
+          echo "GET /pipeline.py -> $code"
+          test "$code" = "200"
