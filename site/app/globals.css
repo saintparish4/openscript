@@ -1,0 +1,308 @@
+:root {
+  color-scheme: light dark;
+  --bg: #fbfbfa;
+  --panel: #ffffff;
+  --ink: #14161a;
+  --muted: #5d646e;
+  --line: #e3e5e9;
+  --accent: #2f5bd8;
+  --allow: #1a7f52;
+  --flag: #8a6d1f;
+  --mutate: #9a6212;
+  --deny: #b3261e;
+  --approval: #6b3fb8;
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101216;
+    --panel: #171a20;
+    --ink: #e9ecf1;
+    --muted: #98a0ad;
+    --line: #272c35;
+    --accent: #7d9bff;
+    --allow: #4ac489;
+    --flag: #d8c06a;
+    --mutate: #e0a44a;
+    --deny: #ff7b70;
+    --approval: #b795f5;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+main {
+  max-width: 54rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.masthead h1 {
+  font-size: 1.6rem;
+  margin: 0 0 0.4rem;
+  letter-spacing: -0.01em;
+}
+
+.lede {
+  margin: 0 0 2rem;
+  color: var(--muted);
+  max-width: 42rem;
+}
+
+.muted { color: var(--muted); font-size: 0.86rem; }
+
+/* ── Panel ─────────────────────────────────────────────────────────── */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+}
+
+.panel--idle, .panel--placeholder { text-align: center; }
+.panel--error { border-color: var(--deny); }
+.panel--error h3 { margin: 0 0 0.5rem; color: var(--deny); font-size: 1rem; }
+
+.load, .compose button, .chip {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: inherit;
+}
+
+.load, .compose button {
+  padding: 0.6rem 1.1rem;
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 550;
+}
+
+.load:hover, .compose button:hover:not(:disabled) { filter: brightness(1.08); }
+.compose button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Boot progress ─────────────────────────────────────────────────── */
+
+.boot { margin-bottom: 1.5rem; }
+
+.boot__bar {
+  height: 4px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.boot__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+/* Discrete steps, because the real download reports no byte-level progress —
+   a fake smooth bar would be a lie about information we do not have. */
+.boot__fill--runtime  { width: 15%; }
+.boot__fill--packages { width: 45%; }
+.boot__fill--install  { width: 75%; }
+.boot__fill--pipeline { width: 92%; }
+.boot__fill--ready    { width: 100%; }
+
+.boot__msg { margin: 0.6rem 0 0.2rem; font-size: 0.92rem; }
+
+/* ── Chips ─────────────────────────────────────────────────────────── */
+
+.chips {
+  border: 0;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+}
+
+.chips legend {
+  padding: 0;
+  margin-bottom: 0.6rem;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.chips[disabled] { opacity: 0.55; }
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+}
+
+.chip:hover:not(:disabled) { border-color: var(--accent); }
+.chip--active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.chip__label { font-weight: 550; font-size: 0.92rem; }
+.chip__teaser { color: var(--muted); font-size: 0.8rem; }
+
+/* ── Compose ───────────────────────────────────────────────────────── */
+
+.compose label {
+  display: block;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.compose textarea {
+  width: 100%;
+  font: inherit;
+  padding: 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: inherit;
+  resize: vertical;
+}
+
+.compose textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.compose__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+}
+
+.privacy { margin: 0; font-size: 0.82rem; color: var(--muted); max-width: 30rem; }
+
+/* ── Results ───────────────────────────────────────────────────────── */
+
+.results { margin-top: 2rem; border-top: 1px solid var(--line); padding-top: 1.25rem; }
+
+.results__local {
+  margin: 0 0 1rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.outcome {
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  margin-bottom: 1rem;
+}
+
+.outcome strong { display: block; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; }
+.outcome p { margin: 0.3rem 0 0; font-size: 0.92rem; }
+.outcome__reason { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; }
+.outcome--deny { border-left-color: var(--deny); }
+.outcome--deny strong { color: var(--deny); }
+.outcome--allow { border-left-color: var(--allow); }
+.outcome--allow strong { color: var(--allow); }
+
+.diff { display: grid; gap: 0.75rem; margin-bottom: 1.25rem; }
+
+@media (min-width: 40rem) {
+  .diff { grid-template-columns: 1fr 1fr; }
+}
+
+.diff__label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+
+.diff__text {
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.diff__text--before { color: var(--muted); }
+.diff__text mark { background: color-mix(in srgb, var(--mutate) 25%, transparent); color: inherit; border-radius: 3px; }
+
+.verdicts { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+
+.verdict {
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+}
+
+.verdict__head { display: flex; gap: 0.75rem; align-items: baseline; justify-content: space-between; }
+.verdict__policy { font-weight: 550; font-size: 0.92rem; }
+.verdict__badge { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+.verdict__why { margin: 0.25rem 0 0; font-size: 0.86rem; color: var(--muted); }
+
+.verdict--allow { border-left-color: var(--allow); }
+.verdict--allow .verdict__badge { color: var(--allow); }
+.verdict--flag { border-left-color: var(--flag); }
+.verdict--flag .verdict__badge { color: var(--flag); }
+.verdict--mutate { border-left-color: var(--mutate); }
+.verdict--mutate .verdict__badge { color: var(--mutate); }
+.verdict--deny { border-left-color: var(--deny); }
+.verdict--deny .verdict__badge { color: var(--deny); }
+.verdict--approval { border-left-color: var(--approval); }
+.verdict--approval .verdict__badge { color: var(--approval); }
+.verdict--skipped, .verdict--not_reached { opacity: 0.6; }
+.verdict--skipped .verdict__badge, .verdict--not_reached .verdict__badge { color: var(--muted); }
+
+.verdict__meter {
+  height: 3px;
+  background: var(--line);
+  border-radius: 999px;
+  margin-top: 0.5rem;
+  overflow: hidden;
+}
+
+.verdict__meter span { display: block; height: 100%; background: currentColor; opacity: 0.5; }
+.verdict__risk { font-size: 0.72rem; color: var(--muted); }
+
+.totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 1.25rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.totals div { margin: 0; }
+.totals dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.totals dd { margin: 0.15rem 0 0; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+
+.footer {
+  margin-top: 3rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.footer a { color: var(--accent); }
