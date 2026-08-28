@@ -41,11 +41,12 @@ cd openscript
 python -m venv .venv
 .venv/Scripts/activate   # Windows
 # source .venv/bin/activate  # Unix
-pip install -r requirements.txt
 pip install -e .
 ```
 
-Optional extras: `openscript[redis]` (shared approval store), `openscript[metrics]` (Prometheus), `openscript[otel]` (tracing), `openscript[ml]` (embedding-based checks).
+`pip install -e .` alone is enough for everything below — it pulls only `pydantic`, `structlog`, `pyyaml`. `requirements.txt` installs the full dev+server stack (FastAPI, SQLAlchemy, Postgres driver, Redis client, pytest, mypy, …) and is only needed if you're running the test suite, the server, or the demo script — not for using the SDK.
+
+Optional extras: `openscript[redis]` (shared approval store), `openscript[metrics]` (Prometheus), `openscript[otel]` (tracing), `openscript[ml]` (embedding-based checks), `openscript[demo]` (deps for `demo/injection_demo.py`).
 
 ### 2. Wrap an Agent
 
@@ -93,6 +94,8 @@ policies:
   tool_firewall:
     rules_path: tools.yaml
 ```
+
+`tool_firewall.rules_path` expects a rules file — copy `sdk/policies/tools_example.yaml` to get started.
 
 ```python
 from sdk import SecureAgent, load_policies
@@ -236,7 +239,7 @@ The pipeline is deliberately dumb — all detection lives in the policies. Deny 
 
 ## Framework Integrations
 
-LangChain and LangGraph wrappers ship today:
+`SecureAgent` wraps any object exposing `ainvoke`/`invoke` (and `astream`/`stream`) — `wrap_agent` and `wrap_graph_agent` are named convenience aliases over that for LangChain and LangGraph:
 
 ```python
 from sdk import wrap_agent, wrap_graph_agent, load_policies
@@ -245,7 +248,7 @@ secure = wrap_agent(langchain_agent, policies=load_policies("policies.yaml"))
 result = await secure.invoke({"input": "What is prompt injection?"})
 ```
 
-CrewAI, PydanticAI, AutoGen, and OpenAI Agents SDK adapters are on the roadmap (each as an optional extra, built on the frameworks' official guardrail/callback hooks).
+This means any framework whose runnables expose that same shape — CrewAI, PydanticAI, AutoGen, the OpenAI Agents SDK — already works with `SecureAgent(agent, policies=...)` directly today; named wrappers for them are on the roadmap for ergonomics, not because the underlying capability is missing. What none of the current wrappers do yet is hook a framework's own per-step primitives (LangGraph node execution, LangChain callbacks) — policies see the whole call, not individual steps inside it.
 
 ## Compliance Positioning
 
@@ -253,11 +256,12 @@ CrewAI, PydanticAI, AutoGen, and OpenAI Agents SDK adapters are on the roadmap (
 
 ## Server
 
-An optional FastAPI server (`uvicorn server.app:app`) provides the event store, SSE feeds, a session dashboard (`/dashboard/`), stateless scoring endpoints (`/v1/threat/score`, `/v1/tools/validate`), the approval queue (`/v1/approvals`), and Prometheus metrics (`/metrics`). All endpoints except `/health` require the `X-API-KEY` header (`OPENSCRIPT_API_KEY`).
+An optional FastAPI server (`uvicorn server.app:app`) provides the event store, SSE feeds, a session dashboard (`/dashboard/`), stateless scoring endpoints (`/v1/threat/score`, `/v1/tools/validate`), the approval queue (`/v1/approvals`), and Prometheus metrics (`/metrics`). All endpoints except `/health` require the `X-API-KEY` header (`OPENSCRIPT_API_KEY`). The server needs a running Postgres with migrations applied before it will boot — `docker compose up -d && alembic upgrade head` (see `docker-compose.yml`), or point `DATABASE_URL` at your own instance.
 
-Try the full pipeline end-to-end:
+Try the full pipeline end-to-end (in-memory, no server or database required):
 
 ```bash
+pip install -e ".[demo]"
 python demo/injection_demo.py
 ```
 
@@ -275,10 +279,10 @@ pip install -r requirements.txt && pip install -e .
 # Test
 pytest
 
-# Lint + format + type-check
+# Lint + format + type-check (CI runs mypy --strict on sdk/ and contracts/)
 ruff check .
 black .
-mypy sdk/ contracts/
+mypy --strict sdk/ contracts/
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full details.
