@@ -110,3 +110,9 @@ site/tsconfig.tsbuildinfo
 # build only runs `next build`, it can't regenerate these via
 # tools/build_browser_wheels.sh, so the demo needs them committed as static
 # assets. Rebuild + recommit with `make browser-wheels` when deps change.
+# The unanchored `wheels/` rule near the top of this file would otherwise
+# swallow it (and silently block `git add` on any *new* filename here, e.g.
+# after a version bump) — negate it explicitly rather than rely on the
+# files already being tracked.
+!site/public/wheels/
+!site/public/wheels/**
