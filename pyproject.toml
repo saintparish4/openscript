@@ -44,6 +44,14 @@ otel = [
     "opentelemetry-sdk>=1.27",
     "opentelemetry-exporter-otlp>=1.27",
 ]
+# Everything demo/injection_demo.py imports unconditionally. It also prints
+# Prometheus metrics, hence the self-reference onto [metrics] rather than
+# duplicating prometheus-client's pin here.
+demo = [
+    "openscript[metrics]",
+    "rich>=13.0.0",
+    "python-dotenv>=1.0.0",
+]
 dev = [
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
