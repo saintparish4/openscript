@@ -66,6 +66,7 @@ coverage.xml
 ehthumbs.db
 Thumbs.db
 Desktop.ini
+*:Zone.Identifier
 
 # Environment variables
 .env
