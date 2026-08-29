@@ -73,7 +73,7 @@ main {
 .panel--error { border-color: var(--deny); }
 .panel--error h3 { margin: 0 0 0.5rem; color: var(--deny); font-size: 1rem; }
 
-.load, .compose button, .chip {
+.load, .chip {
   font: inherit;
   cursor: pointer;
   border-radius: 8px;
@@ -82,7 +82,7 @@ main {
   color: inherit;
 }
 
-.load, .compose button {
+.load {
   padding: 0.6rem 1.1rem;
   background: var(--accent);
   border-color: transparent;
@@ -90,8 +90,7 @@ main {
   font-weight: 550;
 }
 
-.load:hover, .compose button:hover:not(:disabled) { filter: brightness(1.08); }
-.compose button:disabled { opacity: 0.5; cursor: not-allowed; }
+.load:hover { filter: brightness(1.08); }
 
 /* ── Boot progress ─────────────────────────────────────────────────── */
 
@@ -156,40 +155,7 @@ main {
 .chip__label { font-weight: 550; font-size: 0.92rem; }
 .chip__teaser { color: var(--muted); font-size: 0.8rem; }
 
-/* ── Compose ───────────────────────────────────────────────────────── */
-
-.compose label {
-  display: block;
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  margin-bottom: 0.5rem;
-}
-
-.compose textarea {
-  width: 100%;
-  font: inherit;
-  padding: 0.7rem;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: inherit;
-  resize: vertical;
-}
-
-.compose textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-.compose__foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 0.75rem;
-}
-
-.privacy { margin: 0; font-size: 0.82rem; color: var(--muted); max-width: 30rem; }
+.privacy { margin: 0; font-size: 0.82rem; color: var(--muted); max-width: 34rem; }
 
 /* ── Results ───────────────────────────────────────────────────────── */
 

@@ -16,7 +16,6 @@ export default function DemoPanel() {
   });
   const [status, setStatus] = useState<Status>("booting");
   const [error, setError] = useState("");
-  const [text, setText] = useState("");
   const [result, setResult] = useState<PipelineResult | null>(null);
   const [activeId, setActiveId] = useState("");
 
@@ -43,24 +42,20 @@ export default function DemoPanel() {
     };
   }, []);
 
-  const submit = useCallback(
-    async (example: Example | null, value: string) => {
-      const py = runtime.current;
-      if (!py || !value.trim()) return;
-      setStatus("running");
-      setActiveId(example?.id ?? "");
-      setText(value);
-      try {
-        setResult(await runPipeline(py, value, example?.toolCall ?? null));
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : String(err));
-        setStatus("failed");
-        return;
-      }
-      setStatus("ready");
-    },
-    [],
-  );
+  const submit = useCallback(async (example: Example) => {
+    const py = runtime.current;
+    if (!py) return;
+    setStatus("running");
+    setActiveId(example.id);
+    try {
+      setResult(await runPipeline(py, example.text, example.toolCall ?? null));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("failed");
+      return;
+    }
+    setStatus("ready");
+  }, []);
 
   if (status === "failed") {
     return (
@@ -92,13 +87,13 @@ export default function DemoPanel() {
       ) : null}
 
       <fieldset className="chips" disabled={busy}>
-        <legend>Try one of these</legend>
+        <legend>Pick a prompt to run</legend>
         {EXAMPLES.map((ex) => (
           <button
             key={ex.id}
             type="button"
             className={`chip${activeId === ex.id ? " chip--active" : ""}`}
-            onClick={() => void submit(ex, ex.text)}
+            onClick={() => void submit(ex)}
           >
             <span className="chip__label">{ex.label}</span>
             <span className="chip__teaser">{ex.teaser}</span>
@@ -106,32 +101,10 @@ export default function DemoPanel() {
         ))}
       </fieldset>
 
-      <form
-        className="compose"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit(null, text);
-        }}
-      >
-        <label htmlFor="prompt">Or write your own</label>
-        <textarea
-          id="prompt"
-          rows={3}
-          value={text}
-          placeholder="Type anything — an adversarial prompt, a secret, a normal question."
-          onChange={(e) => setText(e.target.value)}
-          disabled={busy}
-        />
-        <div className="compose__foot">
-          <p className="privacy">
-            Your text never leaves this browser. There is no server to send it to — open the
-            network tab and watch.
-          </p>
-          <button type="submit" disabled={busy || !text.trim()}>
-            {status === "running" ? "Running…" : "Run the pipeline"}
-          </button>
-        </div>
-      </form>
+      <p className="privacy">
+        These run in this browser. There is no server to send them to — open the network tab and
+        watch.
+      </p>
 
       {/* Outside the results section on purpose: that section is aria-live, and
           a modal announced by the live region and then focused is announced twice. */}
