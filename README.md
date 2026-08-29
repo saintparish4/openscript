@@ -14,7 +14,7 @@ OpenScript wraps any agent in a **policy pipeline**: policies run before and aft
 that runs **this package** — compiled to WebAssembly with Pyodide — entirely inside your
 tab. Every policy executes locally: there is no backend and no API endpoint, so nothing
 typed into it is sent anywhere, and the network tab proves it. That is possible because all
-eight built-in policies are pure-local heuristics, a property enforced in CI rather than
+nine built-in policies are pure-local heuristics, a property enforced in CI rather than
 merely asserted. Requires a browser with WebAssembly and access to the jsDelivr CDN (which
 serves the Pyodide runtime).
 
@@ -29,11 +29,7 @@ make demo-verify   # run every gallery example through the export, headless
 
 ### 1. Install
 
-```bash
-pip install openscript
-```
-
-Or from source:
+Install from source — OpenScript is not published to PyPI:
 
 ```bash
 git clone https://github.com/saintparish4/openscript.git
@@ -46,7 +42,7 @@ pip install -e .
 
 `pip install -e .` alone is enough for everything below — it pulls only `pydantic`, `structlog`, `pyyaml`. `requirements.txt` installs the full dev+server stack (FastAPI, SQLAlchemy, Postgres driver, Redis client, pytest, mypy, …) and is only needed if you're running the test suite, the server, or the demo script — not for using the SDK.
 
-Optional extras: `openscript[redis]` (shared approval store), `openscript[metrics]` (Prometheus), `openscript[otel]` (tracing), `openscript[ml]` (embedding-based checks), `openscript[demo]` (deps for `demo/injection_demo.py`).
+Optional extras: `pip install -e ".[redis]"` (shared approval store), `[metrics]` (Prometheus), `[otel]` (tracing), `[ml]` (embedding-based checks), `[demo]` (deps for `demo/injection_demo.py`).
 
 ### 2. Wrap an Agent
 
@@ -84,6 +80,8 @@ policies:
     threshold: 0.6
   toxicity:
     threshold: 0.5
+  harmful_request:
+    threshold: 0.5
   pii:
     mode: redact
   secrets:
@@ -109,6 +107,7 @@ secure = SecureAgent(agent, policies=load_policies("policies.yaml"))
 |--------|-------|--------------|
 | `PromptInjectionPolicy` | input | Scores role injection, prompt extraction, goal hijacking, delimiter/indirect injection; denies on threshold |
 | `ToxicityPolicy` | input | Detects threats, hate speech, harassment, self-harm content; denies on threshold |
+| `HarmfulRequestPolicy` | input | Scores requests for harmful capability — weapons, malware, doxxing, illicit acquisition, fraud, violence planning, covert surveillance, exploitation, self-harm methods; denies on threshold |
 | `PIIPolicy` | output | Redacts or denies emails, phones, SSNs, credit cards (Luhn-checked), API keys, IPs |
 | `SecretsPolicy` | input + output | Redacts or denies AWS/GitHub/Slack tokens, JWTs, private-key blocks; separately flags internal URLs/private IPs (`internal_url_mode`: annotate by default, plus allowlist) |
 | `CompliancePolicy` | input + output | Honestly-scoped presets: `phi_detection`, `credential_output_guard`, `data_access_audit` — see [Compliance positioning](#compliance-positioning) |
@@ -175,9 +174,9 @@ from sdk import MetricsRecorder, SecureAgent
 secure = SecureAgent(agent, policies=[...], metrics=MetricsRecorder())
 ```
 
-Prometheus metrics (`pip install openscript[metrics]`): actions by decision, a `risk_score` histogram, per-category violation counters, injection/tool-denial/PII-redaction counters, and per-policy latency histograms. The server exposes them at `GET /metrics` (API-key gated).
+Prometheus metrics (`pip install -e ".[metrics]"`): actions by decision, a `risk_score` histogram, per-category violation counters, injection/tool-denial/PII-redaction counters, and per-policy latency histograms. The server exposes them at `GET /metrics` (API-key gated).
 
-OpenTelemetry (`pip install openscript[otel]`): set `OPENSCRIPT_OTEL=1` for one span per action carrying the final decision and risk score; configure your OTLP exporter via standard `OTEL_*` env vars.
+OpenTelemetry (`pip install -e ".[otel]"`): set `OPENSCRIPT_OTEL=1` for one span per action carrying the final decision and risk score; configure your OTLP exporter via standard `OTEL_*` env vars.
 
 ## Write a Custom Policy
 
@@ -215,6 +214,7 @@ User Request
 │  ┌─ before_action ─────────────────────┐   │
 │  │  PromptInjectionPolicy   ──► DENY?  │   │
 │  │  ToxicityPolicy          ──► DENY?  │   │
+│  │  HarmfulRequestPolicy    ──► DENY?  │   │
 │  │  ToolFirewallPolicy ──► APPROVAL?   │   │
 │  └─────────────────────────────────────┘   │
 │                  │                         │

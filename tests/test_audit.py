@@ -23,6 +23,7 @@ from policy_audit import ALLOWED_RUNTIME_DEPS, audit  # noqa: E402
 EXPECTED_POLICIES = {
     "prompt_injection",
     "toxicity",
+    "harmful_request",
     "pii",
     "secrets",
     "compliance",
@@ -47,7 +48,7 @@ FORBIDDEN_AT_IMPORT = [
 ]
 
 
-def test_registry_has_exactly_the_eight_audited_policies():
+def test_registry_has_exactly_the_nine_audited_policies():
     found = {r["policy"] for r in audit()}
     assert found == EXPECTED_POLICIES, (
         f"policy registry changed: added={found - EXPECTED_POLICIES}, "
@@ -88,8 +89,8 @@ builtins.__import__ = guard
 import sdk
 required = [
     "PIIPolicy", "SecretsPolicy", "PromptInjectionPolicy", "ToxicityPolicy",
-    "CompliancePolicy", "ToolFirewallPolicy", "OutputSchemaPolicy", "AuditPolicy",
-    "SecureAgent", "RiskScorer", "load_policies",
+    "HarmfulRequestPolicy", "CompliancePolicy", "ToolFirewallPolicy",
+    "OutputSchemaPolicy", "AuditPolicy", "SecureAgent", "RiskScorer", "load_policies",
 ]
 missing = [n for n in required if not hasattr(sdk, n)]
 assert not missing, missing

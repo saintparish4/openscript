@@ -42,6 +42,7 @@ REQUIRED_WHEEL_MEMBERS = [
     "sdk/interceptors/base.py",
     "sdk/policies/secrets.py",
     "sdk/policies/toxicity.py",
+    "sdk/policies/harmful_request.py",
     "sdk/policies/compliance.py",
     "sdk/policies/tool_firewall.py",
     "sdk/policies/output_schema.py",

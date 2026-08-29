@@ -8,6 +8,10 @@
 policies:
   prompt_injection:
     threshold: 0.5        # block inputs scoring at or above this [0, 1]
+  toxicity:
+    threshold: 0.5        # abusive expression: violence, hate, harassment, self-harm
+  harmful_request:
+    threshold: 0.5        # requests for harmful capability: weapons, malware, doxxing, …
   pii:
     mode: redact          # redact | deny
   secrets:

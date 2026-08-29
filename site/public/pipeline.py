@@ -21,6 +21,7 @@ from sdk import (
     ActionBlockedError,
     AuditPolicy,
     CompliancePolicy,
+    HarmfulRequestPolicy,
     PHIMode,
     PIIPolicy,
     PromptInjectionPolicy,
@@ -49,12 +50,24 @@ TOOL_RULES = ToolRules.model_validate(
 POLICIES = {
     "threat": ("Prompt injection", "Weighted pattern match over 6 attack categories"),
     "toxicity": ("Toxicity", "Structural patterns for violence, hate, harassment, self-harm"),
+    "harmful_request": (
+        "Harmful request",
+        "Request constructions aimed at weapons, malware, doxxing and 5 more categories",
+    ),
     "compliance": ("Compliance", "PHI detection and a credential guard on output"),
     "secrets": ("Secrets", "Credential shapes in the prompt and the response"),
     "pii": ("PII", "Email, phone, SSN, card numbers (Luhn-checked), IP addresses"),
     "tool_firewall": ("Tool firewall", "Declarative rules on the tool call the agent attempts"),
 }
-ORDER = ["threat", "toxicity", "secrets", "pii", "compliance", "tool_firewall"]
+ORDER = [
+    "threat",
+    "toxicity",
+    "harmful_request",
+    "secrets",
+    "pii",
+    "compliance",
+    "tool_firewall",
+]
 
 
 class _MemorySink:
@@ -114,6 +127,16 @@ def _explain(key: str, meta: dict) -> str:
         named = ", ".join(_label(s) for s in sorted(signals, key=signals.get, reverse=True))
         return f"Matched {named}. Score {risk:.2f} is at or above the {meta.get('threshold', 0.5):.2f} threshold."
 
+    if key == "harmful_request":
+        signals = meta.get("signals") or {}
+        if not meta.get("flagged"):
+            return "No request for harmful capability matched."
+        named = ", ".join(_label(s) for s in sorted(signals, key=signals.get, reverse=True))
+        return (
+            f"Matched {named}. Score {risk:.2f} is at or above the "
+            f"{meta.get('threshold', 0.5):.2f} threshold."
+        )
+
     if key == "pii":
         found = meta.get("found") or []
         if not found:
@@ -170,6 +193,21 @@ def _verdict(key: str, meta: dict, blocked_by: str) -> str:
     return "allow"
 
 
+def _needs_crisis_support(metadata: dict) -> bool:
+    """True when any policy matched a self-harm pattern in this submission.
+
+    Deliberately keyed on the *signal*, not on the deny — the patterns that
+    score below threshold ("i want to die" scores 0.45 against a 0.50 gate) are
+    exactly the ones a refusal would answer with silence. The policy layer's
+    job ends at the signal; deciding that this particular one deserves a
+    different response than "Blocked" is the product's call, so it is made
+    here rather than inside the policy.
+    """
+    harmful = (metadata.get("harmful_request") or {}).get("signals") or {}
+    toxic = (metadata.get("toxicity") or {}).get("signals") or {}
+    return "self_harm_method" in harmful or "self_harm" in toxic
+
+
 def _rows(metadata: dict, blocked_by: str, reached: set) -> list:
     out = []
     for key in ORDER:
@@ -215,6 +253,7 @@ _STARTED = False
 _INPUT_POLICIES = [
     PromptInjectionPolicy(),
     ToxicityPolicy(),
+    HarmfulRequestPolicy(),
     SecretsPolicy(),
     PIIPolicy(),
     CompliancePolicy(rules=["phi_detection", "credential_output_guard"], phi_mode=PHIMode.ANNOTATE),
@@ -306,6 +345,7 @@ async def run_pipeline(payload_json: str) -> str:
             "blocked_by": POLICIES.get(blocked_by, (blocked_by, ""))[0],
             "blocked_reason": blocked_reason,
             "stage": stage,
+            "crisis": _needs_crisis_support(ctx.metadata),
             "rows": _rows(ctx.metadata, blocked_by, reached),
             "risk": risk,
             "categories": categories,
@@ -320,6 +360,7 @@ async def run_pipeline(payload_json: str) -> str:
 _KEY_BY_CLASS = {
     "PromptInjectionPolicy": "threat",
     "ToxicityPolicy": "toxicity",
+    "HarmfulRequestPolicy": "harmful_request",
     "CompliancePolicy": "compliance",
     "SecretsPolicy": "secrets",
     "PIIPolicy": "pii",

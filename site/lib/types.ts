@@ -26,6 +26,8 @@ export interface PipelineResult {
   blocked_reason: string;
   /** Where the block happened, so it can be described accurately. */
   stage: "" | "prompt" | "response" | "tool";
+  /** A self-harm pattern matched, at or below threshold. Routes to resources. */
+  crisis: boolean;
   rows: PolicyRow[];
   risk: number;
   categories: Record<string, number>;

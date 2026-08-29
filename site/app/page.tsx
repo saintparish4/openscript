@@ -16,9 +16,9 @@ export default function Page() {
 
       <footer className="footer">
         <p>
-          Eight built-in policies, no network calls: prompt injection, toxicity, PII, secrets,
-          compliance, tool firewall, output schema and audit logging. The demo exercises six of
-          them plus the audit trail.
+          Nine built-in policies, no network calls: prompt injection, toxicity, harmful requests,
+          PII, secrets, compliance, tool firewall, output schema and audit logging. The demo
+          exercises seven of them plus the audit trail.
         </p>
         <p>
           <a href="https://github.com/saintparish4/openscript">Source</a>

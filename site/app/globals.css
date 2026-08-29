@@ -297,6 +297,33 @@ main {
 .totals dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .totals dd { margin: 0.15rem 0 0; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
 
+/* ── Crisis notice ─────────────────────────────────────────────────── */
+
+.crisis {
+  max-width: 30rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  padding: 1.25rem;
+}
+
+.crisis::backdrop { background: rgb(0 0 0 / 0.45); }
+.crisis h3 { margin: 0 0 0.75rem; font-size: 1rem; }
+.crisis ul { margin: 0 0 1rem; padding-left: 1.1rem; display: grid; gap: 0.35rem; }
+.crisis li { font-size: 0.92rem; }
+.crisis a { color: var(--accent); }
+.crisis p { margin: 0 0 1rem; }
+.crisis button {
+  font: inherit;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: inherit;
+}
+
 .footer {
   margin-top: 3rem;
   padding-top: 1.25rem;

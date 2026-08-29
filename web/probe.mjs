@@ -77,4 +77,4 @@ if (bad.length) {
   console.error("\nFAILED CHECKS: " + bad.map(([k, v]) => `${k} (${v.detail})`).join(", "));
   process.exit(1);
 }
-console.log("\nPASS — all 8 policies ran in Pyodide.");
+console.log("\nPASS — all 9 policies ran in Pyodide.");

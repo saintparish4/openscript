@@ -14,6 +14,7 @@ from sdk.interceptors.event_writer import AuditPolicy
 from sdk.interceptors.pii import PIIMode, PIIPolicy
 from sdk.interceptors.threat import PromptInjectionPolicy
 from sdk.policies.compliance import CompliancePolicy, PHIMode
+from sdk.policies.harmful_request import HarmfulRequestPolicy
 from sdk.policies.output_schema import OutputSchemaPolicy
 from sdk.policies.secrets import InternalURLMode, SecretsPolicy
 from sdk.policies.tool_firewall import ToolFirewallPolicy, ToolRules
@@ -129,6 +130,11 @@ def _build_toxicity(params: dict[str, Any], writer: EventWriter | None) -> Polic
     return ToxicityPolicy(threshold=params.get("threshold", 0.5), writer=writer)
 
 
+def _build_harmful_request(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "harmful_request", {"threshold"})
+    return HarmfulRequestPolicy(threshold=params.get("threshold", 0.5), writer=writer)
+
+
 def _build_compliance(params: dict[str, Any], writer: EventWriter | None) -> Policy:
     _take(params, "compliance", {"rules", "phi_mode"})
     return CompliancePolicy(
@@ -153,6 +159,7 @@ def _build_noop(params: dict[str, Any], writer: EventWriter | None) -> Policy:
 _REGISTRY: dict[str, PolicyFactory] = {
     "prompt_injection": _build_prompt_injection,
     "toxicity": _build_toxicity,
+    "harmful_request": _build_harmful_request,
     "pii": _build_pii,
     "secrets": _build_secrets,
     "compliance": _build_compliance,

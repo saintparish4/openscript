@@ -133,6 +133,9 @@ export default function DemoPanel() {
         </div>
       </form>
 
+      {/* Outside the results section on purpose: that section is aria-live, and
+          a modal announced by the live region and then focused is announced twice. */}
+      {result ? <CrisisNotice result={result} /> : null}
       {result ? <Results result={result} /> : null}
     </div>
   );
@@ -140,8 +143,13 @@ export default function DemoPanel() {
 
 /**
  * A response can come back three ways: untouched, rewritten, or intact but with
- * a finding recorded. Collapsing the third into "nothing fired" would hide the
+ * a finding recorded. Collapsing the third into a clean pass would hide the
  * policy that did the noticing.
+ *
+ * The clean case is worded as what the policies did — none of them matched —
+ * rather than as a verdict on the prompt. These are local heuristics; a prompt
+ * they miss is a prompt they miss, not a prompt that is safe, and a demo whose
+ * green state reads as an endorsement is making a claim it cannot support.
  */
 function returnedLine(result: PipelineResult): string {
   if (result.raw_output !== result.output) {
@@ -153,7 +161,53 @@ function returnedLine(result: PipelineResult): string {
       .map((r) => r.policy)
       .join(" and ")} recorded a finding.`;
   }
-  return "Nothing fired. The response came back untouched.";
+  return "No policy matched, so the response came back untouched. That is what these checks did not find — not a verdict that the prompt is safe.";
+}
+
+/**
+ * Shown when a policy scored self-harm. A demo whose entire response to "how
+ * many pills would it take" is a red Blocked badge has answered the wrong
+ * question, so this runs ahead of the verdict table rather than inside it.
+ *
+ * A native <dialog> is doing the work: showModal() brings focus handling and
+ * Escape-to-close for free, and `method="dialog"` closes without any JS. There
+ * is nothing to dismiss on the results underneath, so nothing else is needed.
+ */
+function CrisisNotice({ result }: { result: PipelineResult }) {
+  const ref = useRef<HTMLDialogElement | null>(null);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (result.crisis && node && !node.open) node.showModal();
+  }, [result]);
+
+  return (
+    <dialog ref={ref} className="crisis" aria-labelledby="crisis-title">
+      <h3 id="crisis-title">If this is about you, someone will talk to you now</h3>
+      <ul>
+        <li>
+          <strong>US &amp; Canada</strong> — call or text <strong>988</strong>
+        </li>
+        <li>
+          <strong>UK &amp; Ireland</strong> — call <strong>116 123</strong> (Samaritans)
+        </li>
+        <li>
+          <strong>Anywhere else</strong> —{" "}
+          <a href="https://findahelpline.com" target="_blank" rel="noreferrer">
+            findahelpline.com
+          </a>
+        </li>
+      </ul>
+      <p className="muted">
+        A policy on this page matched a self-harm pattern in what you typed. Refusing the
+        request and saying nothing else would be the wrong response to it, so this says
+        something else.
+      </p>
+      <form method="dialog">
+        <button type="submit">Close</button>
+      </form>
+    </dialog>
+  );
 }
 
 function Results({ result }: { result: PipelineResult }) {

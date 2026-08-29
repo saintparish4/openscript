@@ -27,6 +27,7 @@ from sdk.observability.risk import RiskScorer, aggregate_risk
 from sdk.observability.tracing import ActionTracer
 from sdk.policies.compliance import CompliancePolicy, PHIMode, find_phi
 from sdk.policies.config import PolicyConfig, load_policies, register_policy
+from sdk.policies.harmful_request import HarmfulRequestPolicy
 from sdk.policies.output_schema import HallucinationMode, OnInvalid, OutputSchemaPolicy
 from sdk.policies.secrets import InternalURLMode, SecretsPolicy, find_secrets
 from sdk.policies.tool_firewall import ToolFirewallPolicy, validate_tool_call
@@ -47,6 +48,7 @@ __all__ = [
     "FailureMode",
     "GuardScan",
     "HallucinationMode",
+    "HarmfulRequestPolicy",
     "InMemoryApprovalStore",
     "Interceptor",  # deprecated alias
     "InterceptorDecision",

@@ -14,6 +14,7 @@ from sdk.interceptors.pii import PIIMode, PIIPolicy
 from sdk.interceptors.threat import PromptInjectionPolicy
 from sdk.policies.compliance import CompliancePolicy, PHIMode
 from sdk.policies.config import PolicyConfig, load_policies, register_policy
+from sdk.policies.harmful_request import HarmfulRequestPolicy
 from sdk.policies.secrets import SecretsPolicy
 from sdk.policies.tool_firewall import ToolFirewallPolicy
 from sdk.policies.toxicity import ToxicityPolicy
@@ -108,6 +109,12 @@ def test_toxicity_threshold_applied():
     assert policy._threshold == 0.8
 
 
+def test_harmful_request_threshold_applied():
+    (policy,) = load_policies({"harmful_request": {"threshold": 0.8}})
+    assert isinstance(policy, HarmfulRequestPolicy)
+    assert policy._threshold == 0.8
+
+
 def test_compliance_rules_and_mode_applied():
     (policy,) = load_policies(
         {"compliance": {"rules": ["phi_detection", "data_access_audit"], "phi_mode": "deny"}}
@@ -152,6 +159,8 @@ def test_shipped_example_config_loads():
     policies = load_policies(Path("sdk/policies/policies_example.yaml"))
     assert [type(p) for p in policies] == [
         PromptInjectionPolicy,
+        ToxicityPolicy,
+        HarmfulRequestPolicy,
         PIIPolicy,
         SecretsPolicy,
         ToolFirewallPolicy,

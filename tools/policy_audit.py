@@ -49,6 +49,7 @@ LAZY_ONLY = {"sentence_transformers", "prometheus_client", "opentelemetry", "red
 _POLICY_MODULES = {
     "prompt_injection": "sdk/interceptors/threat.py",
     "toxicity": "sdk/policies/toxicity.py",
+    "harmful_request": "sdk/policies/harmful_request.py",
     "pii": "sdk/interceptors/pii.py",
     "secrets": "sdk/policies/secrets.py",
     "compliance": "sdk/policies/compliance.py",
