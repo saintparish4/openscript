@@ -61,6 +61,7 @@ dev = [
     "mypy>=1.19.1",
     "types-PyYAML>=6.0",
     "hypothesis>=6.151.9",
+    "build>=1.2",
 ]
 
 [tool.setuptools.packages.find]

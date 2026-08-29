@@ -5,6 +5,7 @@ black>=26.1.0
 ruff>=0.15.6
 mypy>=1.19.1
 hypothesis>=6.151.9
+build>=1.2 # tests/test_pyodide_compat.py builds the wheel it inspects
 pydantic>=2.12
 structlog>=25.5.0
 fastapi>=0.128.0
