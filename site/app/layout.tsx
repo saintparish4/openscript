@@ -6,6 +6,13 @@ export const metadata: Metadata = {
   title: "OpenScript — see the policy pipeline run",
   description:
     "An interactive demo of the OpenScript security gateway. Every policy runs in your browser; nothing you type is sent anywhere.",
+  openGraph: {
+    type: "website",
+    siteName: "OpenScript",
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
