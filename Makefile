@@ -141,6 +141,14 @@ help:  ## List all available targets
 audit:  ## Regenerate the policy audit table
 	$(PYTHON) tools/policy_audit.py
 
+.PHONY: evals
+evals:  ## Score the input policies against the labelled corpora in evals/
+	$(PYTHON) evals/run.py
+
+.PHONY: evals-misses
+evals-misses:  ## Same, plus every prompt the policies got wrong
+	$(PYTHON) evals/run.py --misses
+
 .PHONY: wasm-deps
 wasm-deps:  ## Check runtime deps for Pyodide-incompatible C extensions
 	$(PYTHON) tools/check_wasm_deps.py

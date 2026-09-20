@@ -17,7 +17,17 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-from policy_audit import ALLOWED_RUNTIME_DEPS, audit  # noqa: E402
+from policy_audit import (  # noqa: E402
+    ALLOWED_RUNTIME_DEPS,
+    NETWORK_MARKERS,
+    audit,
+    lazy_imports,
+    top_level_imports,
+)
+
+# Helper modules a policy imports. The audit table walks policy modules only,
+# so anything shared between them has to be named here or it is unchecked.
+SHARED_POLICY_HELPERS = ["sdk/policies/normalize.py"]
 
 # The exact set of policies the demo claims to run in the browser.
 EXPECTED_POLICIES = {
@@ -106,3 +116,26 @@ print("OK")
         "`import sdk` pulled in a dependency Pyodide cannot provide:\n" + proc.stderr
     )
     assert "OK" in proc.stdout
+
+
+@pytest.mark.parametrize("module", SHARED_POLICY_HELPERS)
+def test_shared_helpers_are_stdlib_only(module: str):
+    """A helper every input policy calls is part of the pure-local claim."""
+    path = REPO_ROOT / module
+    top = top_level_imports(path)
+    lazy = lazy_imports(path)
+
+    external = {
+        m
+        for m in top
+        if m not in sys.stdlib_module_names and m not in {"sdk", "contracts", "events"}
+    }
+    assert not external - ALLOWED_RUNTIME_DEPS, (
+        f"{module} imports {sorted(external - ALLOWED_RUNTIME_DEPS)} at module scope; "
+        "the browser build only has the pure-local set."
+    )
+    reachable = (top | lazy) & NETWORK_MARKERS
+    assert not reachable, (
+        f"{module} references {sorted(reachable)}. A module every policy calls "
+        "cannot import anything that could open a socket."
+    )

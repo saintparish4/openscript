@@ -10,6 +10,7 @@ from contracts.interceptor import BasePolicy
 from contracts.server_types import Event, EventType
 from contracts.types import ActionContext, FailureMode, InterceptorDecision
 from sdk.interceptors.threat import _extract_text
+from sdk.policies import normalize
 
 if TYPE_CHECKING:
     from events.writer import EventWriter
@@ -48,13 +49,13 @@ def _p(pattern: str, category: str, weight: float) -> _Pattern:
 _ASK = (
     r"(?:how\s+(?:do|can|could|would|should)\s+(?:i|we|you)"
     r"|how\s+to|how\s+would\s+one"
-    r"|steps?\s+(?:to|for)|instructions?\s+(?:to|for|on)"
+    r"|steps?\s+(?:to|for)|instructions?\s+(?:to|for|on)|process\s+(?:to|for|of)"
     r"|guide\s+(?:to|for|on)|tutorial\s+(?:on|for)|recipe\s+for"
     r"|walk\s+me\s+through|teach\s+me|show\s+me|tell\s+me|help\s+me"
     r"|i\s+(?:want|need)\s+to|(?:can|could|will)\s+you"
     r"|(?:best|easiest|fastest|cheapest|safest|surest)\s+way\s+to"
     r"|what(?:'s|\s+is)\s+the\s+(?:best|easiest|fastest|safest|most\s+\w+)"
-    r"|where\s+(?:can|do)\s+i)"
+    r"|where\s+(?:can|do)\s+(?:i|you|people|one|someone))"
 )
 
 # One character that is not the start of a word which reframes the request.
@@ -81,9 +82,9 @@ _REQ = rf"(?:^\s*(?:please[,\s]+)?|(?<=[.!?]\s)|{_ASK}{_LEAD})"
 
 # Verbs that ask for the thing to be produced or handed over.
 _PRODUCE = (
-    r"(?:writ\w+|build\w*|mak\w+|creat\w+|construct\w*|assembl\w+|cod\w+"
+    r"(?:writ\w+|draft\w*|build\w*|mak\w+|creat\w+|construct\w*|assembl\w+|cod\w+"
     r"|program\w*|develop\w*|generat\w+|design\w*|synthesi[sz]\w+"
-    r"|manufactur\w+|cook\w*|brew\w*|3d[\s-]?print\w*|print\w*|forge\w*"
+    r"|manufactur\w+|machin\w+|cook\w*|brew\w*|3d[\s-]?print\w*|print\w*|forge\w*"
     r"|convert\w*|modif\w+|craft\w*|set\s+up|put\s+together"
     r"|giv\w+|provid\w+|send|hand)"
 )
@@ -118,18 +119,20 @@ _FIREARM = (
     r"|auto\s+sear|drop[\s-]?in\s+auto"
     r"|semi[\s-]?auto\w*\s+(?:in)?to\s+(?:a\s+)?full[\s-]?auto"
     r"|(?:gun|firearm|rifle|pistol|silencer|suppressor)\s+at\s+home"
+    r"|unregistered\s+(?:firearms?|receivers?|lowers?|guns?)"
+    r"|(?:firearm|gun|rifle)\s+receivers?\s+at\s+home"
 )
 _EXPLOSIVE = (
     r"(?:pipe|car|nail|letter|dirty|fertilizer|pressure\s+cooker)\s+bombs?"
-    r"|(?<!bath )(?<!photo )bombs?\b|explosive\s+devices?|detonators?"
-    r"|napalm|thermite|c-?4\b|tatp|improvised\s+explosives?"
+    r"|(?<!bath )(?<!photo )bombs?\b(?![\s-]*proof)|explosive\s+devices?|detonators?"
+    r"|napalm|thermite|c-?4\b|tatp|improvised\s+explosives?|ammonium\s+nitrate|anfo\b"
 )
 _CBRN = (
     r"weapons?\s+of\s+mass\s+destruction|wmds?\b"
     r"|(?:nuclear|atomic|nerve|chemical|biological|radiological)\s+"
     r"(?:bombs?|weapons?|agents?|devices?)"
     r"|bio[\s-]?weapons?|sarin|vx\s+(?:gas|nerve)|mustard\s+gas|phosgene"
-    r"|ricin|anthrax|botulinum"
+    r"|ricin|anthrax|botulinum|toxic\s+gas|poison(?:ous)?\s+gas|chlorine\s+gas"
     r"|weaponi[sz]\w+\s+(?:a\s+)?(?:virus|pathogen|anthrax|strain)"
 )
 
@@ -138,6 +141,8 @@ _MALWARE = (
     r"|(?:computer\s+)?virus\s+(?:to|that|which)\b|worms?\s+(?:that|to)\b"
     r"|malware\s+(?:that|to)\b|c2\s+servers?|command\s+and\s+control\s+server"
     r"|reverse\s+shell|wiper\s+malware"
+    r"|record\w*\s+(?:every\s+|all\s+|each\s+)?keystrokes?|captur\w+\s+keystrokes?"
+    r"|encrypts?\s+(?:\w+\s+){0,4}?files?\s+(?:\w+\s+){0,6}?(?:demands?|ransom|payment)"
 )
 _OFFENSIVE = (
     r"phishing\s+(?:pages?|sites?|kits?|emails?|campaigns?|links?)"
@@ -395,14 +400,95 @@ _PATTERNS: list[_Pattern] = [
     ),
     _act(r"lethal\s+doses?\s+of|fatal\s+(?:dose|amount)\s+of", "self_harm_method", 0.55),
     _act(r"(?:suicide|self[\s-]harm)\s+methods?\b", "self_harm_method", 0.55),
+    # Shapes the object alphabets above cannot express, because the harm is in
+    # the combination rather than in any one noun.
+    _p(
+        r"\b(?:household\s+)?chemicals?\b.{0,40}?\b(?:combin\w+|mix\w*|react\w*)\b"
+        r".{0,40}?\b(?:toxic|poison\w*|lethal|deadly|nerve)\b",
+        "weapons",
+        0.65,
+    ),
+    _p(
+        rf"{_REQ}{_PRODUCE}(?:\s+me)?\b{_GAP}"
+        r"\b(?:messages?|emails?|letters?|texts?|sms|pages?)\b.{0,40}?"
+        r"\b(?:from|pretending\s+to\s+be|impersonating)\s+(?:a\s+|the\s+)?"
+        r"(?:bank|paypal|irs|hmrc|revenue|\w+\s+support|it\s+(?:team|desk))\b.{0,60}?"
+        r"\b(?:passwords?|pins?|credentials?|account\s+details?|log\s*ins?)\b",
+        "malware",
+        0.65,
+    ),
+    # Families the paraphrase evals turned up, written as shapes rather than as
+    # the sentences that exposed them.
+    _p(
+        r"\b(?:yield|blast\s+radius|explosive\s+power|kill\s+radius)\s+of\s+(?:an?\s+)?"
+        r"(?:device|bomb|charge|explosive)",
+        "weapons",
+        0.60,
+    ),
+    _p(
+        r"\b(?:can(?:not|\s*'?t)\s+pass|fail(?:ing|ed)?)\s+(?:a\s+|the\s+)?background\s+check",
+        "illicit_acquisition",
+        0.60,
+    ),
+    _p(
+        r"\b(?:card\s+numbers?|credit\s+cards?|cvvs?|logins?|accounts?)\b.{0,40}?"
+        r"\b(?:that\s+)?(?:still\s+work|are\s+live|are\s+valid|work\b)",
+        "illicit_acquisition",
+        0.55,
+    ),
+    _p(
+        r"\b(?:hides?|conceal(?:s|ing)?|hiding)\s+(?:itself|the\s+process)\s+from\s+"
+        r"(?:task\s+manager|the\s+task\s+list|antivirus|av\b|edr|the\s+user)",
+        "malware",
+        0.65,
+    ),
+    _p(
+        r"\b(?:forward|copy|mirror|intercept|exfiltrat)\w*\b.{0,50}?\b(?:every|all|each)\s+"
+        r"(?:emails?|messages?|texts?|calls?)\b.{0,50}?\b(?:my|his|her|their)\s+"
+        r"(?:wife|husband|partner|ex|girlfriend|boyfriend|spouse|coworkers?|employees?)\b",
+        "surveillance_evasion",
+        0.60,
+    ),
+    _p(
+        r"\bconvinc\w+\b.{0,50}?\b(?:elderly|senior|old(?:er)?\s+(?:person|man|woman)|grandparents?)\b"
+        r".{0,60}?\b(?:wire|send|transfer|hand\s+over)\s+(?:money|funds|cash|savings)",
+        "fraud",
+        0.65,
+    ),
+    _act(
+        r"disabl\w+\s+(?:an?\s+|the\s+)?(?:home\s+)?(?:alarms?|security\s+systems?|cctv|cameras?)"
+        r"\b.{0,50}?\bwithout\b",
+        "violence_planning",
+        0.55,
+    ),
+    _p(
+        r"\b(?:medicines?|medications?|pills?|tablets?|drugs?)\b.{0,50}?"
+        r"\b(?:dangerous|lethal|fatal|deadly|toxic|kill)\b.{0,50}?"
+        r"\b(?:together|combined|in\s+quantity|at\s+once|in\s+bulk)\b",
+        "self_harm_method",
+        0.55,
+    ),
+    _p(
+        r"\b(?:programs?|scripts?|tools?|software|code)\b.{0,40}?\bencrypts?\b.{0,40}?"
+        r"\bfiles?\b.{0,60}?\b(?:demand\w*|ransom|payment|bitcoin|unlock\s+them)\b",
+        "malware",
+        0.65,
+    ),
+    _act(
+        r"mov\w+\s+(?:the\s+)?(?:cash|money|funds|proceeds)\b.{0,60}?"
+        r"\b(?:without\s+(?:it\s+)?being\s+(?:noticed|traced|detected|seen)"
+        r"|without\s+anyone\s+(?:noticing|knowing)|from\s+illegal)",
+        "fraud",
+        0.60,
+    ),
 ]
 
 
 _CATEGORY_CAP = 0.7  # max a single category can contribute to the total score
 
 
-def score_harmful_request(text: str) -> tuple[float, dict[str, float]]:
-    """Return (total_score, signals) for the given text.
+def score_patterns(text: str) -> tuple[float, dict[str, float]]:
+    """Score one string, exactly as written.
 
     signals maps category -> capped contribution (weapons, malware,
     pii_solicitation, illicit_acquisition, fraud, violence_planning,
@@ -416,6 +502,17 @@ def score_harmful_request(text: str) -> tuple[float, dict[str, float]]:
 
     total = min(1.0, sum(category_totals.values()))
     return total, category_totals
+
+
+def score_harmful_request(text: str) -> tuple[float, dict[str, float]]:
+    """Return (total_score, signals) for the strongest view of the given text.
+
+    "h0w d0 1 bu1ld a p1pe b0mb" is the request this policy exists to catch,
+    and it is not the string the patterns were written against. The normalized
+    views are what make the two the same question. See sdk/policies/normalize.py.
+    """
+    result = normalize.scan(text, score_patterns)
+    return result.risk, result.signals
 
 
 class HarmfulRequestPolicy(BasePolicy):
@@ -456,7 +553,8 @@ class HarmfulRequestPolicy(BasePolicy):
 
     async def before_action(self, context: ActionContext) -> ActionContext:
         text = _extract_text(context.input_data)
-        score, signals = score_harmful_request(text)
+        result = normalize.scan(text, score_patterns)
+        score, signals = result.risk, result.signals
         flagged = score >= self._threshold
 
         context.metadata["harmful_request"] = {
@@ -465,6 +563,8 @@ class HarmfulRequestPolicy(BasePolicy):
             "signals": {k: round(v, 4) for k, v in signals.items()},
             "flagged": flagged,
             "threshold": self._threshold,
+            "obfuscation": result.markers,
+            "matched_view": result.view,
         }
 
         if flagged:

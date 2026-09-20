@@ -78,6 +78,9 @@ jobs:
       - name: Run tests 
         run: pytest -v 
 
+      - name: Report the measured detection numbers
+        run: python evals/run.py
+
   pyodide:
     runs-on: ubuntu-latest
     steps:

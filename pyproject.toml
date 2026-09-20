@@ -122,6 +122,11 @@ known-first-party = ["sdk", "contracts"]
 # Logging is silenced before the policies are imported so their per-finding
 # warnings stay out of the browser console; the UI is the report.
 "site/public/pipeline.py" = ["E402"]
+# The confusables table is a list of characters that look like ASCII but are
+# not. Flagging them as ambiguous is the whole point of the file, and of the
+# obfuscated prompts the tests and the eval corpora are built from.
+"sdk/policies/normalize.py" = ["RUF001", "RUF002"]
+"tests/test_normalize.py" = ["RUF001"]
 
 [tool.mypy]
 python_version = "3.10"
