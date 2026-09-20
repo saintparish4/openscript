@@ -61,13 +61,20 @@ Measured inside Python, around the pipeline call only.
 | Prompt injection, per prompt | 0.21 ms | 1.2 ms | `make evals` |
 | Toxicity, per prompt | 0.07 ms | 0.2 ms | `make evals` |
 | Harmful request, per prompt | 1.6 ms | 6.9 ms | `make evals` |
-| Full gallery pipeline, under Pyodide | 7.1 ms | 29.7 ms | `make demo-verify` |
+| Full gallery pipeline, under Pyodide | 2.4 ms | 9.8 ms | `npm run verify` on a CI runner |
+| Same, on a loaded local WSL box | 7.1 ms | 29.7 ms | `make demo-verify` |
 
-The browser number was 1.5 ms p50 on 2026-09-16 and is 7.1 ms now. Almost all
-of it is `HarmfulRequestPolicy`, whose bank roughly doubled: it costs 2.6 ms
-p50 natively against 0.2 ms for injection and 0.07 ms for toxicity, and WASM
-multiplies that. Still imperceptible, and the page prints the number it
-measured, so this is a thing to watch rather than a thing to fix.
+Quote the CI row. The two rows are the same code minutes apart, and the gap
+between them is the machine, which is also why the 1.5 ms p50 recorded on
+2026-09-16 is not a controlled comparison — it was measured locally and the
+provenance of the hardware state is gone.
+
+Where the time goes is measurable regardless: `HarmfulRequestPolicy` costs
+2.6 ms p50 natively against 0.2 ms for injection and 0.07 ms for toxicity, so
+its bank is most of the budget. Cost is linear in input length times the number
+of views — a pathological 10 KB prompt takes about 0.9 s, and doubling the
+length doubles the time rather than squaring it, so there is no catastrophic
+backtracking in the banks or the normalizer.
 
 Normalization itself is not the cost: plain prose produces exactly one view,
 which is what it produced before. Only text that has been obfuscated pays for

@@ -22,6 +22,10 @@ export default function Page() {
         </p>
         <p>
           <a href="https://github.com/saintparish4/openscript">Source</a>
+          {" · "}
+          <a href="https://github.com/saintparish4/openscript/blob/master/docs/metrics.md">
+            Measured detection numbers
+          </a>
         </p>
       </footer>
     </main>
