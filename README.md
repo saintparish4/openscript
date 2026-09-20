@@ -18,7 +18,7 @@ proves it. That is possible because all nine built-in policies are pure-local he
 property enforced in CI rather than merely asserted. Requires a browser with WebAssembly and
 access to the jsDelivr CDN (which serves the Pyodide runtime).
 
-Each of the eleven prompts in the gallery says what it is reaching for and what reaching the agent unchecked would have meant, shows the tool call the firewall refused, and — for the disguised jailbreak — says which obfuscation had to be undone before any pattern matched.
+The gallery is eleven prompts from three fictional users — a customer, a contractor and a support agent. Each one shows what the sender is asking for, what reaching the agent unchecked would have meant, and what the pipeline did instead; tool prompts show the call the firewall refused next to the rule it hit, and the disguised jailbreak names the obfuscation that had to be undone before any pattern matched.
 
 To run it locally instead, `site/` is the source for that demo:
 

@@ -231,17 +231,33 @@ function Results({ result, example }: { result: PipelineResult; example: Example
         Every check below ran locally in your browser, in {result.latency_ms.toFixed(1)} ms.
       </p>
 
+      {/* Who sent it, and what they sent. A prompt blocked on the way in
+          produces no output at all, so without this the visitor never sees the
+          text they just ran. */}
+      <div className="sender">
+        <p className="sender__who">
+          <strong>{example.persona.name}</strong>
+          <span>{example.persona.role}</span>
+        </p>
+        <p className="sender__prompt">{result.prompt}</p>
+      </div>
+
       {/* A red badge says a policy fired. It does not say what the prompt was
-          reaching for, or what the agent would have done with it — which is
-          the only part a visitor cannot work out from the prompt alone. */}
+          reaching for, what the agent would have done with it, or what the
+          pipeline did instead — which is the whole of what a visitor cannot
+          work out from the prompt alone. */}
       <dl className="context">
         <div>
-          <dt>What this prompt is doing</dt>
+          <dt>What {example.persona.name} is asking for</dt>
           <dd>{example.attempt}</dd>
         </div>
-        <div>
+        <div className="context--without">
           <dt>Without the gateway</dt>
           <dd>{example.without}</dd>
+        </div>
+        <div className="context--with">
+          <dt>With OpenScript</dt>
+          <dd>{example.withGateway}</dd>
         </div>
       </dl>
 

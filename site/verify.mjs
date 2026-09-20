@@ -98,10 +98,22 @@ for (const ex of EXAMPLES) {
   // trip nothing, which is the claim that it is not just blocking everything.
   let ok = ex.expect ? fired : quiet;
 
-  // The page says what every prompt is reaching for and what it would have
-  // cost. A chip added without those is a chip that explains nothing.
-  if (!ex.attempt || !ex.without) {
-    console.error(`  ${ex.id}: missing attempt/without copy in examples.json`);
+  // The page says who sent every prompt, what it is reaching for, what it
+  // would have cost, and what the pipeline did instead. A chip missing any of
+  // those is a chip that explains nothing.
+  const missing = ["persona", "attempt", "without", "withGateway"].filter((f) => !ex[f]);
+  if (missing.length) {
+    console.error(`  ${ex.id}: examples.json is missing ${missing.join(", ")}`);
+    ok = false;
+  }
+  if (ex.persona && !(ex.persona.name && ex.persona.role)) {
+    console.error(`  ${ex.id}: persona needs both a name and a role`);
+    ok = false;
+  }
+  // The label is the sentence the gallery reads as, so it has to name the
+  // person it is attributed to.
+  if (ex.persona?.name && !ex.label.includes(ex.persona.name)) {
+    console.error(`  ${ex.id}: label "${ex.label}" does not name ${ex.persona.name}`);
     ok = false;
   }
 

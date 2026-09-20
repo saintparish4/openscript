@@ -183,8 +183,35 @@ main {
 .outcome--allow { border-left-color: var(--allow); }
 .outcome--allow strong { color: var(--allow); }
 
-/* What the prompt was reaching for, and what it would have cost. A verdict
-   badge cannot carry either, and they are the part a visitor cannot infer. */
+/* Who sent the prompt, and the prompt itself. */
+.sender {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.sender__who {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.sender__who span { color: var(--muted); }
+
+.sender__prompt {
+  margin: 0.45rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* What the prompt was reaching for, what it would have cost, and what the
+   pipeline did instead. A verdict badge carries none of the three. */
 .context {
   display: grid;
   gap: 0.6rem;
@@ -204,6 +231,12 @@ main {
 }
 
 .context dd { margin: 0; font-size: 0.9rem; line-height: 1.55; }
+
+/* The two halves of the comparison, coloured the way the verdicts are: what
+   would have happened, against what did. */
+.context > div { border-left: 2px solid transparent; padding-left: 0.6rem; }
+.context--without { border-left-color: var(--deny); }
+.context--with { border-left-color: var(--allow); }
 
 .toolcall {
   margin-bottom: 1.25rem;
