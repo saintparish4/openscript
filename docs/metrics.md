@@ -58,12 +58,20 @@ Measured inside Python, around the pipeline call only.
 
 | What | p50 | max | Measured by |
 |---|---|---|---|
-| Input policies, per prompt (injection) | 0.21 ms | 1.2 ms | `make evals` |
-| Input policies, per prompt (harmful request) | 1.6 ms | 6.9 ms | `make evals` |
-| Full gallery pipeline, in the browser | 1.5 ms | 3.3 ms | `make demo-verify` (2026-09-16) |
+| Prompt injection, per prompt | 0.21 ms | 1.2 ms | `make evals` |
+| Toxicity, per prompt | 0.07 ms | 0.2 ms | `make evals` |
+| Harmful request, per prompt | 1.6 ms | 6.9 ms | `make evals` |
+| Full gallery pipeline, under Pyodide | 7.1 ms | 29.7 ms | `make demo-verify` |
 
-Normalization costs one extra pass only over text that has been obfuscated.
-Plain prose produces exactly one view, which is what it produced before.
+The browser number was 1.5 ms p50 on 2026-09-16 and is 7.1 ms now. Almost all
+of it is `HarmfulRequestPolicy`, whose bank roughly doubled: it costs 2.6 ms
+p50 natively against 0.2 ms for injection and 0.07 ms for toxicity, and WASM
+multiplies that. Still imperceptible, and the page prints the number it
+measured, so this is a thing to watch rather than a thing to fix.
+
+Normalization itself is not the cost: plain prose produces exactly one view,
+which is what it produced before. Only text that has been obfuscated pays for
+a second pass.
 
 ## The demo, on real devices
 
@@ -71,7 +79,7 @@ Plain prose produces exactly one view, which is what it produced before.
 |---|---|---|
 | Cold load, iOS Safari (cellular) | ~5-6 s to ready | By hand, 2026-09-20 |
 | Cold load, desktop Chrome | ~5-6 s to ready | By hand, 2026-09-20 |
-| Every gallery chip behaves as advertised | 10/10 | By hand on device, and `make demo-verify` in CI |
+| Every gallery chip behaves as advertised | 11/11 | By hand on device (10 chips, 2026-09-20), and `make demo-verify` in CI |
 | Over the wire, cold | ~7.2 MB brotli | DevTools, 2026-09-16 |
 | Self-hosted wheels | 164 KB (80 KB openscript + 76 KB structlog) | `du -sh site/public/wheels` |
 
@@ -92,6 +100,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-09-20 | Demo gallery gained an obfuscated-jailbreak chip, per-chip "what this was reaching for" copy, and the refused tool call spelled out |
 | 2026-09-20 | Normalization added; injection detection 48% → 100% on its corpus, obfuscated 79% → 100%, false positives 3% → 0%. Held-out generalization measured for the first time: 4% |
 | 2026-09-16 | 431 tests; demo deployed and green; obfuscation gap found and written down |
 | 2026-08-30 | `HarmfulRequestPolicy` added: 45/45 adversarial blocked, 36/36 benign near-misses at 0.00 |

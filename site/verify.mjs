@@ -96,7 +96,28 @@ for (const ex of EXAMPLES) {
 
   // A chip that advertises a policy must actually trip it; the benign one must
   // trip nothing, which is the claim that it is not just blocking everything.
-  const ok = ex.expect ? fired : quiet;
+  let ok = ex.expect ? fired : quiet;
+
+  // The page says what every prompt is reaching for and what it would have
+  // cost. A chip added without those is a chip that explains nothing.
+  if (!ex.attempt || !ex.without) {
+    console.error(`  ${ex.id}: missing attempt/without copy in examples.json`);
+    ok = false;
+  }
+
+  // A tool chip has to show the call it refused, or the verdict is unverifiable.
+  if (ex.toolCall && result.tool_call?.name !== ex.toolCall.name) {
+    console.error(`  ${ex.id}: pipeline did not report the attempted tool call`);
+    ok = false;
+  }
+
+  // The obfuscated chip exists to demonstrate normalization. If it starts
+  // matching as written, it has stopped demonstrating anything.
+  if (ex.id === "obfuscated" && !(row?.explanation ?? "").includes("after undoing")) {
+    console.error(`  ${ex.id}: caught, but not because of normalization: ${row?.explanation}`);
+    ok = false;
+  }
+
   if (!ok) failures++;
 
   const verdict = ex.expect ? `${ex.expect}=${row ? row.verdict : "absent"}` : quiet ? "all clear" : "unexpectedly flagged";

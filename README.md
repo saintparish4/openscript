@@ -18,6 +18,8 @@ proves it. That is possible because all nine built-in policies are pure-local he
 property enforced in CI rather than merely asserted. Requires a browser with WebAssembly and
 access to the jsDelivr CDN (which serves the Pyodide runtime).
 
+Each of the eleven prompts in the gallery says what it is reaching for and what reaching the agent unchecked would have meant, shows the tool call the firewall refused, and — for the disguised jailbreak — says which obfuscation had to be undone before any pattern matched.
+
 To run it locally instead, `site/` is the source for that demo:
 
 ```bash
@@ -114,6 +116,23 @@ secure = SecureAgent(agent, policies=load_policies("policies.yaml"))
 | `ToolFirewallPolicy` | input | Allowlist/deny/RBAC/argument constraints for tool calls; can require human approval. Also usable standalone via `validate_tool_call()` or `POST /v1/tools/validate` |
 | `OutputSchemaPolicy` | output | Pydantic schema validation, dangerous-content scan, optional hallucination/grounding check against a source |
 | `AuditPolicy` | both | Writes every action to the event store; place it **last** so its events carry the final risk score |
+
+The three input-side policies scan the prompt as it arrived **and** normalized views of it, so an attack disguised with zero-width characters, Cyrillic look-alikes, leetspeak, spaced-out letters, full-width forms or a base64 payload scores like the attack it is. Plain prose produces one view and costs what it always did. See `sdk/policies/normalize.py`.
+
+### What the detection actually measures
+
+Asserting that a security tool works is cheap. `evals/` holds labelled corpora and `make evals` scores the policies against them; `tests/test_evals.py` fails the build if the numbers regress. Measured 2026-09-20:
+
+| Corpus | Attacks blocked | Obfuscated blocked | Benign wrongly blocked |
+|---|---|---|---|
+| Prompt injection | 49/49 (100%) | 14/14 (100%) | 0/30 (0%) |
+| Toxicity | 20/20 (100%) | 6/6 (100%) | 0/18 (0%) |
+| Harmful request | 49/49 (100%) | 10/10 (100%) | 0/46 (0%) |
+| **Held out — phrasings never fixed against** | **1/23 (4%)** | — | **0/20 (0%)** |
+
+Both halves of that matter. A pattern bank recognises shapes, so it is close to perfect on attack families it has seen (including disguised ones) and close to useless against an attack phrased in words nobody wrote a rule for. **0 false positives across all 154 benign prompts** — prompts that report on malware, teach about phishing and quote threats in HR reports — is the other number worth having, because a gateway that blocks the security team gets switched off.
+
+What this does not catch, stated plainly: attacks in languages other than English, novel paraphrase, and anything that needs to understand a sentence rather than match it. Closing that needs a model, which is a deliberate architecture change and would end the no-backend property the browser demo depends on. Full numbers and history: [`docs/metrics.md`](docs/metrics.md); methodology: [`evals/README.md`](evals/README.md).
 
 Every policy writes standardized metadata — `{"risk": float, "category": str, ...}` — which the built-in `RiskScorer` aggregates into a single `risk_score` per action:
 
@@ -283,7 +302,14 @@ pytest
 ruff check .
 black .
 mypy --strict sdk/ contracts/
+
+# Measure detection and false positives against the labelled corpora
+make evals
+make evals-misses       # plus every prompt the policies got wrong
 ```
+
+CI skips every job for changes that only touch markdown, so documentation edits
+do not spend six runners proving nothing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full details.
 

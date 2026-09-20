@@ -183,6 +183,60 @@ main {
 .outcome--allow { border-left-color: var(--allow); }
 .outcome--allow strong { color: var(--allow); }
 
+/* What the prompt was reaching for, and what it would have cost. A verdict
+   badge cannot carry either, and they are the part a visitor cannot infer. */
+.context {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.context dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.context dd { margin: 0; font-size: 0.9rem; line-height: 1.55; }
+
+.toolcall {
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--approval);
+  border-radius: 8px;
+}
+
+.toolcall__label {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.toolcall__code {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.toolcall__rule {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.toolcall__rule code { font-size: 0.8rem; }
+
 .diff { display: grid; gap: 0.75rem; margin-bottom: 1.25rem; }
 
 @media (min-width: 40rem) {

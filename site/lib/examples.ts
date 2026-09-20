@@ -8,6 +8,10 @@ export interface Example {
   /** What a visitor should expect to see, in one clause. */
   teaser: string;
   text: string;
+  /** What the prompt is trying to do, in the attacker's terms. */
+  attempt: string;
+  /** What reaching the agent unchecked would have meant. */
+  without: string;
   toolCall?: ToolCall;
   /** The policy this example is meant to demonstrate, asserted by verify.mjs. */
   expect: string;

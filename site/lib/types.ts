@@ -28,6 +28,8 @@ export interface PipelineResult {
   stage: "" | "prompt" | "response" | "tool";
   /** A self-harm pattern matched, at or below threshold. Routes to resources. */
   crisis: boolean;
+  /** The call the agent attempted, and the rule it was held to. */
+  tool_call: AttemptedToolCall | null;
   rows: PolicyRow[];
   risk: number;
   categories: Record<string, number>;
@@ -39,4 +41,10 @@ export interface PipelineResult {
 export interface ToolCall {
   name: string;
   args: Record<string, unknown>;
+}
+
+export interface AttemptedToolCall extends ToolCall {
+  /** Only the fields the rule actually sets, so the page shows the constraint
+   *  that was applied rather than a wall of defaults. */
+  rule: Record<string, unknown>;
 }

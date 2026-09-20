@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EXAMPLES, type Example } from "@/lib/examples";
 import { loadRuntime, runPipeline, type Progress } from "@/lib/runtime";
-import type { PipelineResult } from "@/lib/types";
+import type { AttemptedToolCall, PipelineResult } from "@/lib/types";
 import { DiffView } from "./diff-view";
 import { VerdictRow } from "./verdict-row";
 
@@ -17,6 +17,7 @@ export default function DemoPanel() {
   const [status, setStatus] = useState<Status>("booting");
   const [error, setError] = useState("");
   const [result, setResult] = useState<PipelineResult | null>(null);
+  const [ran, setRan] = useState<Example | null>(null);
   const [activeId, setActiveId] = useState("");
 
   // The interpreter, kept across submissions. Re-booting per run would re-fetch
@@ -49,6 +50,7 @@ export default function DemoPanel() {
     setActiveId(example.id);
     try {
       setResult(await runPipeline(py, example.text, example.toolCall ?? null));
+      setRan(example);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("failed");
@@ -109,7 +111,7 @@ export default function DemoPanel() {
       {/* Outside the results section on purpose: that section is aria-live, and
           a modal announced by the live region and then focused is announced twice. */}
       {result ? <CrisisNotice result={result} /> : null}
-      {result ? <Results result={result} /> : null}
+      {result && ran ? <Results result={result} example={ran} /> : null}
     </div>
   );
 }
@@ -183,7 +185,39 @@ function CrisisNotice({ result }: { result: PipelineResult }) {
   );
 }
 
-function Results({ result }: { result: PipelineResult }) {
+/**
+ * The attempted call, spelled out next to the rule it was held to.
+ *
+ * "Blocked by the tool firewall" is a claim; refund_tool(amount=9999) against
+ * max_amount 100 is the reason, and it is the part that shows the check is a
+ * rule rather than a vibe. Without it a visitor has to take the verdict on
+ * trust, which is the thing this page exists not to ask for.
+ */
+function ToolCallView({ call }: { call: AttemptedToolCall }) {
+  const args = Object.entries(call.args)
+    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    .join(", ");
+  const rule = Object.entries(call.rule);
+
+  return (
+    <div className="toolcall">
+      <span className="toolcall__label">The call the agent tried to make</span>
+      <code className="toolcall__code">
+        {call.name}({args})
+      </code>
+      {rule.length ? (
+        <p className="toolcall__rule">
+          Rule for <code>{call.name}</code>:{" "}
+          {rule.map(([k, v]) => `${k.replace(/_/g, " ")} ${JSON.stringify(v)}`).join(", ")}
+        </p>
+      ) : (
+        <p className="toolcall__rule">No rule covers this tool, so the default applies.</p>
+      )}
+    </div>
+  );
+}
+
+function Results({ result, example }: { result: PipelineResult; example: Example }) {
   const blockLine =
     result.stage === "tool"
       ? `The reply was returned, but the tool call was refused by the ${result.blocked_by} policy.`
@@ -197,6 +231,20 @@ function Results({ result }: { result: PipelineResult }) {
         Every check below ran locally in your browser, in {result.latency_ms.toFixed(1)} ms.
       </p>
 
+      {/* A red badge says a policy fired. It does not say what the prompt was
+          reaching for, or what the agent would have done with it — which is
+          the only part a visitor cannot work out from the prompt alone. */}
+      <dl className="context">
+        <div>
+          <dt>What this prompt is doing</dt>
+          <dd>{example.attempt}</dd>
+        </div>
+        <div>
+          <dt>Without the gateway</dt>
+          <dd>{example.without}</dd>
+        </div>
+      </dl>
+
       {result.blocked ? (
         <div className="outcome outcome--deny">
           <strong>Blocked</strong>
@@ -209,6 +257,8 @@ function Results({ result }: { result: PipelineResult }) {
           <p>{returnedLine(result)}</p>
         </div>
       )}
+
+      {result.tool_call ? <ToolCallView call={result.tool_call} /> : null}
 
       <DiffView before={result.raw_output} after={result.output} />
 

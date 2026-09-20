@@ -104,6 +104,20 @@ def _label(name: str) -> str:
     return name.replace("_", " ")
 
 
+def _normalization_note(meta: dict) -> str:
+    """Said out loud, because "it matched" is not the interesting part here.
+
+    A prompt written with Cyrillic letters or leetspeak scored 0.00 before the
+    policies started scanning normalized views of the text. When that is why a
+    finding exists, the page should say so rather than presenting the score as
+    if the patterns matched the text as typed.
+    """
+    if meta.get("matched_view", "raw") == "raw":
+        return ""
+    named = ", ".join(_label(m) for m in meta.get("obfuscation") or [])
+    return f" Matched only after undoing {named}." if named else ""
+
+
 def _explain(key: str, meta: dict) -> str:
     """One line of plain English. Never a stack trace, never a raw score alone."""
     risk = meta.get("risk", 0.0)
@@ -118,14 +132,20 @@ def _explain(key: str, meta: dict) -> str:
                 f"{meta.get('threshold', 0.5):.2f} threshold, so it passed."
             )
         named = ", ".join(_label(s) for s in sorted(signals, key=signals.get, reverse=True))
-        return f"Matched {named}. Score {risk:.2f} is at or above the {meta.get('threshold', 0.5):.2f} threshold."
+        return (
+            f"Matched {named}. Score {risk:.2f} is at or above the "
+            f"{meta.get('threshold', 0.5):.2f} threshold." + _normalization_note(meta)
+        )
 
     if key == "toxicity":
         signals = meta.get("signals") or {}
         if not meta.get("flagged"):
             return "No violence, hate, harassment or self-harm patterns matched."
         named = ", ".join(_label(s) for s in sorted(signals, key=signals.get, reverse=True))
-        return f"Matched {named}. Score {risk:.2f} is at or above the {meta.get('threshold', 0.5):.2f} threshold."
+        return (
+            f"Matched {named}. Score {risk:.2f} is at or above the "
+            f"{meta.get('threshold', 0.5):.2f} threshold." + _normalization_note(meta)
+        )
 
     if key == "harmful_request":
         signals = meta.get("signals") or {}
@@ -134,7 +154,7 @@ def _explain(key: str, meta: dict) -> str:
         named = ", ".join(_label(s) for s in sorted(signals, key=signals.get, reverse=True))
         return (
             f"Matched {named}. Score {risk:.2f} is at or above the "
-            f"{meta.get('threshold', 0.5):.2f} threshold."
+            f"{meta.get('threshold', 0.5):.2f} threshold." + _normalization_note(meta)
         )
 
     if key == "pii":
@@ -298,7 +318,14 @@ async def run_pipeline(payload_json: str) -> str:
 
     # The agent only gets to attempt a tool call if the prompt survived the
     # input gates — which is the point of running them first.
+    attempted_tool = None
     if tool_call is not None and not blocked_by:
+        rule = TOOL_RULES.rules.get(tool_call["name"])
+        attempted_tool = {
+            "name": tool_call["name"],
+            "args": tool_call.get("args", {}),
+            "rule": rule.model_dump(exclude_defaults=True) if rule is not None else {},
+        }
         tool_ctx = ActionContext(
             action="tool_call",
             agent_id="demo",
@@ -345,6 +372,7 @@ async def run_pipeline(payload_json: str) -> str:
             "blocked_by": POLICIES.get(blocked_by, (blocked_by, ""))[0],
             "blocked_reason": blocked_reason,
             "stage": stage,
+            "tool_call": attempted_tool,
             "crisis": _needs_crisis_support(ctx.metadata),
             "rows": _rows(ctx.metadata, blocked_by, reached),
             "risk": risk,
