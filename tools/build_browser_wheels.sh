@@ -54,10 +54,38 @@ PY
 
 # The demo app serves the same wheels from its own public/ directory. Mirroring
 # rather than rebuilding keeps the probe and the page on identical bytes.
+#
+# site/public/wheels/ is committed, and a wheel is a zip: two builds of
+# identical source differ in their member timestamps. Copying unconditionally
+# would put a meaningless 80 KB diff in front of every commit, so a wheel whose
+# modules already match is left where it is.
 SITE_OUT="$ROOT/site/public/wheels"
 if [ -d "$ROOT/site/public" ]; then
   echo "==> mirroring into site/public/wheels"
-  rm -rf "$SITE_OUT"
   mkdir -p "$SITE_OUT"
-  cp "$OUT"/*.whl "$OUT/manifest.json" "$SITE_OUT/"
+  "$PYTHON" - "$OUT" "$SITE_OUT" <<'MIRROR'
+import shutil, sys, zipfile
+from pathlib import Path
+
+built, mirrored = Path(sys.argv[1]), Path(sys.argv[2])
+
+
+def modules(path):
+    with zipfile.ZipFile(path) as zf:
+        return {n: zf.read(n) for n in sorted(zf.namelist()) if n.endswith(".py")}
+
+
+names = {p.name for p in built.iterdir()}
+for stale in mirrored.iterdir():
+    if stale.name not in names:
+        stale.unlink()
+
+for source in built.iterdir():
+    target = mirrored / source.name
+    if source.suffix == ".whl" and target.exists() and modules(source) == modules(target):
+        print(f"    {source.name} unchanged")
+        continue
+    shutil.copy2(source, target)
+    print(f"    {source.name} updated")
+MIRROR
 fi
