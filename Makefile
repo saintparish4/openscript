@@ -161,9 +161,10 @@ probe-serve: browser-wheels  ## Serve the bare Pyodide page at :8080
 
 NPM := npm
 
-# site/public/wheels/ is generated, not committed, so every target that serves
-# or exports the app builds the bundle first — otherwise the page boots the
-# interpreter and then 404s on the package it exists to demonstrate.
+# site/public/wheels/ IS committed (Vercel only runs `next build` and cannot run
+# tools/build_browser_wheels.sh). Every target that serves or exports the app
+# still rebuilds the bundle first, so what you look at locally is the current
+# source rather than whatever was committed last.
 
 site/node_modules:
 	cd site && $(NPM) ci

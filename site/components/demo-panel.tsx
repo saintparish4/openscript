@@ -172,7 +172,7 @@ function CrisisNotice({ result }: { result: PipelineResult }) {
         </li>
       </ul>
       <p className="muted">
-        A policy on this page matched a self-harm pattern in what you typed. Refusing the
+        A policy on this page matched a self-harm pattern in the prompt you ran. Refusing the
         request and saying nothing else would be the wrong response to it, so this says
         something else.
       </p>

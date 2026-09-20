@@ -12,11 +12,11 @@ OpenScript wraps any agent in a **policy pipeline**: policies run before and aft
 
 **[openscript-rho.vercel.app](https://openscript-rho.vercel.app/)** — an interactive demo
 that runs **this package** — compiled to WebAssembly with Pyodide — entirely inside your
-tab. Every policy executes locally: there is no backend and no API endpoint, so nothing
-typed into it is sent anywhere, and the network tab proves it. That is possible because all
-nine built-in policies are pure-local heuristics, a property enforced in CI rather than
-merely asserted. Requires a browser with WebAssembly and access to the jsDelivr CDN (which
-serves the Pyodide runtime).
+tab. Pick a prompt from the gallery and every policy runs locally: there is no backend and
+no API endpoint, so the prompt and the verdicts never leave the tab, and the network tab
+proves it. That is possible because all nine built-in policies are pure-local heuristics, a
+property enforced in CI rather than merely asserted. Requires a browser with WebAssembly and
+access to the jsDelivr CDN (which serves the Pyodide runtime).
 
 To run it locally instead, `site/` is the source for that demo:
 

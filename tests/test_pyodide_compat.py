@@ -178,3 +178,38 @@ def test_no_runtime_dependency_needs_a_missing_wasm_wheel(wheel: Path, pyodide_l
         f"{unavailable} are neither bundled by Pyodide nor known-pure; "
         "verify a py3-none-any wheel exists on PyPI before shipping"
     )
+
+
+def _modules(path: Path) -> dict[str, bytes]:
+    """Every Python module in a wheel, keyed by path. Metadata is left out.
+
+    Zip bytes differ between builds (timestamps, member order), so comparing
+    archives is useless. What matters is whether the code the browser installs
+    is the code in this working tree.
+    """
+    with zipfile.ZipFile(path) as zf:
+        return {n: zf.read(n) for n in sorted(zf.namelist()) if n.endswith(".py")}
+
+
+def test_committed_browser_wheel_matches_source(wheel: Path):
+    """site/public/wheels/ is what Vercel serves, and it is committed.
+
+    Nothing else in CI notices when it falls behind: the demo job rebuilds the
+    bundle before exporting, so it verifies fresh wheels while visitors keep
+    running whatever was committed last.
+    """
+    committed = sorted((REPO_ROOT / "site/public/wheels").glob("openscript-*.whl"))
+    assert len(committed) == 1, (
+        f"expected exactly one committed openscript wheel, found {[p.name for p in committed]}. "
+        "Run `make browser-wheels` and commit site/public/wheels/."
+    )
+
+    fresh, shipped = _modules(wheel), _modules(committed[0])
+    stale = sorted(
+        set(fresh) ^ set(shipped)
+        | {name for name in set(fresh) & set(shipped) if fresh[name] != shipped[name]}
+    )
+    assert not stale, (
+        f"{committed[0].name} is behind the source in {len(stale)} module(s): {stale[:10]}\n"
+        "The live demo serves this file. Run `make browser-wheels` and commit site/public/wheels/."
+    )

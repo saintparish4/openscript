@@ -1,8 +1,8 @@
 """The policy pipeline the demo page runs, in the browser, on the visitor's text.
 
 Loaded once by lib/runtime.ts and then called per submission. Every entry point
-goes through `run_pipeline`, so the example chips and the free-text box exercise
-the identical code — there is no separate "demo mode".
+goes through `run_pipeline`, so the page and the end-to-end check in verify.mjs
+exercise the identical code — there is no separate "demo mode".
 
 The policy objects are built once at module scope and reused: they are stateless
 apart from per-session counters, and rebuilding them per keystroke would show up

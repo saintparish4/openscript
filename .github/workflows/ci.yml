@@ -1,10 +1,28 @@
 name: CI
 
+# Documentation-only changes skip the whole pipeline: nothing in these jobs
+# reads a markdown file, so running them proves nothing and costs six runners.
+# The two lists are duplicated on purpose — GitHub Actions does not expand YAML
+# anchors — so keep them identical, or a PR can pass checks that its merge skips.
 on:
   push:
     branches: [master]
-  pull_request: 
-    branches: [master] 
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".github/ISSUE_TEMPLATE/**"
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - "*.md"
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - ".github/ISSUE_TEMPLATE/**"
 
 jobs:
   lint:
@@ -115,8 +133,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" build
 
-      # site/public/wheels/ is generated rather than committed, so until this
-      # runs the export has no package for the page to install.
+      # Rebuilt from the current source rather than trusting the committed
+      # site/public/wheels/ — the two are held together by
+      # test_committed_browser_wheel_matches_source in the `test` job.
       - name: Build the browser wheel bundle
         run: bash tools/build_browser_wheels.sh
         env:
