@@ -2,12 +2,35 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import { EXAMPLES } from "@/lib/examples";
+import { DemoWindow } from "./demo-window";
+import { PromptCard } from "./results";
+
+/**
+ * The window before the panel is live: the same frame and the same gallery,
+ * with nothing wired up. It is what the static export contains, so the page
+ * has its list on first paint and the live panel swaps in without a jump.
+ */
+function Shell({ status, children }: { status: string; children: React.ReactNode }) {
+  return (
+    <DemoWindow selectedId={EXAMPLES[0].id} status={status}>
+      <div className="preview">
+        <PromptCard example={EXAMPLES[0]} />
+        <div className="preview__run">{children}</div>
+      </div>
+    </DemoWindow>
+  );
+}
 
 // ssr:false is load-bearing, not a preference: the panel boots a WebAssembly
 // interpreter and touches browser globals that do not exist during a build.
 const DemoPanel = dynamic(() => import("./demo-panel"), {
   ssr: false,
-  loading: () => <div className="panel panel--placeholder">Loading the demo…</div>,
+  loading: () => (
+    <Shell status="Loading the demo…">
+      <p className="muted">Loading the demo…</p>
+    </Shell>
+  ),
 });
 
 /**
@@ -40,15 +63,15 @@ export function DemoSection() {
       {armed ? (
         <DemoPanel />
       ) : (
-        <div className="panel panel--idle">
-          <button type="button" className="load" onClick={() => setArmed(true)}>
+        <Shell status="Not loaded yet">
+          <button type="button" className="btn" onClick={() => setArmed(true)}>
             Load the demo
           </button>
           <p className="muted">
             Downloads a Python runtime and the OpenScript package into this tab. Roughly 7 MB,
             once.
           </p>
-        </div>
+        </Shell>
       )}
     </div>
   );

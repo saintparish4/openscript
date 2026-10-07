@@ -13,11 +13,11 @@ export function DiffView({ before, after }: { before: string; after: string }) {
   return (
     <div className="diff">
       <div className="diff__side">
-        <span className="diff__label">What the model produced</span>
+        <span className="label">What the model produced</span>
         <p className="diff__text diff__text--before">{before}</p>
       </div>
       <div className="diff__side">
-        <span className="diff__label">What the caller received</span>
+        <span className="label">What the caller received</span>
         <p className="diff__text">
           {after.split(SPLIT).map((part, i) =>
             IS_MARKER.test(part) ? <mark key={i}>{part}</mark> : <span key={i}>{part}</span>,
