@@ -81,22 +81,30 @@ class _MemorySink:
 
 
 class _EchoAgent:
-    """Stands in for the LLM. It quotes the prompt back, which is what gives the
-    output-side policies (PII, secrets, the credential guard) something real to
-    catch — a model repeating sensitive input is the leak they exist to stop.
+    """Stands in for the LLM. It quotes back whatever it was given, which is
+    what gives the output-side policies (PII, the credential guard) something
+    real to catch — a model repeating sensitive input is the leak they exist to
+    stop.
+
+    "Whatever it was given" is not always what was sent. SecretsPolicy masks a
+    credential on the way in, so a pasted key never reaches this method and
+    the echo has nothing to repeat. Both sides are kept so the page can show
+    that rather than claim it.
 
     Async on purpose: the sync path routes through loop.run_in_executor, a
     threading API, and this runtime has no threads.
     """
 
     def __init__(self) -> None:
-        # Kept so the page can show what the model produced next to what the
-        # caller actually received. Without it there is no "before" to diff.
+        # What the model was handed, to set beside what the sender wrote.
+        self.last_input = ""
+        # What the model produced, to set beside what the caller received.
+        # Without these there is no "before" to diff on either side.
         self.last_output = ""
 
     async def ainvoke(self, input_data, **kwargs):
-        prompt = input_data.get("input", "")
-        self.last_output = f"Sure — here is what you asked about: {prompt}"
+        self.last_input = input_data.get("input", "")
+        self.last_output = f"Sure — here is what you asked about: {self.last_input}"
         return {"output": self.last_output}
 
 
@@ -325,6 +333,7 @@ async def run_pipeline(payload_json: str) -> str:
     blocked_by = ""
     blocked_reason = ""
     output = ""
+    _ECHO.last_input = ""
     _ECHO.last_output = ""
 
     start = time.perf_counter()
@@ -387,6 +396,8 @@ async def run_pipeline(payload_json: str) -> str:
     return json.dumps(
         {
             "prompt": text,
+            # Empty when the prompt was stopped before the model was called.
+            "model_input": _ECHO.last_input,
             "output": output,
             "raw_output": _ECHO.last_output,
             "blocked": bool(blocked_by),

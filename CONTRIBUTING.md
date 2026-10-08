@@ -23,6 +23,15 @@ mypy --strict sdk/ contracts/   # type-check — this is what CI runs, not plain
 
 All four run in CI (`.github/workflows/ci.yml`) and must pass.
 
+One test file needs a service. `tests/test_redis_approvals.py` checks the Redis approval store against a real Redis, and skips when it is not told where one is:
+
+```bash
+docker compose up -d redis
+OPENSCRIPT_TEST_REDIS_URL=redis://localhost:6379/15 pytest tests/test_redis_approvals.py
+```
+
+CI runs it against a Redis service container, and fails rather than skips if that is missing.
+
 ## The browser-compatibility constraint
 
 This is the one architectural rule that isn't optional: every built-in policy must stay pure-Python with zero network calls, because the same `sdk` package is compiled to WebAssembly via Pyodide and runs the live browser demo (`site/`) with nothing behind it. `tests/test_audit.py` enforces this in CI — it fails if any policy grows a network call or an import Pyodide can't supply. If a change needs either, that's a deliberate architecture decision (bringing a backend service back into scope), not something to slip in quietly.

@@ -354,7 +354,7 @@ This means any framework whose runnables expose that same shape — CrewAI, Pyda
 
 ## Server
 
-An optional FastAPI server (`uvicorn server.app:app`) provides the event store, SSE feeds, a session dashboard (`/dashboard/`), stateless scoring endpoints (`/v1/threat/score`, `/v1/tools/validate`), the approval queue (`/v1/approvals`), and Prometheus metrics (`/metrics`). All endpoints except `/health` require the `X-API-KEY` header (`OPENSCRIPT_API_KEY`). The server needs a running Postgres with migrations applied before it will boot — `docker compose up -d && alembic upgrade head` (see `docker-compose.yml`), or point `DATABASE_URL` at your own instance.
+An optional FastAPI server (`uvicorn server.app:app`) provides the event store, SSE feeds, a session dashboard (`/dashboard/`), stateless scoring endpoints (`/v1/threat/score`, `/v1/tools/validate`), the approval queue (`/v1/approvals`), and Prometheus metrics (`/metrics`). All endpoints except `/health` require the `X-API-KEY` header (`OPENSCRIPT_API_KEY`). The server needs a running Postgres with migrations applied before it will boot — `docker compose up -d && alembic upgrade head` (see `docker-compose.yml`), or point `DATABASE_URL` at your own instance. The approval queue is only shared with SDK clients in other processes when the server has `REDIS_URL`; the compose file starts a Redis and sets it. Without one the server keeps approvals in its own memory and says so in its log.
 
 Try the full pipeline end-to-end (in-memory, no server or database required):
 

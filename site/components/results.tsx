@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { Example } from "@/lib/examples";
-import { outcomeOf } from "@/lib/outcome";
+import { outcomeOf, rewrites } from "@/lib/outcome";
 import type { AttemptedToolCall, PipelineResult } from "@/lib/types";
 import { DiffView } from "./diff-view";
 import { VerdictRow } from "./verdict-row";
@@ -41,13 +41,24 @@ export function PromptCard({ example }: { example: Example }) {
  * a finding recorded. Collapsing the third into a clean pass would hide the
  * policy that did the noticing.
  *
+ * "Rewritten" has two places it can happen, and the line says which. Masked on
+ * the way in means the model was never given the thing; masked on the way out
+ * means it was, and repeated it. Those are not the same protection.
+ *
  * The clean case is worded as what the policies did — none of them matched —
  * rather than as a verdict on the prompt. These are local heuristics; a prompt
  * they miss is a prompt they miss, not a prompt that is safe, and a demo whose
  * green state reads as an endorsement is making a claim it cannot support.
  */
 function returnedLine(result: PipelineResult): string {
-  if (result.raw_output !== result.output) {
+  const { input, output } = rewrites(result);
+  if (input && output) {
+    return "The prompt was rewritten before the model saw it, and the response was rewritten again on the way back.";
+  }
+  if (input) {
+    return "The prompt was rewritten before the model saw it, to remove what the policies found. The response needed nothing taken out.";
+  }
+  if (output) {
     return "The response came back, rewritten to remove what the policies found.";
   }
   const flagged = result.rows.filter((r) => r.verdict === "flag");
@@ -221,7 +232,18 @@ export function Results({ result, example }: { result: PipelineResult; example: 
 
       {result.tool_call ? <ToolCallView call={result.tool_call} /> : null}
 
-      <DiffView before={result.raw_output} after={result.output} />
+      <DiffView
+        before={result.prompt}
+        after={result.model_input}
+        beforeLabel={`What ${example.persona.name} sent`}
+        afterLabel="What the model was given"
+      />
+      <DiffView
+        before={result.raw_output}
+        after={result.output}
+        beforeLabel="What the model produced"
+        afterLabel="What the caller received"
+      />
 
       <div className="steps">
         <h3 className="steps__title">The pipeline, in order</h3>

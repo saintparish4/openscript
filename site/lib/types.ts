@@ -18,6 +18,9 @@ export interface PolicyRow {
 
 export interface PipelineResult {
   prompt: string;
+  /** What the model was actually handed. Differs from `prompt` when an
+   *  input-side policy redacted it; empty when the prompt was stopped first. */
+  model_input: string;
   output: string;
   /** What the model produced, before any policy rewrote it. */
   raw_output: string;

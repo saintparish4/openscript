@@ -124,13 +124,20 @@ class SecureAgent:
             agent_id=kwargs.get("agent_id", "default"),
             session_id=kwargs.get("session_id", "default"),
             input_data=input_data,
-            metadata=kwargs,
+            # A copy. Policies write their findings into metadata, and kwargs
+            # is what the agent is called with: sharing one dict handed the
+            # agent every finding as a keyword argument it never asked for,
+            # which an agent without **kwargs answers with a TypeError.
+            metadata=dict(kwargs),
         )
 
         with self._trace(context):
             context, granted = await self._run_before(context, approval_id)
 
-            result = await self._call_agent(input_data, **kwargs)
+            # context.input_data, not input_data. A policy that redacts the
+            # input replaces it on the context, and the agent has to be given
+            # what the policies left, not what the caller sent.
+            result = await self._call_agent(context.input_data, **kwargs)
 
             context.output_data = result if isinstance(result, dict) else {"output": result}
             context = await self._run_after(context, approval_id, granted)
@@ -165,22 +172,22 @@ class SecureAgent:
             agent_id=kwargs.get("agent_id", "default"),
             session_id=kwargs.get("session_id", "default"),
             input_data=input_data,
-            metadata=kwargs,
+            metadata=dict(kwargs),  # a copy, for the reason given in invoke_with_context
         )
 
         with self._trace(context):
             context, granted = await self._run_before(context, approval_id)
 
+            # Every mode below streams from context.input_data: the input as
+            # the before phase left it, redactions included.
             if mode == StreamOutputMode.GUARDED:
-                async for release in self._stream_guarded(
-                    context, input_data, kwargs, approval_id, granted
-                ):
+                async for release in self._stream_guarded(context, kwargs, approval_id, granted):
                     yield release
                 return
 
             chunks: list[Any] = []
             if mode == StreamOutputMode.PASSTHROUGH:
-                async for chunk in self._stream_agent(input_data, **kwargs):
+                async for chunk in self._stream_agent(context.input_data, **kwargs):
                     chunks.append(chunk)
                     yield chunk
                 # post-hoc only: metadata/audit and a (too-late but loud) DENY —
@@ -191,7 +198,7 @@ class SecureAgent:
                 return
 
             # BUFFER: nothing reaches the caller until output policies have run
-            async for chunk in self._stream_agent(input_data, **kwargs):
+            async for chunk in self._stream_agent(context.input_data, **kwargs):
                 chunks.append(chunk)
             was_text = bool(chunks) and all(isinstance(c, str) for c in chunks)
             context.output_data = self._assemble_output(chunks)
@@ -216,7 +223,6 @@ class SecureAgent:
     async def _stream_guarded(
         self,
         context: ActionContext,
-        input_data: dict[str, Any],
         kwargs: dict[str, Any],
         approval_id: str,
         granted: bool,
@@ -246,7 +252,7 @@ class SecureAgent:
 
         buffer = ""
         emitted: list[str] = []
-        async for chunk in self._stream_agent(input_data, **kwargs):
+        async for chunk in self._stream_agent(context.input_data, **kwargs):
             if not isinstance(chunk, str):
                 raise TypeError(
                     "guarded stream mode requires text chunks; "

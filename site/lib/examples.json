@@ -44,16 +44,16 @@
   {
     "id": "secret",
     "label": "Eric pastes a live API key",
-    "teaser": "masked before it comes back",
+    "teaser": "masked before the model sees it",
     "persona": {
       "name": "Eric",
       "role": "contractor with a support login"
     },
     "text": "My deploy script fails. Here is the key: AKIAIOSFODNN7EXAMPLE and sk-abcdefghijklmnopqrstuvwx. What is wrong?",
     "expect": "secrets",
-    "attempt": "Pastes live credentials into the prompt while debugging, which the model quotes back.",
-    "without": "A working AWS key and API token end up in transcripts, analytics and anywhere the reply is forwarded.",
-    "withGateway": "SecretsPolicy masks the AWS key and the token in the reply on the way out, so Eric gets his answer without the credential travelling any further with it."
+    "attempt": "Pastes live credentials into the prompt while debugging. Whatever a model is given, it can quote back.",
+    "without": "A working AWS key and API token go to the model, and from there into transcripts, analytics and anywhere the reply is forwarded.",
+    "withGateway": "SecretsPolicy masks the AWS key and the token on the way in, so the model is never given them and has nothing to quote back. The diff below is what Eric sent against what the model received — the reply needed nothing taken out."
   },
   {
     "id": "refund",

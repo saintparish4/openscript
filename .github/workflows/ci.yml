@@ -62,6 +62,21 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # RedisApprovalStore is only worth testing against a real Redis: what it
+    # promises is about two clients reaching one record at the same moment.
+    # tests/test_redis_approvals.py fails, rather than skips, if CI offers none.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      OPENSCRIPT_TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v4
 

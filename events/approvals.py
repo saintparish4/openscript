@@ -21,6 +21,43 @@ class ApprovalStatus(str, Enum):
     DENIED = "denied"
 
 
+def _typed(value: Any) -> Any:
+    """*value* as plain JSON in which every piece says what type it was.
+
+    Exact types, not isinstance: an IntEnum member is not the int it compares
+    equal to, and should not be approved as if it were. A list and a tuple are
+    deliberately the same thing here; nothing can be done with one that cannot
+    be done with the other.
+    """
+    kind = type(value)
+    if value is None:
+        return ["none"]
+    if kind is bool:
+        return ["bool", value]
+    if kind is int:
+        return ["int", str(value)]
+    if kind is float:
+        return ["float", repr(value)]
+    if kind is str:
+        return ["str", value]
+    if kind in (bytes, bytearray):
+        return ["bytes", bytes(value).hex()]
+    if kind in (list, tuple):
+        return ["list", [_typed(item) for item in value]]
+    if kind in (set, frozenset):
+        return ["set", sorted((_typed(item) for item in value), key=_order)]
+    if kind is dict:
+        pairs = ([_typed(key), _typed(item)] for key, item in value.items())
+        return ["dict", sorted(pairs, key=_order)]
+    # Anything else is named by its type as well as its text, so a Decimal, a
+    # UUID or a date cannot stand in for the string that spells it.
+    return ["object", f"{kind.__module__}.{kind.__qualname__}", str(value)]
+
+
+def _order(encoded: Any) -> str:
+    return json.dumps(encoded)
+
+
 def action_hash(action: str, input_data: dict[str, Any]) -> str:
     """Canonical fingerprint of (action, input) for approval binding.
 
@@ -28,10 +65,13 @@ def action_hash(action: str, input_data: dict[str, Any]) -> str:
     for — a matching hash proves the retried call carries the same action
     name and input/args, so a granted approval can't be replayed against a
     different tool call.
+
+    "The same" means the same values of the same types. This used to be
+    json.dumps(default=str), and str() forgets what it was given: Decimal("10")
+    and the text "10" fingerprinted alike, as did {1: x} and {"1": x}. An
+    approval for one was an approval for the other.
     """
-    canonical = json.dumps(
-        {"action": action, "input_data": input_data}, sort_keys=True, default=str
-    )
+    canonical = json.dumps(["action", action, _typed(input_data)], separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
@@ -166,7 +206,9 @@ class RedisApprovalStore:
     Records live at {prefix}:{approval_id} as JSON with a Redis TTL matching
     expires_at; pending ids are tracked in the {prefix}:pending set. Single-use
     redemption relies on DELETE's atomicity: only the caller whose DELETE
-    returns 1 wins a concurrent redeem race.
+    returns 1 wins a concurrent redeem race. A decision is made under WATCH,
+    so of two people deciding the same request at once, one is told it was
+    already decided.
     """
 
     def __init__(
@@ -214,20 +256,37 @@ class RedisApprovalStore:
     async def decide(
         self, approval_id: str, approved: bool, decided_by: str = ""
     ) -> ApprovalRecord | None:
-        record = await self.get(approval_id)
-        if record is None:
-            return None
-        if record.status != ApprovalStatus.PENDING or record.expired:
-            raise ValueError(f"approval '{approval_id}' is not pending")
-        record.status = ApprovalStatus.APPROVED if approved else ApprovalStatus.DENIED
-        record.decided_by = decided_by
-        await self._redis.set(
-            self._key(approval_id),
-            json.dumps(record.to_dict()),
-            ex=self._ttl_seconds(record),
-        )
-        await self._redis.srem(self._pending_key, approval_id)
-        return record
+        from redis.exceptions import WatchError
+
+        key = self._key(approval_id)
+        # Read, check and write as one step. Without the WATCH, two people
+        # deciding at the same moment both read "pending", both write, and both
+        # are told it worked — an approval and a denial of the same request,
+        # with whichever landed second quietly winning.
+        # Typed Any: redis-py leaves multi() unannotated, and whether that is
+        # an error depends on whether its types are installed where mypy runs.
+        transaction: Any = self._redis.pipeline(transaction=True)
+        async with transaction as pipe:
+            while True:
+                try:
+                    await pipe.watch(key)
+                    raw = await pipe.get(key)
+                    record = ApprovalRecord.from_dict(json.loads(raw)) if raw else None
+                    if record is None:
+                        return None
+                    if record.status != ApprovalStatus.PENDING or record.expired:
+                        raise ValueError(f"approval '{approval_id}' is not pending")
+                    record.status = ApprovalStatus.APPROVED if approved else ApprovalStatus.DENIED
+                    record.decided_by = decided_by
+                    pipe.multi()
+                    pipe.set(key, json.dumps(record.to_dict()), ex=self._ttl_seconds(record))
+                    pipe.srem(self._pending_key, approval_id)
+                    await pipe.execute()
+                    return record
+                except WatchError:
+                    # Someone else wrote the record first. Read it again: it is
+                    # no longer pending, and the check above says so.
+                    continue
 
     async def consume(self, approval_id: str, expected_hash: str) -> bool:
         record = await self.get(approval_id)

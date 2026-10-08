@@ -131,6 +131,19 @@ for (const ex of EXAMPLES) {
     ok = false;
   }
 
+  // The credential chip says the model is never given the key. That is only
+  // true while the pipeline hands the agent the redacted prompt rather than
+  // the one that was sent — it once did not — so the claim is checked against
+  // what the agent was actually called with.
+  if (ex.expect === "secrets") {
+    const given = result.model_input ?? "";
+    const leaked = /AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}/.test(given);
+    if (!given || given === result.prompt || leaked) {
+      console.error(`  ${ex.id}: the model was handed the credential: ${given || "(nothing reported)"}`);
+      ok = false;
+    }
+  }
+
   // The obfuscated chip exists to demonstrate normalization. If it starts
   // matching as written, it has stopped demonstrating anything.
   if (ex.id === "obfuscated" && !(row?.explanation ?? "").includes("after undoing")) {

@@ -15,6 +15,18 @@ services:
       timeout: 3s
       retries: 5
 
+  # The approval store, once approvals are decided somewhere other than the
+  # process that asked for them — which is what running the server means.
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   migrate:
     build: .
     command: alembic upgrade head
@@ -31,10 +43,15 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://openscript:openscript@postgres:5432/openscript
+      # Without this the server keeps approvals in its own memory, where no SDK
+      # client in another process can see or redeem them.
+      REDIS_URL: redis://redis:6379/0
       OPENSCRIPT_API_KEY: ${OPENSCRIPT_API_KEY:-demo}
       OPENSCRIPT_LOG_FORMAT: json
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
