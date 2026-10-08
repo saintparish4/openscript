@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from events.writer import EventWriter
 
 logger = structlog.get_logger(__name__)
+
+_TOOL_OUTPUT_MODES = ("off", "annotate", "deny")
 
 # ---------------------------------------------------------------------------
 # Pattern bank
@@ -468,8 +470,23 @@ def score_text(text: str) -> tuple[float, dict[str, float]]:
 class PromptInjectionPolicy:
     """Scores input text for prompt-injection signals and blocks on threshold breach.
 
-    Stateless scoring runs on every before_action call. after_action is a pass-through.
-    Set failure_mode=FAIL_CLOSED so any internal error blocks rather than leaks.
+    Stateless scoring runs on every before_action call. Set
+    failure_mode=FAIL_CLOSED so any internal error blocks rather than leaks.
+
+    after_action does nothing for an agent call. For a tool call (the action
+    SecureTool produces) it scores what the tool *returned*, because a tool's
+    output is the other way text reaches a model: the page it fetched, the
+    email it read. *tool_output* says what a finding there does:
+
+      "annotate"  (default) record it in context.metadata["tool_output"] and
+                  let the result through. These are the same patterns that
+                  miss most attacks they were not written for, so by default
+                  a match is a signal for the audit trail, not a gate.
+      "deny"      withhold the result from the caller. The tool has already
+                  run; this stops its output reaching the model, nothing more.
+      "off"       do not look.
+
+    The scan costs time in proportion to the size of the output.
     """
 
     failure_mode: FailureMode = FailureMode.FAIL_CLOSED
@@ -478,11 +495,19 @@ class PromptInjectionPolicy:
         self,
         threshold: float = 0.5,
         writer: EventWriter | None = None,
+        tool_output: Literal["off", "annotate", "deny"] = "annotate",
     ) -> None:
         if not 0.0 <= threshold <= 1.0:
             raise ValueError(f"threshold must be in [0, 1], got {threshold}")
+        # Checked here, not where it is read: a mode nobody recognises would
+        # otherwise just never match, and the scan would be silently off.
+        if tool_output not in _TOOL_OUTPUT_MODES:
+            raise ValueError(
+                f"tool_output must be one of {_TOOL_OUTPUT_MODES}, got {tool_output!r}"
+            )
         self._threshold = threshold
         self._writer = writer
+        self._tool_output = tool_output
         self._sequence_counters: dict[str, int] = {}
 
     async def before_action(self, context: ActionContext) -> ActionContext:
@@ -526,6 +551,49 @@ class PromptInjectionPolicy:
         return context
 
     async def after_action(self, context: ActionContext) -> ActionContext:
+        if context.action != "tool_call" or self._tool_output == "off":
+            return context
+
+        result = normalize.scan(_strings(context.output_data), score_patterns)
+        score, signals = result.risk, result.signals
+        flagged = score >= self._threshold
+        blocked = flagged and self._tool_output == "deny"
+
+        # Its own key, so the verdict on the arguments (under "threat", from
+        # the before phase) is still there to read. Same category, so the two
+        # count once towards the action's risk.
+        context.metadata["tool_output"] = {
+            "risk": round(score, 4),
+            "category": "prompt_injection",
+            "signals": {k: round(v, 4) for k, v in signals.items()},
+            "flagged": flagged,
+            "blocked": blocked,
+            "threshold": self._threshold,
+            "obfuscation": result.markers,
+            "matched_view": result.view,
+        }
+
+        if flagged:
+            top_signal = max(signals, key=lambda k: signals[k]) if signals else "unknown"
+            reason = (
+                f"tool output threat score {score:.2f} >= threshold {self._threshold} "
+                f"(top signal: {top_signal})"
+            )
+            logger.warning(
+                "tool_output_threat_detected",
+                session_id=context.session_id,
+                agent_id=context.agent_id,
+                tool=context.input_data.get("name", ""),
+                score=round(score, 4),
+                signals=list(signals.keys()),
+                blocked=blocked,
+            )
+            if blocked:
+                context.decision = InterceptorDecision.DENY
+                context.decision_reason = reason
+            if self._writer is not None:
+                await self._emit_threat_event(context, score, signals, reason)
+
         return context
 
     async def _emit_threat_event(
@@ -555,6 +623,28 @@ class PromptInjectionPolicy:
         count = self._sequence_counters.get(session_id, 0) + 1
         self._sequence_counters[session_id] = count
         return count
+
+
+def _strings(value: Any) -> str:
+    """Every piece of text in a tool's result, whatever shape it came back in.
+
+    Keys as well as values: a tool that returns a mapping built from a fetched
+    document can be handed its instructions in either.
+    """
+    parts: list[str] = []
+    pending: list[Any] = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            parts.append(item)
+        elif isinstance(item, dict):
+            pending.extend(item.values())
+            pending.extend(key for key in item if isinstance(key, str))
+        elif isinstance(item, (list, tuple, set, frozenset)):
+            pending.extend(item)
+        elif isinstance(item, (bytes, bytearray)):
+            parts.append(bytes(item).decode("utf-8", errors="replace"))
+    return "\n".join(parts)
 
 
 def _extract_text(input_data: dict[str, Any]) -> str:

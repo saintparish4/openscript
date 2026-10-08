@@ -25,11 +25,12 @@ from sdk import (
     PromptInjectionPolicy,
     SecretsPolicy,
     SecureAgent,
+    SecureTool,
     ToolFirewallPolicy,
+    ToolRules,
     ToxicityPolicy,
     load_policies,
 )
-from sdk.policies.tool_firewall import ToolRules
 
 R = {}
 
@@ -124,6 +125,21 @@ ctx = await run(
 )
 m = ctx.metadata["tool_firewall"]
 record("tool_firewall", not m["allowed"] and ctx.decision.value == "deny", m["reason"])
+
+# 7b — the same rule where it counts: around a tool, which must then not run
+refunds = []
+
+
+async def refund_tool(amount):
+    refunds.append(amount)
+
+
+try:
+    await SecureTool(refund_tool, [ToolFirewallPolicy(rules=rules)])(amount=9999)
+    refused = False
+except ActionBlockedError:
+    refused = True
+record("secure_tool", refused and not refunds, f"refused={refused} tool_ran={bool(refunds)}")
 
 
 # 8 — output schema (pydantic validation compiled to wasm)

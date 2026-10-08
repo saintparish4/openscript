@@ -47,4 +47,7 @@ export interface AttemptedToolCall extends ToolCall {
   /** Only the fields the rule actually sets, so the page shows the constraint
    *  that was applied rather than a wall of defaults. */
   rule: Record<string, unknown>;
+  /** Whether the tool's own code ran. Reported by the tool, not worked out
+   *  from the verdict: "refused" is only worth saying if this is false. */
+  executed: boolean;
 }

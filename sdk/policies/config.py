@@ -60,8 +60,12 @@ def _take(params: dict[str, Any], name: str, allowed: set[str]) -> None:
 
 
 def _build_prompt_injection(params: dict[str, Any], writer: EventWriter | None) -> Policy:
-    _take(params, "prompt_injection", {"threshold"})
-    return PromptInjectionPolicy(threshold=params.get("threshold", 0.5), writer=writer)
+    _take(params, "prompt_injection", {"threshold", "tool_output"})
+    return PromptInjectionPolicy(
+        threshold=params.get("threshold", 0.5),
+        writer=writer,
+        tool_output=params.get("tool_output", "annotate"),
+    )
 
 
 def _build_pii(params: dict[str, Any], writer: EventWriter | None) -> Policy:

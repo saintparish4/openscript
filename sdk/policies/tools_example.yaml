@@ -1,4 +1,12 @@
 # Reference config — copy and edit to create your own tools.yaml.
+#
+# These rules only do anything where a tool call actually passes through them:
+# wrap the tool in SecureTool, or call validate_tool_call() yourself. A
+# ToolFirewallPolicy in a SecureAgent's list sees the agent's input and output,
+# never the tools it calls in between.
+#
+# A key this file does not recognise is an error at load, not a rule that is
+# quietly ignored.
 
 # Whether to deny tool calls for tools that have no rule.
 # false = default allow (permissive); true = default deny (strict allowlist).
@@ -9,21 +17,54 @@ rules:
   get_weather:
     allowed_roles: ["*"]
 
-  # Role-restricted, no approval needed
+  # Role-restricted, no approval needed. A call that carries no role at all is
+  # refused, the same as one with the wrong role.
   read_database:
     allowed_roles: ["admin", "operator"]
 
-  # Role-restricted + requires human approval before execution
+  # Role-restricted + requires human approval before execution.
+  # `args` constrains individual arguments; every constraint set must hold.
   send_email:
     allowed_roles: ["admin"]
     requires_approval: true
+    # Refuse any argument not named under `args` — otherwise the allowlist on
+    # `to` could be walked around with `cc` or `bcc`.
+    unlisted_args: deny
+    args:
+      to:
+        required: true
+        # A regular expression the WHOLE value must match. A list of
+        # recipients is checked one by one.
+        pattern: '[^@\s]+@example\.com'
+      subject: {}          # named, so permitted; otherwise unconstrained
+      body: {}
 
-  # Role-restricted + approval + arg constraint
+  # Role-restricted + approval + numeric bounds
   transfer_funds:
     allowed_roles: ["finance"]
     requires_approval: true
+    args:
+      amount:
+        required: true
+        min: 0             # a negative transfer is a transfer the other way
+        max: 1000.0        # over the limit is denied outright, not sent for approval
+      currency:
+        one_of: ["USD", "EUR"]
+
+  # Paths: the value must sit inside one of these directories once ".." has
+  # been resolved. The check is on the text of the path. It does not expand
+  # "~" and cannot see a symlink that leads back out.
+  read_file:
+    args:
+      path:
+        required: true
+        path_prefix: ["reports", "/srv/shared"]
+
+  # The older spelling of a numeric bound still works:
+  #   arg_constraints: {max_amount: 1000.0, min_amount: 0}
+  refund:
     arg_constraints:
-      max_amount: 1000.0    # deny if args["amount"] > 1000
+      max_amount: 100
 
   # Always deny, regardless of role
   delete_record:

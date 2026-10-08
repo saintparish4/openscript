@@ -62,9 +62,9 @@ const POLICIES: Policy[] = [
   },
   {
     name: "Tool firewall",
-    phase: "input",
+    phase: "tool call",
     icon: <ShieldIcon size={18} />,
-    does: "Allowlists, denials, role checks and argument limits on the tool call itself. It can hold a call for human approval.",
+    does: "Denials, role checks and argument rules on the tool call itself: bounds, allowlists, patterns and path prefixes. It can hold a call for human approval.",
   },
   {
     name: "Output schema",

@@ -1,15 +1,10 @@
 import type { ReactNode } from "react";
 import { CheckIcon, PauseIcon, RedactIcon, SlashIcon } from "./icons";
 
-const BEFORE = [
-  "Prompt injection",
-  "Toxicity",
-  "Harmful request",
-  "Secrets",
-  "Compliance",
-  "Tool firewall",
-  "Audit",
-];
+const BEFORE = ["Prompt injection", "Toxicity", "Harmful request", "Secrets", "Compliance", "Audit"];
+// Not in either list above, and that is the point: the agent's own before and
+// after never see the tools it calls in between. Those are wrapped one by one.
+const AROUND_A_TOOL = ["Tool firewall", "Prompt injection", "Secrets", "PII", "Audit"];
 const AFTER = ["Output schema", "PII", "Secrets", "Compliance", "Audit"];
 
 const DECISIONS: { name: string; tone: string; icon: ReactNode; text: string }[] = [
@@ -87,9 +82,9 @@ export function Pipeline() {
           <h2 className="duo">
             The pipeline has no detection logic.
             <span>
-              It runs every policy before the agent, then the agent, then every policy after it.
-              All the judgement lives in the policies, so you can swap one, configure them from
-              YAML, or write your own.
+              It runs every policy before the agent, then the agent, then every policy after it —
+              and the same two phases around each tool you wrap. All the judgement lives in the
+              policies, so you can swap one, configure them from YAML, or write your own.
             </span>
           </h2>
         </div>
@@ -111,6 +106,20 @@ export function Pipeline() {
             <div className="flow__agent">
               <span>Your agent</span>
             </div>
+            <div className="flow__lane flow__lane--tool">
+              <span className="flow__label">
+                <code>SecureTool</code> — around each tool the agent calls; a deny here and the
+                tool never runs
+              </span>
+              <ul className="flow__chips">
+                {AROUND_A_TOOL.map((name) => (
+                  <li key={name} className="tag">
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flow__link" aria-hidden="true" />
             <div className="flow__lane">
               <span className="flow__label">
                 <code>after_action</code> — a deny here withholds the response

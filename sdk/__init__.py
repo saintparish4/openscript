@@ -22,6 +22,7 @@ from sdk.interceptors.pii import PIIInterceptor, PIIMode, PIIPolicy
 from sdk.interceptors.threat import PromptInjectionPolicy, ThreatInterceptor
 from sdk.logging import configure_logging
 from sdk.middleware.middleware import OpenScriptMiddleware, SecureAgent, StreamOutputMode
+from sdk.middleware.tool import SecureTool
 from sdk.observability.metrics import MetricsRecorder
 from sdk.observability.risk import RiskScorer, aggregate_risk
 from sdk.observability.tracing import ActionTracer
@@ -30,7 +31,7 @@ from sdk.policies.config import PolicyConfig, load_policies, register_policy
 from sdk.policies.harmful_request import HarmfulRequestPolicy
 from sdk.policies.output_schema import HallucinationMode, OnInvalid, OutputSchemaPolicy
 from sdk.policies.secrets import InternalURLMode, SecretsPolicy, find_secrets
-from sdk.policies.tool_firewall import ToolFirewallPolicy, validate_tool_call
+from sdk.policies.tool_firewall import ToolFirewallPolicy, ToolRules, validate_tool_call
 from sdk.policies.toxicity import ToxicityPolicy
 
 __all__ = [
@@ -70,10 +71,12 @@ __all__ = [
     "RiskScorer",
     "SecretsPolicy",
     "SecureAgent",
+    "SecureTool",
     "StreamGuard",
     "StreamOutputMode",
     "ThreatInterceptor",  # deprecated alias
     "ToolFirewallPolicy",
+    "ToolRules",
     "ToxicityPolicy",
     "aggregate_risk",
     "configure_logging",

@@ -15,7 +15,6 @@ import time
 
 logging.disable(logging.CRITICAL)  # the policies log every finding; the UI is the report
 
-from contracts.types import ActionContext, InterceptorDecision
 from events.writer import EventWriter
 from sdk import (
     ActionBlockedError,
@@ -27,11 +26,12 @@ from sdk import (
     PromptInjectionPolicy,
     SecretsPolicy,
     SecureAgent,
+    SecureTool,
     ToolFirewallPolicy,
+    ToolRules,
     ToxicityPolicy,
 )
 from sdk.observability.risk import aggregate_risk
-from sdk.policies.tool_firewall import ToolRules
 
 # Tool rules the sandboxed agent is held to. Deliberately small: a spend ceiling
 # and one outright-forbidden tool are enough to show the shape of the check.
@@ -279,6 +279,26 @@ _INPUT_POLICIES = [
     CompliancePolicy(rules=["phi_detection", "credential_output_guard"], phi_mode=PHIMode.ANNOTATE),
 ]
 _FIREWALL = ToolFirewallPolicy(rules=TOOL_RULES)
+
+# Every tool the sandboxed agent reaches for goes through a SecureTool, so the
+# firewall is in the path of the call rather than consulted beside it. The
+# tools themselves do nothing but note that they ran — which is the one fact
+# about them the page needs: a refused call has to leave this list alone.
+_TOOL_RUNS: list = []
+_TOOLS: dict = {}
+
+
+def _tool(name: str) -> SecureTool:
+    if name not in _TOOLS:
+
+        async def run(**args):
+            _TOOL_RUNS.append(name)
+            return f"{name} ran"
+
+        _TOOLS[name] = SecureTool(run, [_FIREWALL], name=name)
+    return _TOOLS[name]
+
+
 _ECHO = _EchoAgent()
 _AGENT = SecureAgent(_ECHO, policies=[*_INPUT_POLICIES, AuditPolicy(_WRITER)])
 
@@ -320,25 +340,26 @@ async def run_pipeline(payload_json: str) -> str:
     # input gates — which is the point of running them first.
     attempted_tool = None
     if tool_call is not None and not blocked_by:
-        rule = TOOL_RULES.rules.get(tool_call["name"])
+        name = tool_call["name"]
+        rule = TOOL_RULES.rules.get(name)
+        runs_before = len(_TOOL_RUNS)
+        try:
+            _, tool_ctx = await _tool(name).call_with_context(tool_call.get("args", {}))
+        except ActionBlockedError as exc:
+            tool_ctx = exc.context
+            blocked_reason = exc.reason
+            # A pending approval is a hold, not a refusal: the reply stands and
+            # the page says so. Only a deny counts as blocked.
+            if not exc.approval_id:
+                blocked_by = "tool_firewall"
+        ctx.metadata["tool_firewall"] = tool_ctx.metadata["tool_firewall"]
         attempted_tool = {
-            "name": tool_call["name"],
+            "name": name,
             "args": tool_call.get("args", {}),
             "rule": rule.model_dump(exclude_defaults=True) if rule is not None else {},
+            # Read off the tool, not inferred from the verdict.
+            "executed": len(_TOOL_RUNS) > runs_before,
         }
-        tool_ctx = ActionContext(
-            action="tool_call",
-            agent_id="demo",
-            session_id="demo",
-            input_data={"name": tool_call["name"], "args": tool_call.get("args", {})},
-        )
-        tool_ctx = await _FIREWALL.before_action(tool_ctx)
-        ctx.metadata["tool_firewall"] = tool_ctx.metadata["tool_firewall"]
-        if tool_ctx.decision == InterceptorDecision.DENY:
-            blocked_by = "tool_firewall"
-            blocked_reason = tool_ctx.decision_reason
-        elif tool_ctx.decision == InterceptorDecision.REQUIRE_APPROVAL:
-            blocked_reason = tool_ctx.decision_reason
     elapsed_ms = (time.perf_counter() - start) * 1000.0
 
     risk, categories = aggregate_risk(ctx)

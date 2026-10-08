@@ -1102,6 +1102,17 @@ kbd {
   background: rgb(0 0 0 / 0.25);
 }
 
+/* Dashed, because it is not one step in the line: it happens once for every
+   tool call, and only for the tools that have been wrapped. */
+.flow__lane--tool { border-style: dashed; border-color: var(--line-strong); }
+
+.flow__link {
+  width: 1px;
+  height: 1.5rem;
+  margin-inline: auto;
+  background: var(--line-strong);
+}
+
 .flow__label { display: block; margin-bottom: 0.75rem; color: var(--muted); font-size: 0.8125rem; }
 
 .flow__label code,

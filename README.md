@@ -91,11 +91,7 @@ policies:
     internal_url_mode: annotate
   compliance:
     rules: [phi_detection, credential_output_guard]
-  tool_firewall:
-    rules_path: tools.yaml
 ```
-
-`tool_firewall.rules_path` expects a rules file — copy `sdk/policies/tools_example.yaml` to get started.
 
 ```python
 from sdk import SecureAgent, load_policies
@@ -103,17 +99,69 @@ from sdk import SecureAgent, load_policies
 secure = SecureAgent(agent, policies=load_policies("policies.yaml"))
 ```
 
+### 4. Guard the Tools the Agent Calls
+
+`SecureAgent` sees two moments: what the caller sent and what the agent finally returned. The tools an agent calls in between run inside `agent.invoke()`, where none of its policies are looking — and that is where a manipulated agent does its damage. `SecureTool` wraps one tool and runs the same before/after pipeline on every call to it:
+
+```python
+from sdk import SecureTool, ToolFirewallPolicy
+
+async def send_email(to: str, body: str = "") -> str:
+    ...
+
+send = SecureTool(send_email, policies=[ToolFirewallPolicy(rules_path="tools.yaml")])
+
+await send(to="ops@example.com", body="done")   # called like the function it wraps
+```
+
+Give `send` to your agent in place of `send_email`. It imports no framework: whatever calls the tool calls this instead. Sync and async tools both work (a sync one runs in a worker thread). A call the rules deny raises `ActionBlockedError` and **the tool does not run**.
+
+Rules are written per tool and per argument:
+
+```yaml
+# tools.yaml
+default_deny: true              # a tool with no rule is refused
+rules:
+  send_email:
+    unlisted_args: deny         # no cc or bcc around the allowlist on `to`
+    args:
+      to:   {required: true, pattern: '[^@\s]+@example\.com'}
+      body: {}
+  read_file:
+    args:
+      path: {required: true, path_prefix: [reports]}
+  transfer_funds:
+    requires_approval: true     # see Human Approval below
+    args:
+      amount: {min: 0, max: 1000}
+  delete_account:
+    deny: true
+```
+
+What that buys, and what it does not:
+
+- **`ToolFirewallPolicy` belongs in a `SecureTool`'s list.** It acts on tool calls only; in a `SecureAgent`'s list it sees none and does nothing.
+- **Arguments are checked by name, with the tool's own defaults filled in.** A bound on `amount` applies to the amount the tool will actually use, including when the caller leaves it out. `unlisted_args: deny` is about what the caller passes: an argument left to its default is not refused for being unlisted, but is still held to any rule that names it.
+- **A value a rule cannot evaluate is refused.** Numeric text is read as the number it spells, so `"9999"` does not slip under a `max`; NaN, booleans and anything else that is not a number are denied. A list is checked item by item.
+- **`pattern` has to match the whole value**, so an allowlist for `example.com` is not satisfied by `example.com.attacker.io`.
+- **`path_prefix` resolves `..` before comparing** and does not expand `~`. It reads the path as text, so it cannot see a symlink inside the allowed directory that leads back out.
+- **A misspelt key fails the load.** A rules file that reads as enforced and enforces nothing is worse than no file.
+- **Output policies in the tool's list apply to what the tool returns.** `PIIPolicy` and `SecretsPolicy` redact it. `PromptInjectionPolicy` scores it, because a tool's result is how the text of a fetched page or an email reaches the model. That score is recorded and let through by default (`tool_output="annotate"`), since the patterns behind it miss most attacks they were not written for; `tool_output="deny"` withholds the result. Withholding is not undoing: by then the tool has run.
+- **It does not stop harm done through a call the rules permit.** If `send_email` may write to anyone, an injected agent can still send mail. The rules are the boundary, and it is only as tight as they are.
+
+Start from `sdk/policies/tools_example.yaml`. The same check is available without the wrapper as `validate_tool_call(call, rules=rules)` and `POST /v1/tools/validate`.
+
 ## Built-in Policies
 
 | Policy | Phase | What it does |
 |--------|-------|--------------|
-| `PromptInjectionPolicy` | input | Scores role injection, prompt extraction, goal hijacking, delimiter/indirect injection; denies on threshold |
+| `PromptInjectionPolicy` | input, tool output | Scores role injection, prompt extraction, goal hijacking, delimiter/indirect injection; denies on threshold. Around a tool it also scores what the tool returned — recorded by default, `tool_output="deny"` to withhold it |
 | `ToxicityPolicy` | input | Detects threats, hate speech, harassment, self-harm content; denies on threshold |
 | `HarmfulRequestPolicy` | input | Scores requests for harmful capability — weapons, malware, doxxing, illicit acquisition, fraud, violence planning, covert surveillance, exploitation, self-harm methods; denies on threshold |
 | `PIIPolicy` | output | Redacts or denies emails, phones, SSNs, credit cards (Luhn-checked), API keys, IPs |
 | `SecretsPolicy` | input + output | Redacts or denies AWS/GitHub/Slack tokens, JWTs, private-key blocks; separately flags internal URLs/private IPs (`internal_url_mode`: annotate by default, plus allowlist) |
 | `CompliancePolicy` | input + output | Honestly-scoped presets: `phi_detection`, `credential_output_guard`, `data_access_audit` — see [Compliance positioning](#compliance-positioning) |
-| `ToolFirewallPolicy` | input | Allowlist/deny/RBAC/argument constraints for tool calls; can require human approval. Also usable standalone via `validate_tool_call()` or `POST /v1/tools/validate` |
+| `ToolFirewallPolicy` | tool call | Per-tool deny/RBAC and per-argument rules (bounds, allowlists, patterns, path prefixes); can require human approval. Acts on tool calls only, so it goes in a [`SecureTool`](#4-guard-the-tools-the-agent-calls)'s list, not a `SecureAgent`'s. Also usable standalone via `validate_tool_call()` or `POST /v1/tools/validate` |
 | `OutputSchemaPolicy` | output | Pydantic schema validation, dangerous-content scan, optional hallucination/grounding check against a source |
 | `AuditPolicy` | both | Writes every action to the event store; place it **last** so its events carry the final risk score |
 
@@ -144,29 +192,32 @@ print(ctx.risk_categories)   # {"pii": 0.4, "prompt_injection": 0.0, ...}
 
 ## Human Approval (retry-after-approval)
 
-When a policy returns `REQUIRE_APPROVAL` (e.g. a firewalled tool call), the action is blocked and a pending approval record is created:
+When a policy returns `REQUIRE_APPROVAL`, the action is blocked and a pending approval record is created. The usual source is a tool rule with `requires_approval: true`:
 
 ```python
-from sdk import ActionBlockedError, RedisApprovalStore, SecureAgent
+from sdk import ActionBlockedError, RedisApprovalStore, SecureTool, ToolFirewallPolicy
 
-secure = SecureAgent(
-    agent,
-    policies=[...],
+transfer = SecureTool(
+    transfer_funds,
+    policies=[ToolFirewallPolicy(rules_path="tools.yaml")],
     # Redis is REQUIRED when approvals are decided via the server API —
     # the default in-memory store only works within a single process.
     approval_store=RedisApprovalStore("redis://localhost:6379/0"),
 )
 
+call = {"to": "acct-22", "amount": 500}
 try:
-    await secure.invoke({"input": "transfer $5,000"})
+    await transfer.call(call)
 except ActionBlockedError as e:
     approval_id = e.approval_id  # a human decides via POST /v1/approvals/{id}/decide
 
-# after approval, retry the SAME action with the approval id:
-result = await secure.invoke({"input": "transfer $5,000"}, approval_id=approval_id)
+# after approval, retry the SAME call with the approval id:
+result = await transfer.call(call, approval_id=approval_id)
 ```
 
-Approvals are **single-use**, expire after 1 hour, and are bound to the exact action + input hash — an approval granted for one transfer cannot be replayed against a different one.
+Approvals are **single-use**, expire after 1 hour, and are bound to the tool's name and its exact arguments — an approval for $500 to one account cannot be spent on another account or a larger amount, and cannot be replayed. A call that breaks an argument rule is denied outright rather than sent for approval.
+
+`SecureAgent.invoke(..., approval_id=...)` redeems an approval the same way when a custom policy gates the whole agent call. There the approval is bound to the agent's input, not to anything the agent goes on to do.
 
 ## Streaming
 
@@ -234,7 +285,6 @@ User Request
 │  │  PromptInjectionPolicy   ──► DENY?  │   │
 │  │  ToxicityPolicy          ──► DENY?  │   │
 │  │  HarmfulRequestPolicy    ──► DENY?  │   │
-│  │  ToolFirewallPolicy ──► APPROVAL?   │   │
 │  └─────────────────────────────────────┘   │
 │                  │                         │
 │      Agent.invoke() / stream()             │
@@ -254,6 +304,35 @@ User Request
   reason, risk_score, approval_id)
 ```
 
+The tools the agent calls are not in that picture: they run inside `Agent.invoke()`. Each tool wrapped in a `SecureTool` gets the same two phases of its own:
+
+```
+Agent calls a tool
+    │
+    ▼
+┌────────────────────────────────────────────┐
+│  SecureTool  (one per tool)                │
+│                                            │
+│  ┌─ before_action ─────────────────────┐   │
+│  │  ToolFirewallPolicy ──► DENY?       │   │
+│  │                     ──► APPROVAL?   │   │
+│  └─────────────────────────────────────┘   │
+│                  │                         │
+│      the tool runs, with the arguments     │
+│      the policies saw                      │
+│                  │                         │
+│  ┌─ after_action ──────────────────────┐   │
+│  │  PromptInjectionPolicy (its result) │   │
+│  │  PIIPolicy / SecretsPolicy (redact) │   │
+│  │  AuditPolicy (events + risk)        │   │
+│  └─────────────────────────────────────┘   │
+└────────────────────────────────────────────┘
+    │
+    ▼
+  Result (or ActionBlockedError with
+  reason, risk_score, approval_id)
+```
+
 The pipeline is deliberately dumb — all detection lives in the policies. Deny in the *before* phase blocks before the agent runs; deny in the *after* phase blocks the response after all policies (including audit) complete.
 
 ## Framework Integrations
@@ -267,7 +346,7 @@ secure = wrap_agent(langchain_agent, policies=load_policies("policies.yaml"))
 result = await secure.invoke({"input": "What is prompt injection?"})
 ```
 
-This means any framework whose runnables expose that same shape — CrewAI, PydanticAI, AutoGen, the OpenAI Agents SDK — already works with `SecureAgent(agent, policies=...)` directly today; named wrappers for them are on the roadmap for ergonomics, not because the underlying capability is missing. What none of the current wrappers do yet is hook a framework's own per-step primitives (LangGraph node execution, LangChain callbacks) — policies see the whole call, not individual steps inside it.
+This means any framework whose runnables expose that same shape — CrewAI, PydanticAI, AutoGen, the OpenAI Agents SDK — already works with `SecureAgent(agent, policies=...)` directly today; named wrappers for them are on the roadmap for ergonomics, not because the underlying capability is missing. What none of the current wrappers do yet is hook a framework's own per-step primitives (LangGraph node execution, LangChain callbacks) — policies see the whole call, not individual steps inside it. The step that matters most, the tool call, does not need a framework hook: wrap the tools themselves in [`SecureTool`](#4-guard-the-tools-the-agent-calls).
 
 ## Compliance Positioning
 

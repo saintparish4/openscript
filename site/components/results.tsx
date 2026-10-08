@@ -138,6 +138,11 @@ function ToolCallView({ call }: { call: AttemptedToolCall }) {
       ) : (
         <p className="toolcall__rule">No rule covers this tool, so the default applies.</p>
       )}
+      <p className="toolcall__rule">
+        {call.executed
+          ? "The tool ran."
+          : "The tool itself never ran. That is read off the tool, not inferred from the verdict."}
+      </p>
     </div>
   );
 }

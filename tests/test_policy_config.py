@@ -64,7 +64,13 @@ def test_empty_config_returns_empty_list():
 
 def test_declaration_order_is_preserved():
     policies = load_policies(
-        {"policies": {"prompt_injection": None, "tool_firewall": None, "pii": None}}
+        {
+            "policies": {
+                "prompt_injection": None,
+                "tool_firewall": {"rules": {"rules": {}}},
+                "pii": None,
+            }
+        }
     )
     assert [type(p) for p in policies] == [PromptInjectionPolicy, ToolFirewallPolicy, PIIPolicy]
 
@@ -92,6 +98,18 @@ async def test_pii_mode_string_coerced_to_enum():
     (policy,) = load_policies({"pii": {"mode": "deny"}})
     assert isinstance(policy, PIIPolicy)
     assert policy._mode is PIIMode.DENY
+
+
+def test_prompt_injection_tool_output_mode_applied():
+    [policy] = load_policies({"prompt_injection": {"tool_output": "deny"}})
+    assert policy._tool_output == "deny"  # type: ignore[attr-defined]
+    with pytest.raises(ValueError, match="tool_output"):
+        load_policies({"prompt_injection": {"tool_output": "sometimes"}})
+
+
+def test_tool_firewall_without_rules_is_rejected():
+    with pytest.raises(ValueError, match="rules"):
+        load_policies({"tool_firewall": None})
 
 
 def test_tool_firewall_inline_rules():

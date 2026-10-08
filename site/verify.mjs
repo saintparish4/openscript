@@ -123,6 +123,14 @@ for (const ex of EXAMPLES) {
     ok = false;
   }
 
+  // Both tool chips are stopped short of the tool: one refused, one held for a
+  // person. "Stopped" has to mean the tool's own code never ran, and the page
+  // says so — so the pipeline has to report it, and it has to be false.
+  if (ex.toolCall && result.tool_call?.executed !== false) {
+    console.error(`  ${ex.id}: the tool ran, or the pipeline did not say whether it did`);
+    ok = false;
+  }
+
   // The obfuscated chip exists to demonstrate normalization. If it starts
   // matching as written, it has stopped demonstrating anything.
   if (ex.id === "obfuscated" && !(row?.explanation ?? "").includes("after undoing")) {
