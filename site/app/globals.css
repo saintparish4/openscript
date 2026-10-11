@@ -397,12 +397,12 @@ kbd {
 .cast__people li > span:last-child { min-width: 0; }
 .cast__role { display: block; color: var(--muted); font-size: 0.75rem; text-wrap: balance; }
 
-/* On a phone three full chips are three rows, and they push the window off
-   the first screen. The lede already says who the three are, so the chips
-   drop to names. */
 @media (max-width: 40rem) {
-  .cast__role { display: none; }
-  .cast__people li { justify-content: center; padding-inline: 0.5rem; }
+  /* Two across, so each card has room for the name and the job under it. A
+     name alone says nothing about who the person is. */
+  .cast__people { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cast__people li { padding-inline: 0.625rem; }
+  .cast__detail { display: none; }
 }
 
 .demo { padding-inline: var(--gutter); }

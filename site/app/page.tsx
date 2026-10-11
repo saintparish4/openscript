@@ -37,7 +37,16 @@ export default function Page() {
                     </span>
                     <span>
                       <strong>{person.name}</strong>
-                      <span className="cast__role">{person.role}</span>
+                      <span className="cast__role">
+                        {/* The job comes first in every role, before the comma.
+                            A phone has room for that much and no more. */}
+                        {person.role.split(",")[0]}
+                        {person.role.includes(",") ? (
+                          <span className="cast__detail">
+                            ,{person.role.split(",").slice(1).join(",")}
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
                   </li>
                 ))}
