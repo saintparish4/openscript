@@ -46,7 +46,9 @@ export default function Page() {
             <DemoSection />
             <p className="privacy">
               These run in this browser. There is no server to send them to — open the network
-              tab and watch.
+              tab and watch. There is no LLM either: the agent here is a stand-in that repeats
+              what it is given, which is exactly the leak the output policies exist to catch.
+              The policies are the real ones.
             </p>
           </section>
         </div>

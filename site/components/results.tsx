@@ -244,6 +244,8 @@ export function Results({
 }: ResultsProps) {
   const { tone } = outcomeOf(result);
   const headline = headlineOf(result);
+  const unchanged = result.output !== "" && result.output === result.raw_output;
+  const findings = result.rows.filter((r) => r.verdict === "flag");
   const ran = result.rows.filter(
     (r) => r.verdict !== "skipped" && r.verdict !== "not_reached",
   ).length;
@@ -284,12 +286,35 @@ export function Results({
         beforeLabel={`What ${example.persona.name} sent`}
         afterLabel="What the model was given"
       />
+      {/* Said on the result as well as under the window: a reply that parrots
+          the prompt reads as a bug unless the page owns up to why. */}
+      {result.raw_output ? (
+        <p className="standin">
+          No LLM runs on this page. The agent is a stand-in that repeats what it is given, so
+          anything sensitive in the prompt comes straight back out — the same leak a real model
+          makes when it quotes its input.
+        </p>
+      ) : null}
       <DiffView
         before={result.raw_output}
         after={result.output}
-        beforeLabel="What the model produced"
+        beforeLabel="What the stand-in model produced"
         afterLabel="What the caller received"
       />
+      {/* A reply nothing was taken out of is still a reply. Without this a
+          flagged or clean run shows a verdict about a response it never shows. */}
+      {unchanged ? (
+        <div className="reply">
+          <span className="label">What the caller received, unchanged</span>
+          <p className="diff__text">{result.output}</p>
+          {findings.map((row) => (
+            <p key={row.key} className="reply__finding">
+              <strong>{row.policy} recorded a finding and let it through.</strong>{" "}
+              {row.explanation}
+            </p>
+          ))}
+        </div>
+      ) : null}
 
       {/* The answer is above; this is the working. Closed by default so the
           pane reads as a result first, and one tap away for anyone checking. */}

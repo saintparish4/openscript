@@ -800,6 +800,21 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+.standin { margin-bottom: 0; color: var(--muted); font-size: 0.8125rem; line-height: 1.5; }
+.standin + * { margin-top: 0.5rem; }
+
+.reply { display: grid; gap: 0.5rem; }
+.reply__finding {
+  margin: 0;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid color-mix(in srgb, var(--flag) 32%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--flag) 7%, transparent);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.reply__finding strong { color: var(--flag); font-weight: 500; }
+
 /* Where on its way through the call was acted on. */
 .checkpoints {
   display: grid;
