@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     TURN_STARTED = "turn_start"
     TURN_END = "turn_end"
     TOOL_CALL = "tool_call"
@@ -22,6 +22,7 @@ class EventType(str, Enum):
     AGENT_MESSAGE = "agent_message"
     APPROVAL_REQUESTED = "approval_requested"
     APPROVAL_RESOLVED = "approval_resolved"
+    ACTION_BLOCKED = "action_blocked"
 
 
 class Event(BaseModel):

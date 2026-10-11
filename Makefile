@@ -149,6 +149,10 @@ evals:  ## Score the input policies against the labelled corpora in evals/
 evals-misses:  ## Same, plus every prompt the policies got wrong
 	$(PYTHON) evals/run.py --misses
 
+.PHONY: evals-semantic
+evals-semantic:  ## Same corpora, with SemanticPolicy added (needs the [ml] extra)
+	$(PYTHON) evals/run.py --semantic --out evals/results
+
 .PHONY: wasm-deps
 wasm-deps:  ## Check runtime deps for Pyodide-incompatible C extensions
 	$(PYTHON) tools/check_wasm_deps.py

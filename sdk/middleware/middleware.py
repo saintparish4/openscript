@@ -5,8 +5,8 @@ import time
 import warnings
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import AbstractContextManager, nullcontext
-from enum import Enum
-from typing import Any
+from enum import StrEnum
+from typing import Any, NoReturn
 
 import structlog
 
@@ -23,7 +23,7 @@ from sdk.observability.tracing import ActionTracer, tracer_from_env
 logger = structlog.get_logger(__name__)
 
 
-class StreamOutputMode(str, Enum):
+class StreamOutputMode(StrEnum):
     """How stream() applies output policies to streamed chunks.
 
     BUFFER (default): collect every chunk, run after_action policies over
@@ -259,14 +259,14 @@ class SecureAgent:
                     "use stream_output='buffer' for structured chunks"
                 )
             buffer += chunk
-            buffer = self._apply_guards(buffer, guards, context, final=False)
+            buffer = await self._apply_guards(buffer, guards, context, final=False)
             if len(buffer) > window:
                 release = buffer[: len(buffer) - window]
                 buffer = buffer[len(release) :]
                 emitted.append(release)
                 yield release
         # final flush: matches deferred at the buffer edge are now definite
-        buffer = self._apply_guards(buffer, guards, context, final=True)
+        buffer = await self._apply_guards(buffer, guards, context, final=True)
         if buffer:
             emitted.append(buffer)
             yield buffer
@@ -277,7 +277,7 @@ class SecureAgent:
         context = await self._run_after(context, approval_id, granted)
         self._finalize(context)
 
-    def _apply_guards(
+    async def _apply_guards(
         self, text: str, guards: list[Any], context: ActionContext, final: bool
     ) -> str:
         for guard in guards:
@@ -297,13 +297,9 @@ class SecureAgent:
                         guard=guard.name,
                         labels=scan.labels,
                     )
-                    self._finalize(context)
-                    raise ActionBlockedError(
-                        reason=scan.reason,
-                        interceptor=guard.name,
-                        context=context,
-                        risk_score=context.risk_score,
-                    )
+                    context.decision = InterceptorDecision.DENY
+                    context.decision_reason = scan.reason
+                    await self._block(context, guard.name, "stream")
             text = scan.text
         return text
 
@@ -330,13 +326,7 @@ class SecureAgent:
                     continue
                 await self._request_approval(context, type(policy).__name__)
             if context.decision == InterceptorDecision.DENY:
-                self._finalize(context)
-                raise ActionBlockedError(
-                    reason=context.decision_reason,
-                    interceptor=type(policy).__name__,
-                    context=context,
-                    risk_score=context.risk_score,
-                )
+                await self._block(context, type(policy).__name__, "before")
         return context, granted
 
     async def _run_after(
@@ -363,14 +353,45 @@ class SecureAgent:
                 return context
             await self._request_approval(context, blocked_by)
         if context.decision == InterceptorDecision.DENY:
-            self._finalize(context)
-            raise ActionBlockedError(
-                reason=context.decision_reason,
-                interceptor=blocked_by,
-                context=context,
-                risk_score=context.risk_score,
-            )
+            await self._block(context, blocked_by, "after")
         return context
+
+    async def _block(
+        self, context: ActionContext, blocked_by: str, phase: str, approval_id: str = ""
+    ) -> NoReturn:
+        """The single exit for a refused action: aggregate, tell the observers, raise.
+
+        A deny in the before phase stops the loop, so every policy after the
+        one that denied never has its hooks called — and the README tells you
+        to put AuditPolicy last. Without this, a blocked prompt left no record
+        at all. Policies that define on_blocked() are told about the refusal
+        here, wherever they sit in the list and whichever phase it happened in.
+        The policies that were skipped stay skipped: nothing scores or mutates
+        a prompt that has already been refused.
+        """
+        self._finalize(context)
+        for policy in self._policies:
+            hook = getattr(policy, "on_blocked", None)
+            if not callable(hook):
+                continue
+            try:
+                await hook(context, blocked_by=blocked_by, phase=phase, approval_id=approval_id)
+            except Exception as exc:
+                # The action is already refused. An observer that fails must
+                # not turn that refusal into a different error, whatever its
+                # failure mode says about the hooks that can still allow.
+                logger.warning(
+                    "on_blocked_hook_failed",
+                    interceptor=type(policy).__name__,
+                    error=str(exc),
+                )
+        raise ActionBlockedError(
+            reason=context.decision_reason,
+            interceptor=blocked_by,
+            context=context,
+            risk_score=context.risk_score,
+            approval_id=approval_id,
+        )
 
     async def _redeem_approval(self, approval_id: str, context: ActionContext) -> bool:
         if not approval_id:
@@ -414,14 +435,8 @@ class SecureAgent:
                     sequence_num=seq,
                 )
             )
-        self._finalize(context)
-        raise ActionBlockedError(
-            reason=context.decision_reason,
-            interceptor=interceptor_name,
-            context=context,
-            risk_score=context.risk_score,
-            approval_id=record.approval_id,
-        )
+        phase = "after" if context.output_data else "before"
+        await self._block(context, interceptor_name, phase, approval_id=record.approval_id)
 
     def _finalize(self, context: ActionContext) -> ActionContext:
         """Aggregate risk and record metrics — runs at every exit point

@@ -1,6 +1,6 @@
 # OpenScript
 
-**Security gateway SDK for LLM/agent workflows.** Block prompt injection, redact PII and secrets, firewall tool calls, gate risky actions behind human approval, and score every action's risk — across any LLM provider.
+**Security gateway SDK for LLM/agent workflows.** Firewall the tools an agent calls, gate risky actions behind human approval, redact PII and secrets, record every action and every refusal, and flag known prompt-injection shapes — across any LLM provider.
 
 OpenScript wraps any agent in a **policy pipeline**: policies run before and after every action, and each one can allow, mutate (redact), deny, or require human approval. The pipeline itself contains zero detection logic — everything is a `Policy` you can swap, configure from YAML, or write yourself.
 
@@ -163,13 +163,13 @@ Start from `sdk/policies/tools_example.yaml`. The same check is available withou
 | `CompliancePolicy` | input + output | Honestly-scoped presets: `phi_detection`, `credential_output_guard`, `data_access_audit` — see [Compliance positioning](#compliance-positioning) |
 | `ToolFirewallPolicy` | tool call | Per-tool deny/RBAC and per-argument rules (bounds, allowlists, patterns, path prefixes); can require human approval. Acts on tool calls only, so it goes in a [`SecureTool`](#4-guard-the-tools-the-agent-calls)'s list, not a `SecureAgent`'s. Also usable standalone via `validate_tool_call()` or `POST /v1/tools/validate` |
 | `OutputSchemaPolicy` | output | Pydantic schema validation, dangerous-content scan, optional hallucination/grounding check against a source |
-| `AuditPolicy` | both | Writes every action to the event store; place it **last** so its events carry the final risk score |
+| `AuditPolicy` | both | Writes every action to the event store, and an `action_blocked` event for every action the pipeline refuses; place it **last** so its events carry the final risk score |
 
 The three input-side policies scan the prompt as it arrived **and** normalized views of it, so an attack disguised with zero-width characters, Cyrillic look-alikes, leetspeak, spaced-out letters, full-width forms or a base64 payload scores like the attack it is. Plain prose produces one view and costs what it always did. See `sdk/policies/normalize.py`.
 
 ### What the detection actually measures
 
-Asserting that a security tool works is cheap. `evals/` holds labelled corpora and `make evals` scores the policies against them; `tests/test_evals.py` fails the build if the numbers regress. Measured 2026-09-20:
+Asserting that a security tool works is cheap. `evals/` holds labelled corpora and `make evals` scores the policies against them; `tests/test_evals.py` fails the build if the numbers regress. Measured 2026-10-11:
 
 | Corpus | Attacks blocked | Obfuscated blocked | Benign wrongly blocked |
 |---|---|---|---|
@@ -177,10 +177,11 @@ Asserting that a security tool works is cheap. `evals/` holds labelled corpora a
 | Toxicity | 20/20 (100%) | 6/6 (100%) | 0/18 (0%) |
 | Harmful request | 49/49 (100%) | 10/10 (100%) | 0/46 (0%) |
 | **Held out — phrasings never fixed against** | **1/23 (4%)** | — | **0/20 (0%)** |
+| **Public — [`deepset/prompt-injections`](https://huggingface.co/datasets/deepset/prompt-injections), whole** | **4/263 (2%)** | — | **0/399 (0%)** |
 
-Both halves of that matter. A pattern bank recognises shapes, so it is close to perfect on attack families it has seen (including disguised ones) and close to useless against an attack phrased in words nobody wrote a rule for. **0 false positives across all 154 benign prompts** — prompts that report on malware, teach about phishing and quote threats in HR reports — is the other number worth having, because a gateway that blocks the security team gets switched off.
+Read the last two rows first: the top three are conformance tests, written alongside the patterns they score. A pattern bank recognises shapes, so it is close to perfect on attack families it has seen (including disguised ones) and close to useless against an attack phrased in words nobody wrote a rule for — 4% on a set written here and never fixed against, 2% on a public one nobody here wrote, part of which is in German. That is why the detectors are not the boundary; the tool rules, approvals, redaction and audit are, and they do not depend on recognising an attack. **0 false positives across all 154 benign prompts written here** — prompts that report on malware, teach about phishing and quote threats in HR reports — and across the public set's 399 is the other number worth having, because a gateway that blocks the security team gets switched off.
 
-What this does not catch, stated plainly: attacks in languages other than English, novel paraphrase, and anything that needs to understand a sentence rather than match it. Closing that needs a model, which is a deliberate architecture change and would end the no-backend property the browser demo depends on. Full numbers and history: [`docs/metrics.md`](docs/metrics.md); methodology: [`evals/README.md`](evals/README.md).
+What this does not catch, stated plainly: attacks in languages other than English, novel paraphrase, and anything that needs to understand a sentence rather than match it. Closing that needs a model, which cannot be one of the pure-local built-ins the browser demo depends on. `SemanticPolicy` is the opt-in place for one (`[ml]` extra, never in the demo): the code is here, its classifier head is not trained yet, it refuses to construct until one is, and no detection number is claimed for it. Full numbers and history: [`docs/metrics.md`](docs/metrics.md); methodology: [`evals/README.md`](evals/README.md).
 
 Every policy writes standardized metadata — `{"risk": float, "category": str, ...}` — which the built-in `RiskScorer` aggregates into a single `risk_score` per action:
 
@@ -334,6 +335,8 @@ Agent calls a tool
 ```
 
 The pipeline is deliberately dumb — all detection lives in the policies. Deny in the *before* phase blocks before the agent runs; deny in the *after* phase blocks the response after all policies (including audit) complete.
+
+**A refusal is always recorded.** A deny in the *before* phase stops the loop, so policies listed after the one that denied never run — including an `AuditPolicy` placed last, as recommended. Skipped policies stay skipped, but the pipeline calls `on_blocked()` on every policy that defines it, and `AuditPolicy` uses that to write one `action_blocked` event: the phase (`before`, `after`, or `stream` for an aborted guarded stream), the policy that refused, the reason, the final aggregated risk, and the approval id when the refusal is a pending approval. The event carries the input as it stood when it was refused, so only redactions made by policies listed *before* the denier are applied; pass `AuditPolicy(writer, record_blocked_input=False)` to store an input hash instead of the text. Any policy can observe refusals the same way — `on_blocked()` is an optional hook on `BasePolicy`, and it cannot change the decision.
 
 ## Framework Integrations
 

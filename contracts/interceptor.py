@@ -65,6 +65,27 @@ class BasePolicy:
     async def after_action(self, context: ActionContext) -> ActionContext:
         return context
 
+    async def on_blocked(
+        self,
+        context: ActionContext,
+        *,
+        blocked_by: str,
+        phase: str,
+        approval_id: str = "",
+    ) -> None:
+        """Called once when the pipeline refuses an action, on every policy.
+
+        Optional, and not part of the Policy protocol: SecureAgent looks it up
+        by name. It exists for observers. A deny in the before phase stops the
+        loop, so policies listed after the one that denied never run — this is
+        how an audit policy placed last still gets to record the refusal.
+
+        *phase* is "before" (the agent never ran), "after" (the response was
+        withheld) or "stream" (a guard aborted a guarded stream). The decision
+        is already final; the hook cannot change it.
+        """
+        return None
+
     def stream_guard(self) -> StreamGuard | None:
         """Override to participate in guarded streaming. Only policies whose
         checks are bounded text patterns can do so; policies needing the

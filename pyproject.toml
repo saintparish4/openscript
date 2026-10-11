@@ -7,16 +7,16 @@ name = "openscript"
 version = "0.1.0" 
 description = "Python SDK for building prompt-secured LLM/agent workflows"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Security",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
@@ -77,16 +77,15 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.black]
-target-version = ["py310"]
+target-version = ["py311"]
 line-length = 100
 # web/smoke.py runs under Pyodide's runPythonAsync, where top-level `await` is
 # legal. It is not importable Python, so neither formatter can parse it.
 force-exclude = "web/"
 
-# Match requires-python (>=3.10): keeps pyupgrade (UP017 etc.) from suggesting
-# 3.11+ only APIs like datetime.UTC, which mypy rejects under python_version 3.10.
+# Match requires-python (>=3.11), so pyupgrade only suggests what the floor has.
 [tool.ruff] 
-target-version = "py310" 
+target-version = "py311"
 line-length = 100 
 # See the note on [tool.black].force-exclude — top-level await outside a
 # function is a syntax error to every static tool, and correct here.
@@ -105,7 +104,6 @@ select = [
 ]
 ignore = [
     "E501",   # line length (black handles this)
-    "UP042",  # StrEnum requires Python 3.11+; project supports 3.10
 ]
 
 [tool.ruff.lint.isort]
@@ -129,7 +127,7 @@ known-first-party = ["sdk", "contracts"]
 "tests/test_normalize.py" = ["RUF001"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 warn_return_any = true
 warn_unused_configs = true 

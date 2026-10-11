@@ -139,6 +139,20 @@ def _build_harmful_request(params: dict[str, Any], writer: EventWriter | None) -
     return HarmfulRequestPolicy(threshold=params.get("threshold", 0.5), writer=writer)
 
 
+def _build_semantic(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "semantic", {"threshold", "mode", "local_files_only"})
+    # Imported here, not at module scope: the policy is opt-in, and the module
+    # that defines it is the one place a model dependency is allowed to live.
+    from sdk.policies.semantic import SemanticPolicy
+
+    return SemanticPolicy(
+        threshold=params.get("threshold"),
+        mode=params.get("mode", "deny"),
+        local_files_only=params.get("local_files_only", False),
+        writer=writer,
+    )
+
+
 def _build_compliance(params: dict[str, Any], writer: EventWriter | None) -> Policy:
     _take(params, "compliance", {"rules", "phi_mode"})
     return CompliancePolicy(
@@ -167,6 +181,7 @@ _REGISTRY: dict[str, PolicyFactory] = {
     "pii": _build_pii,
     "secrets": _build_secrets,
     "compliance": _build_compliance,
+    "semantic": _build_semantic,
     "tool_firewall": _build_tool_firewall,
     "output_schema": _build_output_schema,
     "audit": _build_audit,

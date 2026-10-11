@@ -16,17 +16,13 @@ import json
 import shutil
 import subprocess
 import sys
+import tomllib
 import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
 
 import pytest
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # py3.10
-    tomllib = None
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYODIDE_VERSION = "0.28.3"
@@ -128,7 +124,6 @@ def test_wheel_is_pure_python(wheel: Path):
     assert wheel.name.endswith("-py3-none-any.whl"), f"not a universal wheel: {wheel.name}"
 
 
-@pytest.mark.skipif(tomllib is None, reason="needs python>=3.11 for tomllib")
 def test_dependency_floors_are_satisfiable_by_pyodide(pyodide_lock: dict):
     from packaging.requirements import Requirement
 

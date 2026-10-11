@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
-class PIIMode(str, Enum):
+class PIIMode(StrEnum):
     REDACT = "redact"
     DENY = "deny"
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from contracts.server_types import Event, EventType
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from events.store import EventStore
 
 
-class NodeType(str, Enum):
+class NodeType(StrEnum):
     TURN = "turn"
     TOOL_CALL = "tool_call"
     MEMORY_WRITE = "memory_write"

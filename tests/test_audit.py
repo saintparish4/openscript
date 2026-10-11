@@ -20,6 +20,7 @@ sys.path.insert(0, str(REPO_ROOT / "tools"))
 from policy_audit import (  # noqa: E402
     ALLOWED_RUNTIME_DEPS,
     NETWORK_MARKERS,
+    OPT_IN_POLICIES,
     audit,
     lazy_imports,
     top_level_imports,
@@ -66,6 +67,35 @@ def test_registry_has_exactly_the_nine_audited_policies():
     )
 
 
+def test_every_registered_policy_is_either_pure_local_or_declared_opt_in():
+    """A policy cannot join the registry without landing in one list or the other."""
+    from sdk.policies.config import _REGISTRY
+
+    registered = set(_REGISTRY) - {"noop"}
+    assert registered == EXPECTED_POLICIES | set(OPT_IN_POLICIES), (
+        f"unaccounted for: {registered - EXPECTED_POLICIES - set(OPT_IN_POLICIES)}. "
+        "A new policy is pure-local (add it to EXPECTED_POLICIES and the audit) or "
+        "it needs a model (add it to OPT_IN_POLICIES). There is no third kind."
+    )
+    assert not EXPECTED_POLICIES & set(OPT_IN_POLICIES)
+
+
+@pytest.mark.parametrize("row", audit(opt_in=True), ids=lambda r: r["policy"])
+def test_opt_in_policy_keeps_its_model_out_of_import_time(row):
+    """An opt-in policy may need a model. `import sdk` may not."""
+    assert not row["disallowed_top_level"], (
+        f"{row['policy']} imports {row['disallowed_top_level']} at module scope; "
+        "heavy dependencies go inside the function that needs them."
+    )
+    assert row["lazy_heavy"], f"{row['policy']} is declared opt-in but imports no model"
+
+
+def test_the_browser_demo_runs_no_opt_in_policy():
+    """The demo's privacy and no-backend claims rest on the pure-local set."""
+    pipeline = (REPO_ROOT / "site/public/pipeline.py").read_text()
+    assert "semantic" not in pipeline.lower()
+
+
 @pytest.mark.parametrize("row", audit(), ids=lambda r: r["policy"])
 def test_policy_makes_no_network_call(row):
     assert not row["network_markers"], (
@@ -101,6 +131,7 @@ required = [
     "PIIPolicy", "SecretsPolicy", "PromptInjectionPolicy", "ToxicityPolicy",
     "HarmfulRequestPolicy", "CompliancePolicy", "ToolFirewallPolicy",
     "OutputSchemaPolicy", "AuditPolicy", "SecureAgent", "RiskScorer", "load_policies",
+    "SemanticPolicy",
 ]
 missing = [n for n in required if not hasattr(sdk, n)]
 assert not missing, missing

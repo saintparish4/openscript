@@ -4,7 +4,7 @@ Everything measurable about OpenScript, in one place, with the date it was
 measured and the command that produces it. Numbers with no command next to them
 were measured by hand and say so.
 
-Last updated **2026-09-20**.
+Last updated **2026-10-11**.
 
 ## Detection
 
@@ -18,8 +18,9 @@ and `tests/test_evals.py` fails the build if these regress.
 | Harmful request | 49/49 (100%) | 10/10 (100%) | 0/46 (0%) |
 | Paraphrase dev (any policy) | 39/48 (81%) | — | 0/40 (0%) |
 | **Held out (any policy)** | **1/23 (4%)** | — | **0/20 (0%)** |
+| **Public: `deepset/prompt-injections` (any policy)** | **4/263 (2%)** | — | **0/399 (0%)** |
 
-Read those last two rows first.
+Read those last three rows first.
 
 - The first three corpora are the shapes the patterns were written for. 100% on
   them means the bank does what it says, not that it generalizes.
@@ -32,11 +33,21 @@ Read those last two rows first.
   nobody wrote a rule for, and no amount of adding patterns changes the shape of
   that result. Closing it needs a model (roadmap D1), which is a deliberate
   architecture change.
+- **Public** is [`deepset/prompt-injections`](https://huggingface.co/datasets/deepset/prompt-injections),
+  all 662 rows, unfiltered: nobody here chose a row, wrote a label or fixed
+  anything against it. **2%.** Roughly a third of its attacks are in German,
+  which no pattern here reads; the rest are paraphrase. Its 399 benign rows are
+  the largest false-positive check in the repo that was not written next to the
+  patterns, though they are ordinary questions and so easier negatives than
+  the 154 below.
+- With counts this small the intervals matter: 1/23 is 1% to 21%, 4/263 is 1%
+  to 4%, and 0/154 puts the false-positive rate below about 2.4% (95%, Wilson).
+  `make evals` prints them.
 - Five attack rows are marked `expect: flag`: they score and deliberately do not
   block (suicidal intent earns crisis resources, not a refusal). They are
   counted separately rather than folded into either number.
 
-**0 false positives across all 154 benign prompts** that share vocabulary with the
+**0 false positives across all 154 benign prompts written here** that share vocabulary with the
 attacks — reporting on malware, teaching about phishing, defending against
 ransomware, quoting a threat in an HR report. That number is worth as much as
 the detection rate: a gateway that blocks the security team is one nobody keeps
@@ -97,9 +108,10 @@ section scrolls into view — which on the current layout is immediately.
 
 | What | Number |
 |---|---|
-| Tests | 474 |
-| Labelled eval prompts | 348 across 5 corpora |
+| Tests | 661 |
+| Labelled eval prompts | 1,010 across 6 corpora (348 written here, 662 public) |
 | Built-in policies | 9, all pure-local |
+| Opt-in policies | 1 (`SemanticPolicy`), head not trained, no number claimed |
 | Policies that make a network call | 0, enforced by `tests/test_audit.py` |
 | CI jobs | lint, type-check, test, pyodide, demo, build |
 
@@ -107,6 +119,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-11 | Public corpus added: `deepset/prompt-injections`, 4/263 attacks blocked (2%), 0/399 benign blocked. Refused actions are now written to the audit trail |
 | 2026-09-20 | Demo gallery gained an obfuscated-jailbreak chip, per-chip "what this was reaching for" copy, and the refused tool call spelled out |
 | 2026-09-20 | Normalization added; injection detection 48% → 100% on its corpus, obfuscated 79% → 100%, false positives 3% → 0%. Held-out generalization measured for the first time: 4% |
 | 2026-09-16 | 431 tests; demo deployed and green; obfuscation gap found and written down |

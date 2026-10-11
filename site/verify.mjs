@@ -151,6 +151,14 @@ for (const ex of EXAMPLES) {
     ok = false;
   }
 
+  // A prompt refused on the way in used to leave no trace: the audit policy
+  // sits last and never ran. The copy now says the refusal is recorded, so the
+  // record has to exist — exactly one event, since nothing after the deny ran.
+  if (result.stage === "prompt" && result.events !== 1) {
+    console.error(`  ${ex.id}: refused at the prompt but wrote ${result.events} audit events, expected 1`);
+    ok = false;
+  }
+
   if (!ok) failures++;
 
   const verdict = ex.expect ? `${ex.expect}=${row ? row.verdict : "absent"}` : quiet ? "all clear" : "unexpectedly flagged";

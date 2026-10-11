@@ -59,6 +59,14 @@ _POLICY_MODULES = {
 }
 
 
+# Registered, but not part of the pure-local claim and never run by the browser
+# demo: they need a model. Listed here so the audit reports them as what they
+# are instead of either hiding them or counting them as local.
+OPT_IN_POLICIES = {
+    "semantic": "sdk/policies/semantic.py",
+}
+
+
 def top_level_imports(path: Path) -> set[str]:
     """Roots of every import at module scope (function-local imports excluded)."""
     tree = ast.parse(path.read_text())
@@ -90,13 +98,15 @@ def lazy_imports(path: Path) -> set[str]:
     return roots
 
 
-def audit() -> list[dict]:
+def audit(opt_in: bool = False) -> list[dict]:
+    """Audit the pure-local built-ins, or with opt_in=True the opt-in policies."""
     rows = []
     first_party = {"sdk", "contracts", "events"}
+    modules = OPT_IN_POLICIES if opt_in else _POLICY_MODULES
     for name in sorted(_REGISTRY):
-        if name == "noop":
+        if name == "noop" or name not in modules:
             continue
-        target = _POLICY_MODULES[name]
+        target = modules[name]
         path = REPO_ROOT / target
         top = top_level_imports(path)
         lazy = lazy_imports(path)
@@ -146,6 +156,12 @@ def main() -> int:
         )
         return 1
     print(f"**All {len(rows)} policies are pure-local. No backend is required.**")
+    for r in audit(opt_in=True):
+        print(
+            f"\nOpt-in, not pure-local, not in the browser demo: `{r['policy']}` "
+            f"(`{r['module']}`) — needs {', '.join(r['lazy_heavy']) or 'a model'}, "
+            "imported inside functions only."
+        )
     return 0
 
 

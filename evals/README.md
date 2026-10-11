@@ -26,6 +26,7 @@ number that decides whether anyone leaves a security tool switched on.
 | `harmful_request.jsonl` | Requests for harmful capability, against the reporting, teaching and defending phrasings that share their keywords |
 | `paraphrase_dev.jsonl` | Attacks written from intent rather than from the pattern bank. **Used to find gaps, and fixed against** |
 | `holdout.jsonl` | The same idea, written after the last round of fixes. **Never fixed against** |
+| `public_deepset.jsonl` | [`deepset/prompt-injections`](https://huggingface.co/datasets/deepset/prompt-injections), all 662 rows, unfiltered. **Nobody here wrote a row or a label in it, and it is never fixed against** |
 
 Each row is `{"text", "label", "category", "tag", "expect"}`.
 
@@ -48,9 +49,11 @@ earns its place as a regression gate, but its rate is not evidence about
 unseen attacks.
 
 `holdout.jsonl` was written after the last pattern was added, scored once, and
-left alone. **That number is the one worth believing**, and it is the number
-this project publishes, unflattering as it is. If you fix a pattern because of
-a row in it, move the row into `paraphrase_dev.jsonl` and write a new holdout.
+left alone. `public_deepset.jsonl` goes one step further: it was not written
+here at all. **Those two numbers are the ones worth believing**, and they are the
+numbers this project publishes, unflattering as they are. If you fix a pattern
+because of a row in the holdout, move the row into `paraphrase_dev.jsonl` and
+write a new holdout. The public set is not edited at all.
 
 ## What the results mean
 

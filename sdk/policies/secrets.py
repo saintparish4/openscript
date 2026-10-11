@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -120,7 +120,7 @@ _GUARD_MAX_MATCH_LEN = 512
 _PEM_HEADER_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY( BLOCK)?-----")
 
 
-class InternalURLMode(str, Enum):
+class InternalURLMode(StrEnum):
     """How SecretsPolicy treats internal URL / private address findings.
 
     Internal hostnames like localhost and *.local appear constantly in

@@ -4,8 +4,8 @@ import hashlib
 import json
 import uuid
 from dataclasses import asdict, dataclass, field, replace
-from datetime import datetime, timedelta, timezone
-from enum import Enum
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Any, Protocol
 
 import structlog
@@ -15,7 +15,7 @@ logger = structlog.get_logger(__name__)
 DEFAULT_TTL_SECONDS = 3600  # approvals expire back to blocked after 1h
 
 
-class ApprovalStatus(str, Enum):
+class ApprovalStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     DENIED = "denied"
@@ -76,7 +76,7 @@ def action_hash(action: str, input_data: dict[str, Any]) -> str:
 
 
 def _new_expiry(ttl_seconds: int = DEFAULT_TTL_SECONDS) -> datetime:
-    return datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+    return datetime.now(UTC) + timedelta(seconds=ttl_seconds)
 
 
 @dataclass
@@ -88,13 +88,13 @@ class ApprovalRecord:
     action_hash: str
     approval_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     status: ApprovalStatus = ApprovalStatus.PENDING
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime = field(default_factory=_new_expiry)
     decided_by: str = ""
 
     @property
     def expired(self) -> bool:
-        return datetime.now(timezone.utc) >= self.expires_at
+        return datetime.now(UTC) >= self.expires_at
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -228,7 +228,7 @@ class RedisApprovalStore:
 
     @staticmethod
     def _ttl_seconds(record: ApprovalRecord) -> int:
-        return max(1, int((record.expires_at - datetime.now(timezone.utc)).total_seconds()))
+        return max(1, int((record.expires_at - datetime.now(UTC)).total_seconds()))
 
     async def create(self, record: ApprovalRecord) -> None:
         await self._redis.set(

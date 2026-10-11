@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
@@ -69,7 +69,7 @@ KNOWN_RULES: dict[str, str] = {
 }
 
 
-class PHIMode(str, Enum):
+class PHIMode(StrEnum):
     ANNOTATE = "annotate"
     DENY = "deny"
 

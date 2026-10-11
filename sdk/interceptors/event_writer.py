@@ -7,6 +7,7 @@ import structlog
 
 from contracts.server_types import Event, EventType
 from contracts.types import ActionContext, FailureMode
+from events.approvals import action_hash
 from events.writer import EventWriter
 from sdk.observability.risk import aggregate_risk
 
@@ -14,16 +15,29 @@ logger = structlog.get_logger(__name__)
 
 
 class AuditPolicy:
-    """Writes before/after events to the event store for every agent action.
+    """Writes before/after events to the event store for every agent action,
+    and an ``action_blocked`` event for every action the pipeline refuses.
 
     Satisfies the contracts/Policy protocol. Lives alongside
     NoopInterceptor in sdk/interceptors/.
+
+    A refused action is recorded through on_blocked(), which SecureAgent calls
+    wherever this policy sits in the list. That matters because the place it is
+    meant to sit is last: a prompt denied by an earlier policy never reaches
+    before_action here, and used to leave no event at all.
+
+    The blocked event carries the input as it stood when the action was
+    refused, so redactions made by policies listed *before* the one that denied
+    are applied and later ones are not. Pass ``record_blocked_input=False`` to
+    store only the input hash when the raw text of a refused prompt should not
+    reach the event store.
     """
 
     failure_mode: FailureMode = FailureMode.FAIL_OPEN
 
-    def __init__(self, writer: EventWriter) -> None:
+    def __init__(self, writer: EventWriter, record_blocked_input: bool = True) -> None:
         self._writer = writer
+        self._record_blocked_input = record_blocked_input
         self._sequence_counters: dict[str, int] = {}
 
     async def before_action(self, context: ActionContext) -> ActionContext:
@@ -66,6 +80,38 @@ class AuditPolicy:
         )
         await self._writer.write(event)
         return context
+
+    async def on_blocked(
+        self,
+        context: ActionContext,
+        *,
+        blocked_by: str,
+        phase: str,
+        approval_id: str = "",
+    ) -> None:
+        payload: dict[str, Any] = {
+            "action": context.action,
+            "phase": phase,
+            "blocked_by": blocked_by,
+            "decision": context.decision.value,
+            "reason": context.decision_reason,
+            # Final: SecureAgent aggregates before it calls this hook.
+            "risk_score": context.risk_score,
+            "risk_categories": context.risk_categories,
+            "input_hash": action_hash(context.action, context.input_data),
+        }
+        if self._record_blocked_input:
+            payload["input_data"] = context.input_data
+        if approval_id:
+            payload["approval_id"] = approval_id
+        event = Event(
+            session_id=context.session_id,
+            agent_id=context.agent_id,
+            event_type=EventType.ACTION_BLOCKED,
+            payload=payload,
+            sequence_num=self._next_sequence(context.session_id),
+        )
+        await self._writer.write(event)
 
     def _next_sequence(self, session_id: str) -> int:
         count = self._sequence_counters.get(session_id, 0) + 1

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -19,12 +19,12 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
-class OnInvalid(str, Enum):
+class OnInvalid(StrEnum):
     DENY = "deny"
     ANNOTATE = "annotate"
 
 
-class HallucinationMode(str, Enum):
+class HallucinationMode(StrEnum):
     KEYWORD = "keyword"
     EMBEDDING = "embedding"
 
