@@ -189,7 +189,9 @@ export default function DemoPanel() {
                   </div>
                   <p className="boot__msg">{progress.message}</p>
                   <p className="muted">
-                    First load pulls about 7 MB of Python runtime. It is cached after that.
+                    This is the real package starting in your tab: a Python runtime compiled to
+                    WebAssembly, then OpenScript itself. About 5 seconds and 7 MB the first
+                    time, cached after that.
                   </p>
                 </div>
               ) : null}

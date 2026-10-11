@@ -203,6 +203,9 @@ export function headlineOf(result: PipelineResult): Headline {
 export function Results({ result, example }: { result: PipelineResult; example: Example }) {
   const { tone } = outcomeOf(result);
   const headline = headlineOf(result);
+  const ran = result.rows.filter(
+    (r) => r.verdict !== "skipped" && r.verdict !== "not_reached",
+  ).length;
 
   return (
     <section className={`results tone--${tone}`}>
@@ -245,17 +248,22 @@ export function Results({ result, example }: { result: PipelineResult; example: 
         afterLabel="What the caller received"
       />
 
-      <div className="steps">
-        <h3 className="steps__title">The pipeline, in order</h3>
-        <p className="steps__local">
-          Every check below ran locally in your browser, in {result.latency_ms.toFixed(1)} ms.
-        </p>
+      {/* The answer is above; this is the working. Closed by default so the
+          pane reads as a result first, and one tap away for anyone checking. */}
+      <details className="steps">
+        <summary className="steps__summary">
+          <span className="steps__title">Every check, in order</span>
+          <span className="steps__local">
+            {ran} of {result.rows.length} ran, locally in your browser, in{" "}
+            {result.latency_ms.toFixed(1)} ms
+          </span>
+        </summary>
         <ol className="verdicts">
           {result.rows.map((row) => (
             <VerdictRow key={row.key} row={row} />
           ))}
         </ol>
-      </div>
+      </details>
 
       <dl className="totals">
         <div>

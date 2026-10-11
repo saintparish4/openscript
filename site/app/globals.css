@@ -350,6 +350,58 @@ kbd {
 
 /* ── The demo window ───────────────────────────────────────────────── */
 
+/* Who is in the gallery, above the window. Sits on the same backdrop as the
+   hero, so it gets the same dark chip treatment as the hero's note. */
+.cast {
+  max-width: 52rem;
+  margin: 0 auto 1.25rem;
+  text-align: center;
+}
+
+.cast__lede {
+  margin: 0 auto 0.875rem;
+  max-width: 34rem;
+  color: rgb(255 255 255 / 0.92);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+  text-shadow: 0 1px 12px rgb(0 0 0 / 0.5);
+}
+
+.cast__people {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cast__people li {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgb(7 8 10 / 0.6);
+  font-size: 0.875rem;
+  line-height: 1.3;
+  text-align: left;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.cast__role { display: block; color: var(--muted); font-size: 0.75rem; }
+
+/* On a phone three full chips are three rows, and they push the window off
+   the first screen. The lede already says who the three are, so the chips
+   drop to names. */
+@media (max-width: 40rem) {
+  .cast__role { display: none; }
+}
+
 .demo { padding-inline: var(--gutter); }
 
 /* --container is the content width, so the padding has to come on top of it. */
@@ -815,8 +867,31 @@ kbd {
   .diff { grid-template-columns: 1fr 1fr; }
 }
 
-.steps__title { margin: 0; font-size: 0.9375rem; font-weight: 500; }
-.steps__local { margin: 0.15rem 0 0.75rem; color: var(--muted); font-size: 0.8125rem; }
+.steps__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.02);
+  cursor: pointer;
+  list-style: none;
+}
+.steps__summary:hover { border-color: var(--line-strong); }
+.steps__summary::-webkit-details-marker { display: none; }
+/* A flex summary loses its disclosure triangle, so it says what a tap does. */
+.steps__summary::after {
+  content: "Show";
+  margin-left: auto;
+  color: var(--muted);
+  font: 400 0.75rem/1 var(--mono);
+}
+.steps[open] .steps__summary::after { content: "Hide"; }
+.steps[open] .steps__summary { margin-bottom: 0.75rem; }
+.steps__title { font-size: 0.9375rem; font-weight: 500; }
+.steps__local { color: var(--muted); font-size: 0.8125rem; }
 
 .verdicts {
   margin: 0;

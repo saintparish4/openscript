@@ -1,10 +1,14 @@
 import { DemoSection } from "@/components/demo-section";
+import { EXAMPLES } from "@/lib/examples";
 import { Hero } from "@/components/hero";
 import { ArrowUpRight, GitHubIcon, Mark } from "@/components/icons";
 import { Pipeline } from "@/components/pipeline";
 import { Policies } from "@/components/policies";
 import { SiteNav } from "@/components/site-nav";
 import { METRICS_URL, SOURCE_URL } from "@/lib/links";
+
+// The three senders, once each, in the order the gallery introduces them.
+const CAST = [...new Map(EXAMPLES.map((ex) => [ex.persona.name, ex.persona])).values()];
 
 export default function Page() {
   return (
@@ -17,6 +21,28 @@ export default function Page() {
         <div className="stage">
           <Hero />
           <section id="demo" className="demo container" aria-label="Demo">
+            {/* Who is talking and what to do, before the list asks for a click.
+                Kept to a line and a row so the window stays in the first screen. */}
+            <div className="cast">
+              <p className="cast__lede">
+                {EXAMPLES.length} messages from three people: a customer, a contractor and a
+                support agent. Pick one and it runs through the real pipeline, next to what
+                would have happened without it.
+              </p>
+              <ul className="cast__people">
+                {CAST.map((person) => (
+                  <li key={person.name}>
+                    <span className="avatar" aria-hidden="true">
+                      {person.name[0]}
+                    </span>
+                    <span>
+                      <strong>{person.name}</strong>
+                      <span className="cast__role">{person.role}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
             <DemoSection />
             <p className="privacy">
               These run in this browser. There is no server to send them to — open the network

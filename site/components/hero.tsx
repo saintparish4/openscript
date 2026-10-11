@@ -75,8 +75,9 @@ export function Hero() {
       <header className="hero">
         <h1>A checkpoint between your app and its agent.</h1>
         <p className="hero__lede">
-          OpenScript is a policy pipeline that sits between an application and its LLM agent, and
-          refuses to pass along the things that should not go through.
+          An agent does what it is told, including by whoever slipped a line into the prompt.
+          OpenScript sits in front of the agent and each of its tools, and checks every message,
+          reply and tool call before it goes through.
         </p>
         <div className="hero__actions">
           <a className="btn" href="#demo">
