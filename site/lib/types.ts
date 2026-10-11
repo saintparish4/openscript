@@ -33,12 +33,31 @@ export interface PipelineResult {
   crisis: boolean;
   /** The call the agent attempted, and the rule it was held to. */
   tool_call: AttemptedToolCall | null;
+  /** Set when the tool call needed a human: waiting, or what was decided. */
+  approval: Approval | null;
   rows: PolicyRow[];
   risk: number;
   categories: Record<string, number>;
   /** Measured inside Python around the pipeline call only — not runtime boot. */
   latency_ms: number;
   events: number;
+}
+
+export interface Approval {
+  id: string;
+  /** "spent" is an id that was already decided or has expired. */
+  status: "pending" | "approved" | "denied" | "spent";
+  decided_by: string;
+  /** The decider's reason, where they gave one. */
+  note: string;
+}
+
+/** A human's answer to a held call, sent back with the same submission. */
+export interface Decision {
+  id: string;
+  approved: boolean;
+  decided_by: string;
+  note: string;
 }
 
 export interface ToolCall {

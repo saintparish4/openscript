@@ -115,12 +115,15 @@ async def test_a_decided_record_leaves_the_pending_list(connect):
     for record in (waiting, approved, denied):
         await store.create(record)
     await store.decide(approved.approval_id, approved=True, decided_by="ops")
-    await store.decide(denied.approval_id, approved=False, decided_by="ops")
+    await store.decide(denied.approval_id, approved=False, decided_by="ops", note="wrong list")
 
     assert [r.approval_id for r in await store.list_pending()] == [waiting.approval_id]
     decided = await store.get(approved.approval_id)
     assert decided is not None
     assert (decided.status, decided.decided_by) == (ApprovalStatus.APPROVED, "ops")
+    refused = await store.get(denied.approval_id)
+    assert refused is not None
+    assert (refused.status, refused.decision_note) == (ApprovalStatus.DENIED, "wrong list")
 
 
 async def test_a_decision_cannot_be_made_twice(connect):

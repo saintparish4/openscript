@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EXAMPLES, type Example } from "@/lib/examples";
 import { outcomeOf, type Outcome } from "@/lib/outcome";
 import { loadRuntime, runPipeline, type Progress } from "@/lib/runtime";
-import type { PipelineResult } from "@/lib/types";
+import type { Decision, PipelineResult } from "@/lib/types";
 import { DemoWindow } from "./demo-window";
 import { Play } from "./icons";
 import { CrisisNotice, headlineOf, PromptCard, Results } from "./results";
@@ -54,10 +54,12 @@ export default function DemoPanel() {
   // and not on a button — and that one run must not scroll the page or speak.
   const touched = useRef(false);
   const auto = useRef(false);
+  // Set for a run that updates the result in place rather than opening one.
+  const stay = useRef(false);
   const windowRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
 
-  const submit = useCallback(async (example: Example) => {
+  const submit = useCallback(async (example: Example, decision: Decision | null = null) => {
     // One run at a time. They take milliseconds, so this only ever drops a
     // double click.
     if (running.current) return;
@@ -71,7 +73,7 @@ export default function DemoPanel() {
     }
     running.current = true;
     try {
-      const result = await runPipeline(py, example.text, example.toolCall ?? null);
+      const result = await runPipeline(py, example.text, example.toolCall ?? null, decision);
       if (!alive.current) return;
       setResults((prev) => ({ ...prev, [example.id]: result }));
       setShownId(example.id);
@@ -119,8 +121,9 @@ export default function DemoPanel() {
   // above the fold after reading to the bottom of a long one.
   useEffect(() => {
     if (!latest) return;
-    if (auto.current) {
+    if (auto.current || stay.current) {
       auto.current = false;
+      stay.current = false;
       return;
     }
     const stacked = !window.matchMedia(SIDE_BY_SIDE).matches;
@@ -152,6 +155,24 @@ export default function DemoPanel() {
 
   const run = (example: Example) => {
     touched.current = true;
+    void submit(example);
+  };
+
+  // A decision, or going back to try the other one, changes a result the
+  // visitor is already reading. It must not scroll them back to the top of it.
+  const decide = (example: Example, approved: boolean) => {
+    const id = results[example.id]?.approval?.id;
+    if (!id || !example.approval) return;
+    stay.current = true;
+    void submit(example, {
+      id,
+      approved,
+      decided_by: example.approval.approver.name,
+      note: approved ? "" : example.approval.denyNote,
+    });
+  };
+  const reset = (example: Example) => {
+    stay.current = true;
     void submit(example);
   };
 
@@ -209,6 +230,8 @@ export default function DemoPanel() {
             position={at + 1}
             total={listed.length}
             onNext={run}
+            onDecide={decide}
+            onReset={reset}
           />
         ) : (
           <div className="preview">

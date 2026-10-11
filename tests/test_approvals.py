@@ -216,6 +216,44 @@ async def test_approved_retry_executes_action():
     assert agent.calls == 1
 
 
+async def test_a_denial_carries_the_reason_and_never_redeems():
+    """The person who says no gets to say why, and the requester can read it."""
+    store = InMemoryApprovalStore()
+    agent = CountingAgent()
+    sa = SecureAgent(agent, policies=[BeforeGatePolicy()], approval_store=store)
+
+    with pytest.raises(ActionBlockedError) as excinfo:
+        await sa.invoke({"input": "hi"})
+    approval_id = excinfo.value.approval_id
+
+    decided = await store.decide(
+        approval_id, approved=False, decided_by="dana", note="external list; goes via finance"
+    )
+    assert decided is not None
+    assert decided.decision_note == "external list; goes via finance"
+    stored = await store.get(approval_id)
+    assert stored is not None
+    assert (stored.status.value, stored.decided_by, stored.decision_note) == (
+        "denied",
+        "dana",
+        "external list; goes via finance",
+    )
+
+    with pytest.raises(ActionBlockedError):
+        await sa.invoke({"input": "hi"}, approval_id=approval_id)
+    assert agent.calls == 0
+
+
+def test_a_record_written_before_the_note_existed_still_loads():
+    from events.approvals import ApprovalRecord
+
+    data = ApprovalRecord(
+        session_id="s", agent_id="a", action="invoke", reason="r", action_hash="h"
+    ).to_dict()
+    del data["decision_note"]
+    assert ApprovalRecord.from_dict(data).decision_note == ""
+
+
 async def test_approval_is_single_use():
     store = InMemoryApprovalStore()
     sa = SecureAgent(CountingAgent(), policies=[BeforeGatePolicy()], approval_store=store)
@@ -362,12 +400,14 @@ def test_decide_endpoint_resolves_and_emits_event(api):
 
     resp = api.post(
         f"/v1/approvals/{record.approval_id}/decide",
-        json={"approved": True, "decided_by": "alice"},
+        json={"approved": True, "decided_by": "alice", "note": "checked the recipient"},
     )
 
     assert resp.status_code == 200
     assert resp.json()["status"] == "approved"
     assert resp.json()["decided_by"] == "alice"
+    assert resp.json()["decision_note"] == "checked the recipient"
+    assert api.app.state.event_store.events[0].payload["note"] == "checked the recipient"
     events = api.app.state.event_store.events
     assert len(events) == 1
     assert events[0].event_type == EventType.APPROVAL_RESOLVED

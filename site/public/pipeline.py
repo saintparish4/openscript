@@ -15,6 +15,7 @@ import time
 
 logging.disable(logging.CRITICAL)  # the policies log every finding; the UI is the report
 
+from events.approvals import InMemoryApprovalStore
 from events.writer import EventWriter
 from sdk import (
     ActionBlockedError,
@@ -38,6 +39,7 @@ from sdk.observability.risk import aggregate_risk
 TOOL_RULES = ToolRules.model_validate(
     {
         "rules": {
+            # What a support agent may refund without a lead signing it off.
             "refund_tool": {"arg_constraints": {"max_amount": 100}},
             "delete_account": {"deny": True},
             "send_email": {"requires_approval": True},
@@ -295,6 +297,15 @@ _FIREWALL = ToolFirewallPolicy(rules=TOOL_RULES)
 _TOOL_RUNS: list = []
 _TOOLS: dict = {}
 
+# One store for every tool, in this tab's memory: the person deciding and the
+# call waiting on them are in the same process here, which is the one case the
+# in-memory store is for. A real deployment decides over the server and needs
+# Redis.
+_APPROVALS = InMemoryApprovalStore()
+# What the firewall recorded when it held a call, by approval id. A denied call
+# is never retried, so this is the only place its row can come from.
+_HELD: dict = {}
+
 
 def _tool(name: str) -> SecureTool:
     if name not in _TOOLS:
@@ -303,7 +314,7 @@ def _tool(name: str) -> SecureTool:
             _TOOL_RUNS.append(name)
             return f"{name} ran"
 
-        _TOOLS[name] = SecureTool(run, [_FIREWALL], name=name)
+        _TOOLS[name] = SecureTool(run, [_FIREWALL], name=name, approval_store=_APPROVALS)
     return _TOOLS[name]
 
 
@@ -323,11 +334,19 @@ async def run_pipeline(payload_json: str) -> str:
 
     Returns JSON: the per-policy rows, the response the caller would have
     received, the aggregated risk, and how long the pipeline itself took.
+
+    A held tool call comes back with `approval: {"id", "status": "pending"}`.
+    Sending the same submission again with `"approval": {"id", "approved",
+    "decided_by", "note"}` is the human's decision: it is written to the
+    approval store, and an approved call is retried with that id, which is the
+    SDK's retry-after-approval and nothing else. The page keeps no state
+    between calls, so the reply is produced again to rebuild the result.
     """
     await _ensure_started()
     payload = json.loads(payload_json)
     text = payload.get("text", "")
     tool_call = payload.get("tool_call")
+    decision = payload.get("approval")
 
     before = len(_SINK.rows)
     blocked_by = ""
@@ -348,20 +367,64 @@ async def run_pipeline(payload_json: str) -> str:
     # The agent only gets to attempt a tool call if the prompt survived the
     # input gates — which is the point of running them first.
     attempted_tool = None
+    approval = None
     if tool_call is not None and not blocked_by:
         name = tool_call["name"]
         rule = TOOL_RULES.rules.get(name)
         runs_before = len(_TOOL_RUNS)
-        try:
-            _, tool_ctx = await _tool(name).call_with_context(tool_call.get("args", {}))
-        except ActionBlockedError as exc:
-            tool_ctx = exc.context
-            blocked_reason = exc.reason
-            # A pending approval is a hold, not a refusal: the reply stands and
-            # the page says so. Only a deny counts as blocked.
-            if not exc.approval_id:
-                blocked_by = "tool_firewall"
-        ctx.metadata["tool_firewall"] = tool_ctx.metadata["tool_firewall"]
+        firewall_meta = None
+        approval_id = ""
+
+        if decision:
+            # The human's answer. decide() refuses an id that is unknown,
+            # already decided or expired, and so does this.
+            approval_id = str(decision.get("id", ""))
+            firewall_meta = _HELD.get(approval_id)
+            try:
+                record = await _APPROVALS.decide(
+                    approval_id,
+                    bool(decision.get("approved")),
+                    str(decision.get("decided_by", "")),
+                    str(decision.get("note", "")),
+                )
+            except ValueError:
+                record = None
+            if record is None:
+                approval = {"id": approval_id, "status": "spent", "decided_by": "", "note": ""}
+            else:
+                approval = {
+                    "id": approval_id,
+                    "status": record.status.value,
+                    "decided_by": record.decided_by,
+                    "note": record.decision_note,
+                }
+
+        # A denied or unusable approval ends here: the call is not made again.
+        if approval is None or approval["status"] == "approved":
+            try:
+                _, tool_ctx = await _tool(name).call_with_context(
+                    tool_call.get("args", {}), approval_id=approval_id
+                )
+                firewall_meta = tool_ctx.metadata["tool_firewall"]
+                if approval is not None:
+                    _HELD.pop(approval_id, None)
+            except ActionBlockedError as exc:
+                firewall_meta = exc.context.metadata["tool_firewall"]
+                blocked_reason = exc.reason
+                # A pending approval is a hold, not a refusal: the reply stands
+                # and the page says so. Only a deny counts as blocked.
+                if exc.approval_id:
+                    _HELD[exc.approval_id] = firewall_meta
+                    approval = {
+                        "id": exc.approval_id,
+                        "status": "pending",
+                        "decided_by": "",
+                        "note": "",
+                    }
+                else:
+                    blocked_by = "tool_firewall"
+        if firewall_meta is not None:
+            ctx.metadata["tool_firewall"] = firewall_meta
         attempted_tool = {
             "name": name,
             "args": tool_call.get("args", {}),
@@ -405,6 +468,9 @@ async def run_pipeline(payload_json: str) -> str:
             "blocked_reason": blocked_reason,
             "stage": stage,
             "tool_call": attempted_tool,
+            # None unless the call needed a human: then who it is waiting on,
+            # or what they decided and why.
+            "approval": approval,
             "crisis": _needs_crisis_support(ctx.metadata),
             "rows": _rows(ctx.metadata, blocked_by, reached),
             "risk": risk,

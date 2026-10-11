@@ -91,6 +91,9 @@ class ApprovalRecord:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime = field(default_factory=_new_expiry)
     decided_by: str = ""
+    #: What the person deciding said about it. A denial with no reason sends
+    #: the requester back to guess; this is where the reason travels.
+    decision_note: str = ""
 
     @property
     def expired(self) -> bool:
@@ -116,6 +119,8 @@ class ApprovalRecord:
             created_at=datetime.fromisoformat(data["created_at"]),
             expires_at=datetime.fromisoformat(data["expires_at"]),
             decided_by=data.get("decided_by", ""),
+            # Absent from records written before the field existed.
+            decision_note=data.get("decision_note", ""),
         )
 
 
@@ -133,11 +138,12 @@ class ApprovalStore(Protocol):
     async def list_pending(self) -> list[ApprovalRecord]: ...
 
     async def decide(
-        self, approval_id: str, approved: bool, decided_by: str = ""
+        self, approval_id: str, approved: bool, decided_by: str = "", note: str = ""
     ) -> ApprovalRecord | None:
         """Resolve a pending record. Returns the updated record, or None when
         the id is unknown. Raises ValueError when the record is no longer
-        pending (already decided or expired)."""
+        pending (already decided or expired). *note* is the decider's reason,
+        kept on the record as ``decision_note``."""
         ...
 
     async def consume(self, approval_id: str, expected_hash: str) -> bool:
@@ -170,7 +176,7 @@ class InMemoryApprovalStore:
         return [replace(r) for r in self._records.values() if r.status == ApprovalStatus.PENDING]
 
     async def decide(
-        self, approval_id: str, approved: bool, decided_by: str = ""
+        self, approval_id: str, approved: bool, decided_by: str = "", note: str = ""
     ) -> ApprovalRecord | None:
         record = self._records.get(approval_id)
         if record is None:
@@ -179,6 +185,7 @@ class InMemoryApprovalStore:
             raise ValueError(f"approval '{approval_id}' is not pending")
         record.status = ApprovalStatus.APPROVED if approved else ApprovalStatus.DENIED
         record.decided_by = decided_by
+        record.decision_note = note
         return replace(record)
 
     async def consume(self, approval_id: str, expected_hash: str) -> bool:
@@ -254,7 +261,7 @@ class RedisApprovalStore:
         return pending
 
     async def decide(
-        self, approval_id: str, approved: bool, decided_by: str = ""
+        self, approval_id: str, approved: bool, decided_by: str = "", note: str = ""
     ) -> ApprovalRecord | None:
         from redis.exceptions import WatchError
 
@@ -278,6 +285,7 @@ class RedisApprovalStore:
                         raise ValueError(f"approval '{approval_id}' is not pending")
                     record.status = ApprovalStatus.APPROVED if approved else ApprovalStatus.DENIED
                     record.decided_by = decided_by
+                    record.decision_note = note
                     pipe.multi()
                     pipe.set(key, json.dumps(record.to_dict()), ex=self._ttl_seconds(record))
                     pipe.srem(self._pending_key, approval_id)

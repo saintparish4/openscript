@@ -1,4 +1,4 @@
-import type { PipelineResult, ToolCall } from "./types";
+import type { Decision, PipelineResult, ToolCall } from "./types";
 
 // Pinned deliberately: this version decides which pydantic and pyyaml the
 // browser gets, which is what the dependency floors in pyproject.toml are
@@ -69,8 +69,9 @@ export async function runPipeline(
   py: PyodideApi,
   text: string,
   toolCall: ToolCall | null = null,
+  approval: Decision | null = null,
 ): Promise<PipelineResult> {
   const run = py.globals.get("run_pipeline");
   if (!run) throw new Error("the pipeline module did not define run_pipeline");
-  return JSON.parse(await run(JSON.stringify({ text, tool_call: toolCall })));
+  return JSON.parse(await run(JSON.stringify({ text, tool_call: toolCall, approval })));
 }

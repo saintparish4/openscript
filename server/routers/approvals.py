@@ -13,6 +13,8 @@ router = APIRouter(prefix="/v1", tags=["approvals"])
 class ApprovalDecisionRequest(BaseModel):
     approved: bool
     decided_by: str = ""
+    #: The decider's reason. Returned on the record and written to the event.
+    note: str = ""
 
 
 def _get_store(request: Request) -> ApprovalStore:
@@ -38,7 +40,7 @@ async def decide_approval(
 ) -> dict:
     """Approve or deny a pending approval and emit APPROVAL_RESOLVED."""
     try:
-        record = await store.decide(approval_id, req.approved, req.decided_by)
+        record = await store.decide(approval_id, req.approved, req.decided_by, req.note)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if record is None:
@@ -57,6 +59,7 @@ async def decide_approval(
                         "action": record.action,
                         "status": record.status.value,
                         "decided_by": record.decided_by,
+                        "note": record.decision_note,
                     },
                     sequence_num=0,  # decided outside the session's sequence
                 )

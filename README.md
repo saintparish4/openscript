@@ -18,7 +18,7 @@ proves it. That is possible because all nine built-in policies are pure-local he
 property enforced in CI rather than merely asserted. Requires a browser with WebAssembly and
 access to the jsDelivr CDN (which serves the Pyodide runtime).
 
-The gallery is eleven prompts from three fictional users — a customer, a contractor and a support agent. Each one shows what the sender is asking for, what reaching the agent unchecked would have meant, and what the pipeline did instead; tool prompts show the call the firewall refused next to the rule it hit, and the disguised jailbreak names the obfuscation that had to be undone before any pattern matched.
+The gallery is eleven prompts from three fictional users — a customer, a contractor and a support agent. Each one shows what the sender is asking for, what reaching the agent unchecked would have meant, and what the pipeline did instead; tool prompts show the call the firewall refused next to the rule it hit, the held call can be approved or denied as the team lead it was sent to, to see it run once or come back with a reason, and the disguised jailbreak names the obfuscation that had to be undone before any pattern matched.
 
 To run it locally instead, `site/` is the source for that demo:
 
@@ -231,7 +231,7 @@ except ActionBlockedError as e:
 result = await transfer.call(call, approval_id=approval_id)
 ```
 
-Approvals are **single-use**, expire after 1 hour, and are bound to the tool's name and its exact arguments — an approval for $500 to one account cannot be spent on another account or a larger amount, and cannot be replayed. A call that breaks an argument rule is denied outright rather than sent for approval.
+Approvals are **single-use**, expire after 1 hour, and are bound to the tool's name and its exact arguments — an approval for $500 to one account cannot be spent on another account or a larger amount, and cannot be replayed. A call that breaks an argument rule is denied outright rather than sent for approval. Whoever decides can say why: `store.decide(approval_id, approved=False, decided_by="dana", note="...")`, or `note` in the body of `POST /v1/approvals/{id}/decide`, is kept on the record as `decision_note` and written to the `approval_resolved` event.
 
 `SecureAgent.invoke(..., approval_id=...)` redeems an approval the same way when a custom policy gates the whole agent call. There the approval is bound to the agent's input, not to anything the agent goes on to do.
 

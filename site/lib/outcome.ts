@@ -27,6 +27,9 @@ export function rewrites(result: PipelineResult): { input: boolean; output: bool
 
 export function outcomeOf(result: PipelineResult): Outcome {
   if (result.blocked) return { tone: "deny", label: "Blocked" };
+  // A human's decision outranks the hold it resolves.
+  if (result.approval?.status === "approved") return { tone: "clean", label: "Approved" };
+  if (result.approval?.status === "denied") return { tone: "deny", label: "Denied" };
   if (result.rows.some((r) => r.verdict === "approval")) return { tone: "approval", label: "Held" };
   const { input, output } = rewrites(result);
   if (input || output) return { tone: "mutate", label: "Redacted" };
@@ -73,8 +76,12 @@ export function stagesOf(result: PipelineResult): Stage[] {
     stages.push(
       result.blocked && result.stage === "tool"
         ? { name: "Tool call", state: "acted", note: "Refused" }
-        : held
-          ? { name: "Tool call", state: "acted", note: "Held" }
+        : result.approval?.status === "approved"
+          ? { name: "Tool call", state: "acted", note: "Approved, ran" }
+          : result.approval?.status === "denied"
+            ? { name: "Tool call", state: "acted", note: "Denied" }
+            : held
+              ? { name: "Tool call", state: "acted", note: "Held" }
           : { name: "Tool call", state: "passed", note: result.tool_call.executed ? "Ran" : "Checked" },
     );
   }

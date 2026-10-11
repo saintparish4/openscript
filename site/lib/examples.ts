@@ -27,6 +27,9 @@ export interface Example {
    *  verify.mjs runs every one of these against the real policies. */
   withGateway: string;
   toolCall?: ToolCall;
+  /** For a prompt whose tool call is held: who it goes to, and what they say
+   *  if they turn it down. The visitor makes the decision in their place. */
+  approval?: { approver: Persona; denyNote: string };
   /** The policy this example is meant to demonstrate, asserted by verify.mjs. */
   expect: string;
 }

@@ -139,7 +139,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | What | Number |
 |---|---|
-| Tests | 667 |
+| Tests | 669 |
 | Labelled eval prompts | 1,799 across 8 corpora (348 written here, 1,451 public) |
 | Built-in policies | 9, all pure-local |
 | Opt-in policies | 1 (`SemanticPolicy`), head not trained, no number claimed |

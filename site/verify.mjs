@@ -118,6 +118,65 @@ for (const ex of EXAMPLES) {
   }
 
   // A tool chip has to show the call it refused, or the verdict is unverifiable.
+  // A held call has somewhere to go. The page lets a visitor answer it as the
+  // approver, and says three things about what follows: an approval runs the
+  // tool, a denial does not and carries the reason, and neither can be used
+  // twice. Each is checked against the real approval store.
+  if (ex.approval) {
+    const submit = async (approval) =>
+      JSON.parse(await run(JSON.stringify({ text: ex.text, tool_call: ex.toolCall, approval })));
+    const answer = (id, approved) => ({
+      id,
+      approved,
+      decided_by: ex.approval.approver.name,
+      note: approved ? "" : ex.approval.denyNote,
+    });
+    const complain = (msg) => {
+      console.error(`  ${ex.id}: ${msg}`);
+      ok = false;
+    };
+
+    if (!(ex.approval.approver?.name && ex.approval.approver?.role && ex.approval.denyNote)) {
+      complain("approval needs an approver with a name and a role, and a denyNote");
+    }
+    if (result.approval?.status !== "pending" || !result.approval?.id) {
+      complain("held, but the pipeline issued no pending approval");
+    } else {
+      const yes = await submit(answer(result.approval.id, true));
+      if (yes.approval?.status !== "approved" || yes.tool_call?.executed !== true) {
+        complain("approved, but the tool did not run");
+      }
+      const again = await submit(answer(result.approval.id, true));
+      if (again.tool_call?.executed !== false || again.approval?.status === "approved") {
+        complain("a spent approval ran the tool a second time");
+      }
+
+      const second = await submit(null);
+      const no = await submit(answer(second.approval?.id, false));
+      if (no.approval?.status !== "denied" || no.tool_call?.executed !== false) {
+        complain("denied, but the tool ran or the denial was not recorded");
+      }
+      if (no.approval?.note !== ex.approval.denyNote) {
+        complain("the denial did not carry the approver's reason");
+      }
+
+      // An approval is for the call that was asked about, not for the tool.
+      const third = await submit(null);
+      const other = JSON.parse(
+        await run(
+          JSON.stringify({
+            text: ex.text,
+            tool_call: { name: ex.toolCall.name, args: { to: "someone-else@example.com" } },
+            approval: answer(third.approval?.id, true),
+          }),
+        ),
+      );
+      if (other.tool_call?.executed !== false) {
+        complain("an approval for one recipient was spent on another");
+      }
+    }
+  }
+
   if (ex.toolCall && result.tool_call?.name !== ex.toolCall.name) {
     console.error(`  ${ex.id}: pipeline did not report the attempted tool call`);
     ok = false;

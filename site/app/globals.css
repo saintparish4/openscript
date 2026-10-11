@@ -918,6 +918,100 @@ kbd {
   letter-spacing: 0;
 }
 
+/* ── A held call, and the person it waits on ───────────────────────── */
+
+.approval {
+  --flow: var(--approval);
+  padding: 0.875rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--flow) 30%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--flow) 5%, transparent);
+}
+.approval--approved { --flow: var(--allow); }
+.approval--denied { --flow: var(--deny); }
+
+.approval__steps {
+  display: grid;
+  gap: 1rem;
+  margin: 0 0 0.25rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: hop;
+}
+
+/* A numbered rail down the left: each step is a hop the call makes. */
+.approval__step {
+  position: relative;
+  padding-left: 2rem;
+  counter-increment: hop;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.approval__step::before {
+  content: counter(hop);
+  position: absolute;
+  top: 0.05rem;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 1.375rem;
+  height: 1.375rem;
+  border: 1px solid color-mix(in srgb, var(--flow) 50%, transparent);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--flow);
+  font: 500 0.6875rem/1 var(--mono);
+}
+.approval__step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 1.6rem;
+  bottom: -0.85rem;
+  left: 0.6875rem;
+  border-left: 1px dashed color-mix(in srgb, var(--flow) 40%, transparent);
+}
+.approval__step strong { display: block; font-weight: 500; }
+.approval__step p { margin: 0.3rem 0 0; color: var(--muted); }
+.approval__step code { color: var(--grey-100); font: 400 0.78rem var(--mono); letter-spacing: 0; }
+.approval__step .toolcall__code { margin-top: 0.3rem; color: #fff; font-size: 0.8125rem; }
+
+.approval__waiting {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  color: #fff !important;
+}
+
+.spinner {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.2rem;
+  border: 2px solid color-mix(in srgb, var(--approval) 30%, transparent);
+  border-top-color: var(--approval);
+  border-radius: 50%;
+}
+
+.approval__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.625rem; }
+.approval__actions .btn:disabled { opacity: 0.6; cursor: default; }
+.approval__note { font-size: 0.8125rem; }
+
+.approval__verdict { font-weight: 500; }
+.approval__verdict--yes { color: var(--allow); }
+.approval__verdict--no { color: var(--deny); }
+
+.approval__reason {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 2px solid var(--deny);
+  background: color-mix(in srgb, var(--deny) 7%, transparent);
+  color: #fff;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.approval > .btn { margin-top: 0.875rem; max-width: 100%; height: auto; min-height: 2.25rem; padding-block: 0.5rem; white-space: normal; text-align: left; }
+
 .diff { display: grid; gap: 0.75rem; }
 
 .diff__text {
@@ -1528,6 +1622,14 @@ kbd {
   .cast__people li:nth-child(3) { animation-delay: 0.37s; }
 
   .steps[open] .verdicts { animation: settle 0.25s ease; }
+
+  /* The wait is the point of a held call, so it is the one thing on the page
+     that keeps moving until someone answers it. */
+  .spinner { animation: spin 0.9s linear infinite; }
+  /* The hops arrive in order, and the answer lands after the question. */
+  .approval__step { animation: rise-sm 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  .approval__step:nth-child(2) { animation-delay: 0.25s; }
+  .approval__step:nth-child(3) { animation-delay: 0.7s; }
   .btn svg { transition: transform 0.15s; }
   .onward .btn:hover svg { transform: translateX(2px); }
 
@@ -1556,6 +1658,10 @@ kbd {
 
 @keyframes sheen {
   to { transform: translateX(100%); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes pop {

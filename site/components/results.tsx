@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { EXAMPLES, type Example } from "@/lib/examples";
 import { outcomeOf, rewrites, stagesOf } from "@/lib/outcome";
 import type { AttemptedToolCall, PipelineResult } from "@/lib/types";
+import { ApprovalFlow } from "./approval-flow";
 import { DiffView } from "./diff-view";
 import { ArrowRight } from "./icons";
 import { VerdictRow } from "./verdict-row";
@@ -125,7 +126,7 @@ export function CrisisNotice({ result }: { result: PipelineResult }) {
 /**
  * The attempted call, spelled out next to the rule it was held to.
  *
- * "Blocked by the tool firewall" is a claim; refund_tool(amount=9999) against
+ * "Blocked by the tool firewall" is a claim; refund_tool(amount=129) against
  * max_amount 100 is the reason, and it is the part that shows the check is a
  * rule rather than a vibe. Without it a visitor has to take the verdict on
  * trust, which is the thing this page exists not to ask for.
@@ -152,7 +153,7 @@ function ToolCallView({ call }: { call: AttemptedToolCall }) {
       )}
       <p className="toolcall__rule">
         {call.executed
-          ? "The tool ran."
+          ? "The tool ran, once. That is read off the tool, not inferred from the verdict."
           : "The tool itself never ran. That is read off the tool, not inferred from the verdict."}
       </p>
     </div>
@@ -184,6 +185,22 @@ export function headlineOf(result: PipelineResult): Headline {
             ? `The model replied, but the ${result.blocked_by} policy stopped the response from being returned.`
             : `The ${result.blocked_by} policy stopped this before the model ever saw it.`,
       reason: result.blocked_reason,
+    };
+  }
+
+  const who = result.approval?.decided_by || "A human";
+  if (result.approval?.status === "approved") {
+    return {
+      title: "Approved",
+      line: `${who} approved the call, so it went back to the session that asked and the tool ran, once.`,
+      reason: result.approval.note,
+    };
+  }
+  if (result.approval?.status === "denied") {
+    return {
+      title: "Denied",
+      line: `${who} turned the call down. The tool never ran, and the reason went back with the refusal.`,
+      reason: result.approval.note,
     };
   }
 
@@ -232,6 +249,10 @@ interface ResultsProps {
   position?: number;
   total?: number;
   onNext?: (example: Example) => void;
+  /** Answer a held call as the person it was sent to. */
+  onDecide?: (example: Example, approved: boolean) => void;
+  /** Put a decided call back to waiting, to try the other answer. */
+  onReset?: (example: Example) => void;
 }
 
 export function Results({
@@ -241,6 +262,8 @@ export function Results({
   position = 0,
   total = EXAMPLES.length,
   onNext,
+  onDecide,
+  onReset,
 }: ResultsProps) {
   const { tone } = outcomeOf(result);
   const headline = headlineOf(result);
@@ -279,6 +302,21 @@ export function Results({
       </dl>
 
       {result.tool_call ? <ToolCallView call={result.tool_call} /> : null}
+
+      {result.approval && result.tool_call && example.approval ? (
+        <ApprovalFlow
+          // A new request, or a decision on this one, is a new flow: the
+          // pressed-button state of the last one must not carry over.
+          key={`${result.approval.id}:${result.approval.status}`}
+          approval={result.approval}
+          call={result.tool_call}
+          sender={example.persona.name}
+          approver={example.approval.approver}
+          denyNote={example.approval.denyNote}
+          onDecide={onDecide ? (approved) => onDecide(example, approved) : undefined}
+          onReset={onReset ? () => onReset(example) : undefined}
+        />
+      ) : null}
 
       <DiffView
         before={result.prompt}
