@@ -112,11 +112,16 @@ CORPORA: dict[str, tuple[str, PolicyFactory]] = {
     # deepset/prompt-injections, whole and unfiltered. Nobody in this repo
     # chose a row of it, wrote a label in it, or fixed anything against it.
     "public_deepset": ("Public: deepset/prompt-injections (any policy)", _all_patterns),
+    # leolee99/NotInject, whole: 339 benign prompts built around the trigger
+    # words guardrails over-block on ("ignore", "bypass", "jailbreak"). It has
+    # no attacks; its only number is the false-positive rate, measured on
+    # near-misses that somebody else wrote.
+    "public_notinject": ("Public: NotInject, benign only (any policy)", _all_patterns),
 }
 
 #: Corpora whose rows are never printed, so reading the misses cannot turn into
 #: fixing against them. Their per-case results are still written, by id.
-SEALED = {"holdout", "public_deepset"}
+SEALED = {"holdout", "public_deepset", "public_notinject"}
 
 #: Corpora where the semantic layer is a fair comparison: the ones scored
 #: against the whole input side rather than a single pattern bank.

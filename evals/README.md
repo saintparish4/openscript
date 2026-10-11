@@ -27,6 +27,7 @@ number that decides whether anyone leaves a security tool switched on.
 | `paraphrase_dev.jsonl` | Attacks written from intent rather than from the pattern bank. **Used to find gaps, and fixed against** |
 | `holdout.jsonl` | The same idea, written after the last round of fixes. **Never fixed against** |
 | `public_deepset.jsonl` | [`deepset/prompt-injections`](https://huggingface.co/datasets/deepset/prompt-injections), all 662 rows, unfiltered. **Nobody here wrote a row or a label in it, and it is never fixed against** |
+| `public_notinject.jsonl` | [`leolee99/NotInject`](https://huggingface.co/datasets/leolee99/NotInject) (MIT, from the InjecGuard paper, arXiv 2410.22770), all 339 rows. Benign only: prompts built around the words guardrails over-block on. **Never fixed against** |
 
 Each row is `{"text", "label", "category", "tag", "expect"}`.
 
@@ -39,6 +40,18 @@ Each row is `{"text", "label", "category", "tag", "expect"}`.
   worth recording without stopping the conversation. Counting those as misses
   would hide a decision, and counting them as detections would inflate the
   headline, so they get their own column.
+
+## Who wrote the rows
+
+The first five files were written in this repo, by the author of the patterns
+they score, alongside those patterns. That is fine for what the first three
+are (conformance tests) and a real limit on the benign rows: negatives chosen
+by the person who wrote the rules test the near-misses that person thought of.
+
+The two `public_*` files are the answer to that. They are copied whole from
+their sources (`deepset/prompt-injections`, Apache-2.0, and
+`leolee99/NotInject` at revision `847ae76`, MIT), with only the field names changed,
+and nothing in `sdk/` is ever edited because of a row in them.
 
 ## Dev and holdout
 
@@ -53,7 +66,7 @@ left alone. `public_deepset.jsonl` goes one step further: it was not written
 here at all. **Those two numbers are the ones worth believing**, and they are the
 numbers this project publishes, unflattering as they are. If you fix a pattern
 because of a row in the holdout, move the row into `paraphrase_dev.jsonl` and
-write a new holdout. The public set is not edited at all.
+write a new holdout. The public sets are not edited at all.
 
 ## What the results mean
 

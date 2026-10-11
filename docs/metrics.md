@@ -19,8 +19,9 @@ and `tests/test_evals.py` fails the build if these regress.
 | Paraphrase dev (any policy) | 39/48 (81%) | — | 0/40 (0%) |
 | **Held out (any policy)** | **1/23 (4%)** | — | **0/20 (0%)** |
 | **Public: `deepset/prompt-injections` (any policy)** | **4/263 (2%)** | — | **0/399 (0%)** |
+| **Public: `NotInject`, benign only (any policy)** | — | — | **3/339 (1%)** |
 
-Read those last three rows first.
+Read those last four rows first.
 
 - The first three corpora are the shapes the patterns were written for. 100% on
   them means the bank does what it says, not that it generalizes.
@@ -40,6 +41,14 @@ Read those last three rows first.
   the largest false-positive check in the repo that was not written next to the
   patterns, though they are ordinary questions and so easier negatives than
   the 154 below.
+- **NotInject** is [`leolee99/NotInject`](https://huggingface.co/datasets/leolee99/NotInject)
+  (MIT), all 339 rows: benign prompts written around the trigger words
+  guardrails over-block on, so it has no detection rate, only a false-positive
+  rate. **3/339 (0.9%, 0.3% to 2.6%)**, all three blocked by
+  `PromptInjectionPolicy`: two role-play prompts and one technical question.
+  84 of its rows are not in English and could not trip an English pattern, so
+  on the 255 that could it is 3/255 (1.2%). The three are not fixed: narrowing
+  a pattern because of a row here would turn the set into a dev corpus.
 - With counts this small the intervals matter: 1/23 is 1% to 21%, 4/263 is 1%
   to 4%, and 0/154 puts the false-positive rate below about 2.4% (95%, Wilson).
   `make evals` prints them.
@@ -47,11 +56,16 @@ Read those last three rows first.
   block (suicidal intent earns crisis resources, not a refusal). They are
   counted separately rather than folded into either number.
 
-**0 false positives across all 154 benign prompts written here** that share vocabulary with the
+**0 false positives across the 154 benign prompts written here** that share vocabulary with the
 attacks — reporting on malware, teaching about phishing, defending against
 ransomware, quoting a threat in an HR report. That number is worth as much as
 the detection rate: a gateway that blocks the security team is one nobody keeps
 switched on.
+
+Those 154 were written in this repo by the person who wrote the patterns, in
+the same sitting, so they cannot surprise the patterns the way someone else's
+text can. That is what the two public rows are for, and it is why the claim is
+"0 of 154 here, 0 of 399 and 3 of 339 elsewhere" and not "no false positives".
 
 ### Obfuscation resistance
 
@@ -108,8 +122,8 @@ section scrolls into view — which on the current layout is immediately.
 
 | What | Number |
 |---|---|
-| Tests | 661 |
-| Labelled eval prompts | 1,010 across 6 corpora (348 written here, 662 public) |
+| Tests | 664 |
+| Labelled eval prompts | 1,349 across 7 corpora (348 written here, 1,001 public) |
 | Built-in policies | 9, all pure-local |
 | Opt-in policies | 1 (`SemanticPolicy`), head not trained, no number claimed |
 | Policies that make a network call | 0, enforced by `tests/test_audit.py` |
@@ -119,6 +133,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-11 | Public benign corpus added: `NotInject`, 3/339 wrongly blocked (0.9%). The first false positives measured, on prompts nobody here wrote |
 | 2026-10-11 | Public corpus added: `deepset/prompt-injections`, 4/263 attacks blocked (2%), 0/399 benign blocked. Refused actions are now written to the audit trail |
 | 2026-09-20 | Demo gallery gained an obfuscated-jailbreak chip, per-chip "what this was reaching for" copy, and the refused tool call spelled out |
 | 2026-09-20 | Normalization added; injection detection 48% → 100% on its corpus, obfuscated 79% → 100%, false positives 3% → 0%. Held-out generalization measured for the first time: 4% |

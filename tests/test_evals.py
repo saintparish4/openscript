@@ -34,6 +34,11 @@ FLOORS = {
     # detection floor is 0 for the same reason. Its 399 benign rows are the
     # largest false-positive check here that nobody in this repo wrote.
     "public_deepset": (0.0, 0.01),
+    # leolee99/NotInject, whole: benign prompts built around trigger words, so
+    # it has no detection rate at all. Measured at 3/339 and published as that.
+    # The ceiling is the measured rate, not zero: it stops the number getting
+    # worse, and a pattern is never narrowed because of a row in this file.
+    "public_notinject": (0.0, 0.01),
 }
 
 
@@ -116,7 +121,10 @@ class _Crashes(BasePolicy):
 @pytest.mark.parametrize("corpus", list(CORPORA))
 def test_an_oracle_scores_perfectly(corpus: str):
     result = evaluate(corpus, policies=[_Oracle(corpus)])
-    assert result.detected == result.blocking > 0
+    assert result.detected == result.blocking
+    # Every corpus has attacks to detect except the one that is benign by design.
+    assert (result.blocking > 0) != (corpus == "public_notinject")
+    assert result.benign > 0
     assert result.false_positives == 0
     assert result.errors == 0
 
@@ -141,7 +149,8 @@ def test_sealed_corpora_never_print_their_rows():
     for corpus in SEALED:
         texts = {row["text"] for row in load(corpus)}
         result = evaluate(corpus, policies=[BasePolicy()])
-        assert result.misses, f"{corpus} should have misses under a policy that never blocks"
+        if result.attacks:  # a benign-only corpus has nothing for it to miss
+            assert result.misses, f"{corpus} should have misses under a policy that never blocks"
         assert not any(m["text"] in texts for m in result.misses)
         assert not any("text" in case for case in result.cases)
 

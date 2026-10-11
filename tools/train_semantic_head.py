@@ -21,7 +21,7 @@ Public data (downloaded here, never committed) plus this repo's *dev* corpora:
 
 What it never sees
 ------------------
-evals/datasets/holdout.jsonl and evals/datasets/public_deepset.jsonl. Neither is
+evals/datasets/holdout.jsonl, public_deepset.jsonl and public_notinject.jsonl. None is
 read for training, model selection or threshold calibration; the only thing
 taken from them is a set of text hashes, used to drop any training row that
 duplicates one. They are scored once, afterwards, by evals/run.py.
@@ -95,7 +95,7 @@ INJECTION_CATEGORIES = {
 }
 TOXICITY_CATEGORIES = {"violence", "hate_speech", "harassment", "self_harm"}
 DEV_CORPORA = ["prompt_injection", "toxicity", "harmful_request", "paraphrase_dev"]
-NEVER_TRAINED_ON = ["holdout", "public_deepset"]
+NEVER_TRAINED_ON = ["holdout", "public_deepset", "public_notinject"]
 
 # (name, model id, kind). "static" candidates go through model2vec.
 CANDIDATES = [
