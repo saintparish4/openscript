@@ -35,3 +35,58 @@ export function outcomeOf(result: PipelineResult): Outcome {
   if (result.rows.some((r) => r.verdict === "flag")) return { tone: "flag", label: "Flagged" };
   return { tone: "clean", label: "No match" };
 }
+
+/**
+ * The path a call takes, and what happened at each point on it. The gallery is
+ * eleven different verdicts until this is on screen; with it they are the same
+ * four checkpoints, acting in different places.
+ *
+ * `acted` is where a policy did something, `passed` where it looked and let
+ * the call on, `unreached` where the call never got to.
+ */
+export interface Stage {
+  name: string;
+  state: "passed" | "acted" | "unreached";
+  /** One word for what happened here. */
+  note: string;
+}
+
+export function stagesOf(result: PipelineResult): Stage[] {
+  const stoppedAtPrompt = result.blocked && result.stage === "prompt";
+  const { input, output } = rewrites(result);
+  const held = result.rows.some((r) => r.verdict === "approval");
+
+  const stages: Stage[] = [
+    stoppedAtPrompt
+      ? { name: "Prompt", state: "acted", note: "Blocked" }
+      : input
+        ? { name: "Prompt", state: "acted", note: "Redacted" }
+        : { name: "Prompt", state: "passed", note: "Checked" },
+    stoppedAtPrompt
+      ? { name: "Agent", state: "unreached", note: "Never ran" }
+      : { name: "Agent", state: "passed", note: "Ran" },
+  ];
+
+  // Only when the agent reached for a tool: most prompts never do, and an
+  // empty checkpoint on every other result would be noise.
+  if (result.tool_call) {
+    stages.push(
+      result.blocked && result.stage === "tool"
+        ? { name: "Tool call", state: "acted", note: "Refused" }
+        : held
+          ? { name: "Tool call", state: "acted", note: "Held" }
+          : { name: "Tool call", state: "passed", note: result.tool_call.executed ? "Ran" : "Checked" },
+    );
+  }
+
+  stages.push(
+    stoppedAtPrompt
+      ? { name: "Reply", state: "unreached", note: "None" }
+      : result.blocked && result.stage === "response"
+        ? { name: "Reply", state: "acted", note: "Withheld" }
+        : output
+          ? { name: "Reply", state: "acted", note: "Redacted" }
+          : { name: "Reply", state: "passed", note: "Returned" },
+  );
+  return stages;
+}

@@ -49,6 +49,11 @@ export default function DemoPanel() {
   // seconds and the list is on screen for all of them, so a click in that
   // window is the common case, not the edge case — it runs when the boot ends.
   const queued = useRef<Example | null>(null);
+  // Whether the visitor has done anything yet. Until they have, the first
+  // prompt is run for them when the boot ends, so the window opens on a result
+  // and not on a button — and that one run must not scroll the page or speak.
+  const touched = useRef(false);
+  const auto = useRef(false);
   const windowRef = useRef<HTMLDivElement | null>(null);
   const detailRef = useRef<HTMLDivElement | null>(null);
 
@@ -71,8 +76,10 @@ export default function DemoPanel() {
       setResults((prev) => ({ ...prev, [example.id]: result }));
       setShownId(example.id);
       setLatest(result);
-      const { title, line } = headlineOf(result);
-      setSaid(`${example.label}. ${title}. ${line}`);
+      if (!auto.current) {
+        const { title, line } = headlineOf(result);
+        setSaid(`${example.label}. ${title}. ${line}`);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
       setStatus("failed");
@@ -93,6 +100,9 @@ export default function DemoPanel() {
           queued.current = null;
           setQueuedId("");
           void submit(waiting);
+        } else if (!touched.current) {
+          auto.current = true;
+          void submit(EXAMPLES[0]);
         }
       })
       .catch((err: unknown) => {
@@ -109,6 +119,10 @@ export default function DemoPanel() {
   // above the fold after reading to the bottom of a long one.
   useEffect(() => {
     if (!latest) return;
+    if (auto.current) {
+      auto.current = false;
+      return;
+    }
     const stacked = !window.matchMedia(SIDE_BY_SIDE).matches;
     const target = stacked ? detailRef.current : windowRef.current;
     if (!target) return;
@@ -120,12 +134,14 @@ export default function DemoPanel() {
   }, [latest]);
 
   const preview = useCallback((example: Example) => {
+    touched.current = true;
     setSelectedId(example.id);
     setShownId(example.id);
   }, []);
 
   const pickFilter = useCallback(
     (name: string) => {
+      touched.current = true;
       setFilter(name);
       // Keep the selection on something that is still in the list.
       const listed = name ? EXAMPLES.filter((ex) => ex.persona.name === name) : EXAMPLES;
@@ -133,6 +149,11 @@ export default function DemoPanel() {
     },
     [selectedId, preview],
   );
+
+  const run = (example: Example) => {
+    touched.current = true;
+    void submit(example);
+  };
 
   if (status === "failed") {
     return (
@@ -156,6 +177,10 @@ export default function DemoPanel() {
   const outcomes: Record<string, Outcome> = {};
   for (const [id, r] of Object.entries(results)) outcomes[id] = outcomeOf(r);
 
+  // The list as it is filtered, which is the list "next" walks.
+  const listed = filter ? EXAMPLES.filter((ex) => ex.persona.name === filter) : EXAMPLES;
+  const at = listed.findIndex((ex) => ex.id === shown.id);
+
   const footer = booting
     ? progress.message
     : result
@@ -169,14 +194,22 @@ export default function DemoPanel() {
         filter={filter}
         outcomes={outcomes}
         status={footer}
-        onRun={(ex) => void submit(ex)}
+        onRun={run}
         onPreview={preview}
         onFilter={pickFilter}
         windowRef={windowRef}
         detailRef={detailRef}
       >
         {result ? (
-          <Results key={shown.id} result={result} example={shown} />
+          <Results
+            key={shown.id}
+            result={result}
+            example={shown}
+            next={listed[at + 1]}
+            position={at + 1}
+            total={listed.length}
+            onNext={run}
+          />
         ) : (
           <div className="preview">
             <PromptCard example={shown} />
@@ -196,7 +229,7 @@ export default function DemoPanel() {
                 </div>
               ) : null}
 
-              <button type="button" className="btn" onClick={() => void submit(shown)}>
+              <button type="button" className="btn" onClick={() => run(shown)}>
                 <Play size={14} />
                 Run it through the pipeline
               </button>

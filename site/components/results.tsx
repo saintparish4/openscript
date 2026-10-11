@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { Example } from "@/lib/examples";
-import { outcomeOf, rewrites } from "@/lib/outcome";
+import { EXAMPLES, type Example } from "@/lib/examples";
+import { outcomeOf, rewrites, stagesOf } from "@/lib/outcome";
 import type { AttemptedToolCall, PipelineResult } from "@/lib/types";
 import { DiffView } from "./diff-view";
+import { ArrowRight } from "./icons";
 import { VerdictRow } from "./verdict-row";
 
 /**
@@ -200,7 +201,47 @@ export function headlineOf(result: PipelineResult): Headline {
   return { title: "Returned", line: returnedLine(result), reason: "" };
 }
 
-export function Results({ result, example }: { result: PipelineResult; example: Example }) {
+/**
+ * Where on its way through the call was acted on. Every result gets the same
+ * strip, so walking the gallery shows the checkpoints rather than describing
+ * them: the first five stop at the prompt, the last two at the tool.
+ */
+function StageStrip({ result }: { result: PipelineResult }) {
+  const stages = stagesOf(result);
+  return (
+    <ol
+      className={`checkpoints checkpoints--${stages.length}`}
+      aria-label="Where the pipeline acted"
+    >
+      {stages.map((stage) => (
+        <li key={stage.name} className={`checkpoint checkpoint--${stage.state}`}>
+          <span className="checkpoint__name">{stage.name}</span>
+          <span className="checkpoint__note">{stage.note}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+interface ResultsProps {
+  result: PipelineResult;
+  example: Example;
+  /** The prompt after this one in the list as it is filtered, if there is one. */
+  next?: Example;
+  /** Where this one sits in that list, counted from 1. */
+  position?: number;
+  total?: number;
+  onNext?: (example: Example) => void;
+}
+
+export function Results({
+  result,
+  example,
+  next,
+  position = 0,
+  total = EXAMPLES.length,
+  onNext,
+}: ResultsProps) {
   const { tone } = outcomeOf(result);
   const headline = headlineOf(result);
   const ran = result.rows.filter(
@@ -216,6 +257,8 @@ export function Results({ result, example }: { result: PipelineResult; example: 
         <p>{headline.line}</p>
         {headline.reason ? <p className="outcome__reason">{headline.reason}</p> : null}
       </div>
+
+      <StageStrip result={result} />
 
       {/* A badge says a policy fired. It does not say what the agent would
           have done with the prompt, or what the pipeline did instead — which
@@ -279,6 +322,29 @@ export function Results({ result, example }: { result: PipelineResult; example: 
           <dd>{result.events}</dd>
         </div>
       </dl>
+
+      {/* The list is above this on a phone and a long way up on any screen
+          once a result has been read. This is the way on without going back. */}
+      {onNext ? (
+        <div className="onward">
+          {next ? (
+            <button type="button" className="btn" onClick={() => onNext(next)}>
+              Next: {next.label}
+              <ArrowRight size={14} />
+            </button>
+          ) : (
+            <p className="onward__end">
+              That was the last one.{" "}
+              <a href="#policies">What each policy does</a>
+            </p>
+          )}
+          {position ? (
+            <span className="onward__count">
+              {position} of {total}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
