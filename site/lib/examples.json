@@ -11,7 +11,7 @@
     "expect": "threat",
     "attempt": "Stacks three moves at once: cancel the operator's instructions, install a persona with no rules, then ask for the system prompt back.",
     "without": "The agent adopts the caller's rules instead of yours, and hands over the instructions that were supposed to constrain it — including anything private written into them.",
-    "withGateway": "The prompt is scored before the agent runs, so the model never sees it. The pipeline stops at the policy that denied — every check after it is marked not reached, which is why the table below has gaps. The refusal itself is still written to the audit trail, with the score and the policy that stopped it."
+    "withGateway": "The prompt is scored before the agent runs, so the model never sees it. The pipeline stops at the policy that denied — every check after it is marked not reached, which is what the list of checks under this shows. The refusal itself is still written to the audit trail, with the score and the policy that stopped it."
   },
   {
     "id": "obfuscated",

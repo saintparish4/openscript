@@ -40,7 +40,7 @@ const SAMPLE = `from sdk import PIIPolicy, PromptInjectionPolicy, SecretsPolicy,
 secure = SecureAgent(
     agent=MyAgent(),
     policies=[
-        PromptInjectionPolicy(threshold=0.5),  # blocks injection attempts
+        PromptInjectionPolicy(threshold=0.5),  # denies known injection shapes
         PIIPolicy(mode="redact"),              # redacts PII from output
         SecretsPolicy(mode="redact"),          # redacts credentials
     ],

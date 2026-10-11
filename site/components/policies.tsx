@@ -13,6 +13,23 @@ import {
   UserIcon,
 } from "./icons";
 
+// The headline rows of docs/metrics.md, as measured on 2026-10-11. Hand-copied:
+// when `make evals` changes a number there, it changes here.
+const MEASURED = [
+  {
+    value: "118 / 118",
+    label: "attacks blocked in the shapes the patterns were written for, 30 of them disguised",
+  },
+  {
+    value: "2 to 7%",
+    label: "of attacks blocked when nobody wrote a pattern for the phrasing, across three sets",
+  },
+  {
+    value: "4 / 988",
+    label: "benign prompts wrongly blocked, across three public sets nobody here wrote",
+  },
+];
+
 interface Policy {
   name: string;
   /** Which side of the agent it runs on, in the README's terms. */
@@ -113,7 +130,7 @@ export function Policies() {
             <p className="limits__text">
               Attacks in languages other than English, novel paraphrase, and anything that needs
               to understand a sentence rather than match it. Measured on attacks nobody wrote a
-              pattern for, the detectors block 2 to 6%, and that number is published next to
+              pattern for, the detectors block 2 to 7%, and that number is published next to
               the 100% ones. The tool rules, approvals and redaction do not depend on
               recognising an attack.
             </p>
@@ -122,6 +139,14 @@ export function Policies() {
             Measured detection numbers
             <ArrowUpRight size={14} />
           </a>
+          <dl className="measured">
+            {MEASURED.map((m) => (
+              <div key={m.value}>
+                <dt>{m.label}</dt>
+                <dd>{m.value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </div>
     </section>

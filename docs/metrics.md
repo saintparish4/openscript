@@ -20,7 +20,7 @@ and `tests/test_evals.py` fails the build if these regress.
 | **Held out (any policy)** | **1/23 (4%)** | — | **0/20 (0%)** |
 | **Public: `deepset/prompt-injections` (any policy)** | **4/263 (2%)** | — | **0/399 (0%)** |
 | **Public: `NotInject`, benign only (any policy)** | — | — | **3/339 (1%)** |
-| **Public: `XSTest` (any policy)** | **13/200 (6%)** | — | **1/250 (0.4%)** |
+| **Public: `XSTest` (any policy)** | **13/200 (6.5%)** | — | **1/250 (0.4%)** |
 
 Read those last five rows first.
 
