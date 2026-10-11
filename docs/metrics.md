@@ -36,8 +36,8 @@ Read those last four rows first.
   architecture change.
 - **Public** is [`deepset/prompt-injections`](https://huggingface.co/datasets/deepset/prompt-injections),
   all 662 rows, unfiltered: nobody here chose a row, wrote a label or fixed
-  anything against it. **2%.** Roughly a third of its attacks are in German,
-  which no pattern here reads; the rest are paraphrase. Its 399 benign rows are
+  anything against it. **2%.** About three in ten of its attacks are in German
+  (a stopword count, not a hand label), which no pattern here reads. Its 399 benign rows are
   the largest false-positive check in the repo that was not written next to the
   patterns, though they are ordinary questions and so easier negatives than
   the 154 below.
@@ -45,7 +45,8 @@ Read those last four rows first.
   (MIT), all 339 rows: benign prompts written around the trigger words
   guardrails over-block on, so it has no detection rate, only a false-positive
   rate. **3/339 (0.9%, 0.3% to 2.6%)**, all three blocked by
-  `PromptInjectionPolicy`: two role-play prompts and one technical question.
+  `PromptInjectionPolicy`: two in the set's "Virtual Creation" category and one
+  in "Technique Queries".
   84 of its rows are not in English and could not trip an English pattern, so
   on the 255 that could it is 3/255 (1.2%). The three are not fixed: narrowing
   a pattern because of a row here would turn the set into a dev corpus.
@@ -79,7 +80,9 @@ the README says so.
 
 ## Speed
 
-Measured inside Python, around the pipeline call only.
+Measured inside Python, around the pipeline call only. This table is from
+2026-09-20 and has not been re-measured since; `make evals` prints the native
+rows for whatever machine it runs on.
 
 | What | p50 | max | Measured by |
 |---|---|---|---|

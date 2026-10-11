@@ -112,8 +112,10 @@ export function Policies() {
             <h3 className="limits__title">What they do not catch</h3>
             <p className="limits__text">
               Attacks in languages other than English, novel paraphrase, and anything that needs
-              to understand a sentence rather than match it. The published numbers include the
-              held-out phrasings a pattern bank mostly misses.
+              to understand a sentence rather than match it. Measured on attacks nobody wrote a
+              pattern for, the detectors block 2 to 4%, and that number is published next to
+              the 100% ones. The tool rules, approvals and redaction do not depend on
+              recognising an attack.
             </p>
           </div>
           <a className="btn btn--ghost" href={METRICS_URL}>
