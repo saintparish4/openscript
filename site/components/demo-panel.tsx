@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EXAMPLES, type Example } from "@/lib/examples";
-import { outcomeOf, type Outcome } from "@/lib/outcome";
+import { missedOutcome, outcomeOf, type Outcome } from "@/lib/outcome";
 import { loadRuntime, runPipeline, type Progress } from "@/lib/runtime";
 import type { Decision, PipelineResult } from "@/lib/types";
 import { DemoWindow } from "./demo-window";
@@ -73,7 +73,13 @@ export default function DemoPanel() {
     }
     running.current = true;
     try {
-      const result = await runPipeline(py, example.text, example.toolCall ?? null, decision);
+      const result = await runPipeline(
+        py,
+        example.text,
+        example.toolCall ?? null,
+        decision,
+        example.fetched ?? null,
+      );
       if (!alive.current) return;
       setResults((prev) => ({ ...prev, [example.id]: result }));
       setShownId(example.id);
@@ -196,7 +202,10 @@ export default function DemoPanel() {
   const booting = status === "booting";
 
   const outcomes: Record<string, Outcome> = {};
-  for (const [id, r] of Object.entries(results)) outcomes[id] = outcomeOf(r);
+  for (const [id, r] of Object.entries(results)) {
+    const miss = EXAMPLES.find((ex) => ex.id === id)?.miss === true;
+    outcomes[id] = miss ? missedOutcome(outcomeOf(r)) : outcomeOf(r);
+  }
 
   // The list as it is filtered, which is the list "next" walks.
   const listed = filter ? EXAMPLES.filter((ex) => ex.persona.name === filter) : EXAMPLES;

@@ -27,9 +27,21 @@ export interface Example {
    *  verify.mjs runs every one of these against the real policies. */
   withGateway: string;
   toolCall?: ToolCall;
+  /** A document the agent reads through a tool before it acts, and the text
+   *  of it. This is how an injection arrives without the sender writing one. */
+  fetched?: { name: string; args: Record<string, unknown>; returns: string };
   /** For a prompt whose tool call is held: who it goes to, and what they say
    *  if they turn it down. The visitor makes the decision in their place. */
-  approval?: { approver: Persona; denyNote: string };
+  approval?: {
+    approver: Persona;
+    denyNote: string;
+    /** A different call to the same tool, which the approval must not cover. */
+    otherArgs: Record<string, unknown>;
+  };
+  /** An attack the policies are known not to catch, shown on purpose. Asserted
+   *  the same way as everything else: if a pattern ever starts catching it,
+   *  the copy that says it gets through is wrong and verify.mjs fails. */
+  miss?: boolean;
   /** The policy this example is meant to demonstrate, asserted by verify.mjs. */
   expect: string;
 }

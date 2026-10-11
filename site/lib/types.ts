@@ -33,6 +33,8 @@ export interface PipelineResult {
   crisis: boolean;
   /** The call the agent attempted, and the rule it was held to. */
   tool_call: AttemptedToolCall | null;
+  /** What the agent read through a tool before it made that call, if anything. */
+  fetched: FetchedTool | null;
   /** Set when the tool call needed a human: waiting, or what was decided. */
   approval: Approval | null;
   rows: PolicyRow[];
@@ -63,6 +65,19 @@ export interface Decision {
 export interface ToolCall {
   name: string;
   args: Record<string, unknown>;
+  /** Who the call is made as, where the tool is restricted by role. */
+  role?: string;
+}
+
+/** A tool the agent called first, to read something, and what came back. */
+export interface FetchedTool {
+  name: string;
+  args: Record<string, unknown>;
+  returned: string;
+  executed: boolean;
+  /** The scan of the result matched an injection at or above threshold. */
+  flagged: boolean;
+  risk: number;
 }
 
 export interface AttemptedToolCall extends ToolCall {

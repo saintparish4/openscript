@@ -7,7 +7,7 @@ import { Policies } from "@/components/policies";
 import { SiteNav } from "@/components/site-nav";
 import { METRICS_URL, SOURCE_URL } from "@/lib/links";
 
-// The three senders, once each, in the order the gallery introduces them.
+// The senders, once each, in the order the gallery introduces them.
 const CAST = [...new Map(EXAMPLES.map((ex) => [ex.persona.name, ex.persona])).values()];
 
 export default function Page() {
@@ -25,9 +25,9 @@ export default function Page() {
                 Kept to a line and a row so the window stays in the first screen. */}
             <div className="cast">
               <p className="cast__lede">
-                {EXAMPLES.length} messages from three people: a customer, a contractor and a
-                support agent. Pick one and it runs through the real pipeline, next to what
-                would have happened without it.
+                {EXAMPLES.length} prompts from six people, three each: a customer, a contractor,
+                a support agent and three engineers. Pick one and it runs through the real
+                pipeline, next to what would have happened without it.
               </p>
               <ul className="cast__people">
                 {CAST.map((person) => (

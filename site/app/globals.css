@@ -368,10 +368,11 @@ kbd {
   text-shadow: 0 1px 12px rgb(0 0 0 / 0.5);
 }
 
+/* A grid, not a wrapping row: six cards in two rows of three, every one the
+   same width and the same height whatever the length of the name or the role. */
 .cast__people {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;
   margin: 0;
   padding: 0;
@@ -393,13 +394,15 @@ kbd {
   backdrop-filter: blur(12px);
 }
 
-.cast__role { display: block; color: var(--muted); font-size: 0.75rem; }
+.cast__people li > span:last-child { min-width: 0; }
+.cast__role { display: block; color: var(--muted); font-size: 0.75rem; text-wrap: balance; }
 
 /* On a phone three full chips are three rows, and they push the window off
    the first screen. The lede already says who the three are, so the chips
    drop to names. */
 @media (max-width: 40rem) {
   .cast__role { display: none; }
+  .cast__people li { justify-content: center; padding-inline: 0.5rem; }
 }
 
 .demo { padding-inline: var(--gutter); }
@@ -445,6 +448,8 @@ kbd {
 
 .seg {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 2px;
   padding: 3px;
   border: 1px solid var(--line);
@@ -854,6 +859,11 @@ kbd {
   background: color-mix(in srgb, var(--tone) 10%, transparent);
 }
 .checkpoint--acted .checkpoint__note { color: var(--tone); }
+.checkpoint--noted {
+  border-color: color-mix(in srgb, var(--flag) 45%, transparent);
+  background: color-mix(in srgb, var(--flag) 8%, transparent);
+}
+.checkpoint--noted .checkpoint__note { color: var(--flag); }
 .checkpoint--unreached { border-style: dashed; background: none; }
 .checkpoint--unreached .checkpoint__note { color: var(--muted); font-weight: 400; }
 
@@ -873,8 +883,10 @@ kbd {
 /* Four checkpoints do not fit across a phone without breaking their words,
    so they go two by two and the joins between them come off. */
 @container detail (max-width: 30rem) {
-  .checkpoints--4 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
-  .checkpoints--4 .checkpoint + .checkpoint::before { display: none; }
+  .checkpoints--4,
+  .checkpoints--5 { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
+  .checkpoints--4 .checkpoint + .checkpoint::before,
+  .checkpoints--5 .checkpoint + .checkpoint::before { display: none; }
 }
 .onward__count { color: var(--muted); font: 400 0.75rem/1 var(--mono); }
 
@@ -910,6 +922,12 @@ kbd {
 }
 
 .toolcall__rule { margin: 0.45rem 0 0; color: var(--muted); font-size: 0.8125rem; }
+
+/* A read, not an action: the amber of a finding rather than the violet of a hold. */
+.toolcall--read { box-shadow: inset 2px 0 0 var(--flag); }
+.toolcall__returned { margin-top: 0.45rem; white-space: pre-wrap; }
+.toolcall__scan { margin: 0.6rem 0 0; font-size: 0.875rem; line-height: 1.5; }
+.toolcall__scan--flagged { color: var(--flag); }
 
 .toolcall__rule code {
   color: var(--grey-100);

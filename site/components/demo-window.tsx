@@ -1,4 +1,6 @@
-import type { KeyboardEvent, ReactNode, Ref } from "react";
+"use client";
+
+import { useEffect, useRef, type KeyboardEvent, type ReactNode, type Ref } from "react";
 import { EXAMPLES, type Example } from "@/lib/examples";
 import type { Outcome } from "@/lib/outcome";
 import { Mark } from "./icons";
@@ -55,6 +57,27 @@ export function DemoWindow({
   detailRef,
 }: Props) {
   const visible = filter ? EXAMPLES.filter((ex) => ex.persona.name === filter) : EXAMPLES;
+  const listRef = useRef<HTMLUListElement | null>(null);
+
+  // The list is shorter than the gallery, so walking it with "Next" runs the
+  // selection off the bottom. Bring the current row back into the list's own
+  // view by moving the list and nothing else: scrollIntoView would move the
+  // page as well, and on a phone the list sits above the result being read.
+  useEffect(() => {
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!list || !row) return;
+    // Measured, not read off offsetTop: the list is its own offset parent
+    // when it is sticky and is not when it is stacked.
+    const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    const bottom = top + row.offsetHeight;
+    if (top < list.scrollTop) list.scrollTop = top - 8;
+    else if (bottom > list.scrollTop + list.clientHeight) {
+      list.scrollTop = bottom - list.clientHeight + 8;
+    }
+    // Runs again when the row's verdict arrives: the badge can wrap a long label
+    // onto a second line, and the row that fitted no longer does.
+  }, [selectedId, filter, outcomes[selectedId]?.label]);
 
   /**
    * Arrow keys walk the list, the way they do in the launcher this window is
@@ -98,7 +121,7 @@ export function DemoWindow({
       </header>
 
       <div className="window__body">
-        <ul className="list" onKeyDown={walk}>
+        <ul className="list" ref={listRef} onKeyDown={walk}>
           {visible.map((ex) => {
             const outcome = outcomes[ex.id];
             return (

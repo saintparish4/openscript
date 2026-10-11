@@ -125,8 +125,8 @@ export function ApprovalFlow({
             {approved ? (
               <p>
                 The call was retried with the approval attached, and <code>{call.name}</code>{" "}
-                ran. The approval is now spent: it cannot be used a second time, or for a
-                different recipient.
+                ran. The approval is now spent: it cannot be used a second time, or for the same
+                tool with different arguments.
               </p>
             ) : (
               <p>

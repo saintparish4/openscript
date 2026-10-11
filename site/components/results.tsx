@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { EXAMPLES, type Example } from "@/lib/examples";
-import { outcomeOf, rewrites, stagesOf } from "@/lib/outcome";
-import type { AttemptedToolCall, PipelineResult } from "@/lib/types";
+import { missedOutcome, outcomeOf, rewrites, stagesOf } from "@/lib/outcome";
+import type { AttemptedToolCall, FetchedTool, PipelineResult } from "@/lib/types";
 import { ApprovalFlow } from "./approval-flow";
 import { DiffView } from "./diff-view";
 import { ArrowRight } from "./icons";
@@ -131,7 +131,35 @@ export function CrisisNotice({ result }: { result: PipelineResult }) {
  * rule rather than a vibe. Without it a visitor has to take the verdict on
  * trust, which is the thing this page exists not to ask for.
  */
-function ToolCallView({ call }: { call: AttemptedToolCall }) {
+/**
+ * What the agent read before it acted, and what the scan made of it.
+ *
+ * The text is shown in full because it is the attack. The sender's prompt was
+ * innocent; this is where the instruction came from, and a visitor who cannot
+ * read it has to take "indirect injection" on trust.
+ */
+function FetchedView({ fetched }: { fetched: FetchedTool }) {
+  const args = Object.entries(fetched.args)
+    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    .join(", ");
+  return (
+    <div className="toolcall toolcall--read">
+      <span className="label">What the agent read first</span>
+      <code className="toolcall__code">
+        {fetched.name}({args})
+      </code>
+      <p className="toolcall__rule">This call is allowed, and it ran. It returned:</p>
+      <p className="diff__text toolcall__returned">{fetched.returned}</p>
+      <p className={`toolcall__scan${fetched.flagged ? " toolcall__scan--flagged" : ""}`}>
+        {fetched.flagged
+          ? `The scan of this result scored it ${fetched.risk.toFixed(2)} for injection and recorded that. It did not block it: the result still reached the agent.`
+          : "The scan of this result found nothing that read as an instruction to the model."}
+      </p>
+    </div>
+  );
+}
+
+function ToolCallView({ call, after = false }: { call: AttemptedToolCall; after?: boolean }) {
   const args = Object.entries(call.args)
     .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
     .join(", ");
@@ -139,17 +167,26 @@ function ToolCallView({ call }: { call: AttemptedToolCall }) {
 
   return (
     <div className="toolcall">
-      <span className="label">The call the agent tried to make</span>
+      <span className="label">
+        {after ? "The call the agent tried to make next" : "The call the agent tried to make"}
+      </span>
       <code className="toolcall__code">
         {call.name}({args})
       </code>
+      {call.role ? (
+        <p className="toolcall__rule">
+          Made with the role <code>{call.role}</code>.
+        </p>
+      ) : null}
       {rule.length ? (
         <p className="toolcall__rule">
           Rule for <code>{call.name}</code>:{" "}
           {rule.map(([k, v]) => `${k.replace(/_/g, " ")} ${JSON.stringify(v)}`).join(", ")}
         </p>
       ) : (
-        <p className="toolcall__rule">No rule covers this tool, so the default applies.</p>
+        <p className="toolcall__rule">
+          No rule names this tool, and a tool with no rule is refused.
+        </p>
       )}
       <p className="toolcall__rule">
         {call.executed
@@ -223,8 +260,8 @@ export function headlineOf(result: PipelineResult): Headline {
  * strip, so walking the gallery shows the checkpoints rather than describing
  * them: the first five stop at the prompt, the last two at the tool.
  */
-function StageStrip({ result }: { result: PipelineResult }) {
-  const stages = stagesOf(result);
+function StageStrip({ result, miss }: { result: PipelineResult; miss: boolean }) {
+  const stages = stagesOf(result, miss);
   return (
     <ol
       className={`checkpoints checkpoints--${stages.length}`}
@@ -265,8 +302,17 @@ export function Results({
   onDecide,
   onReset,
 }: ResultsProps) {
-  const { tone } = outcomeOf(result);
-  const headline = headlineOf(result);
+  const plain = outcomeOf(result);
+  // Only a miss if it really did get through: verify.mjs holds that to be so.
+  const missed = example.miss === true && plain.tone === "clean";
+  const { tone } = missed ? missedOutcome(plain) : plain;
+  const headline = missed
+    ? {
+        title: "Missed",
+        line: "This is an attack, and no policy matched it. The model was given the prompt and the reply came back untouched.",
+        reason: "",
+      }
+    : headlineOf(result);
   const unchanged = result.output !== "" && result.output === result.raw_output;
   const findings = result.rows.filter((r) => r.verdict === "flag");
   const ran = result.rows.filter(
@@ -283,7 +329,7 @@ export function Results({
         {headline.reason ? <p className="outcome__reason">{headline.reason}</p> : null}
       </div>
 
-      <StageStrip result={result} />
+      <StageStrip result={result} miss={missed} />
 
       {/* A badge says a policy fired. It does not say what the agent would
           have done with the prompt, or what the pipeline did instead — which
@@ -301,7 +347,10 @@ export function Results({
         </div>
       </dl>
 
-      {result.tool_call ? <ToolCallView call={result.tool_call} /> : null}
+      {result.fetched ? <FetchedView fetched={result.fetched} /> : null}
+      {result.tool_call ? (
+        <ToolCallView call={result.tool_call} after={result.fetched !== null} />
+      ) : null}
 
       {result.approval && result.tool_call && example.approval ? (
         <ApprovalFlow

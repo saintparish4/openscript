@@ -34,16 +34,34 @@ from sdk import (
 )
 from sdk.observability.risk import aggregate_risk
 
-# Tool rules the sandboxed agent is held to. Deliberately small: a spend ceiling
-# and one outright-forbidden tool are enough to show the shape of the check.
+# Tool rules the sandboxed agents are held to. One of each kind of check the
+# firewall makes, so the gallery can show each of them refusing something: an
+# allowlist, a bound, a path, a role, a tool that is never allowed, and two
+# that need a person.
 TOOL_RULES = ToolRules.model_validate(
     {
+        # A tool with no rule is refused. This is what stops a call nobody
+        # anticipated, which is the only kind an injected agent makes.
+        "default_deny": True,
         "rules": {
             # What a support agent may refund without a lead signing it off.
             "refund_tool": {"arg_constraints": {"max_amount": 100}},
             "delete_account": {"deny": True},
             "send_email": {"requires_approval": True},
-        }
+            # A coding agent may read the repository's source and config.
+            "read_file": {
+                "unlisted_args": "deny",
+                "args": {"path": {"required": True, "path_prefix": ["src", "config"]}},
+            },
+            # Reading an issue is allowed. What it says is another matter.
+            "fetch_issue": {"unlisted_args": "deny", "args": {"number": {"required": True}}},
+            "deploy": {
+                "requires_approval": True,
+                "unlisted_args": "deny",
+                "args": {"env": {"required": True, "one_of": ["staging", "production"]}},
+            },
+            "rotate_keys": {"allowed_roles": ["admin"]},
+        },
     }
 )
 
@@ -59,6 +77,7 @@ POLICIES = {
     "compliance": ("Compliance", "PHI detection and a credential guard on output"),
     "secrets": ("Secrets", "Credential shapes in the prompt and the response"),
     "pii": ("PII", "Email, phone, SSN, card numbers (Luhn-checked), IP addresses"),
+    "tool_output": ("Tool result scan", "Injection patterns in what a tool handed back"),
     "tool_firewall": ("Tool firewall", "Declarative rules on the tool call the agent attempts"),
 }
 ORDER = [
@@ -68,6 +87,7 @@ ORDER = [
     "secrets",
     "pii",
     "compliance",
+    "tool_output",
     "tool_firewall",
 ]
 
@@ -195,6 +215,17 @@ def _explain(key: str, meta: dict) -> str:
             return "No regulated content found."
         return "Found " + " and ".join(parts) + " in the exchange."
 
+    if key == "tool_output":
+        signals = meta.get("signals") or {}
+        if not meta.get("flagged"):
+            return "Nothing in the tool's result read as an instruction to the model."
+        named = ", ".join(_label(s) for s in sorted(signals, key=signals.get, reverse=True))
+        return (
+            f"The tool's result matched {named}. Score {risk:.2f} is at or above the "
+            f"{meta.get('threshold', 0.5):.2f} threshold. Recorded, and passed on: this scan "
+            "annotates by default." + _normalization_note(meta)
+        )
+
     if key == "tool_firewall":
         reason = meta.get("reason") or ""
         if meta.get("allowed") and not meta.get("requires_approval"):
@@ -318,6 +349,23 @@ def _tool(name: str) -> SecureTool:
     return _TOOLS[name]
 
 
+# Scores what a tool returned, which is how the text of an issue, a web page or
+# an email reaches the model. Annotate, the default: it records and lets the
+# result through, because the patterns behind it miss most attacks they were
+# not written for and a scan that blocks on them would mostly block nothing.
+_RESULT_SCAN = PromptInjectionPolicy(tool_output="annotate")
+
+
+def _reader(name: str, returns: str) -> SecureTool:
+    """A tool that hands back *returns*: the document the agent went to read."""
+
+    async def read(**args):
+        _TOOL_RUNS.append(name)
+        return returns
+
+    return SecureTool(read, [_FIREWALL, _RESULT_SCAN], name=name, approval_store=_APPROVALS)
+
+
 _ECHO = _EchoAgent()
 _AGENT = SecureAgent(_ECHO, policies=[*_INPUT_POLICIES, AuditPolicy(_WRITER)])
 
@@ -335,6 +383,10 @@ async def run_pipeline(payload_json: str) -> str:
     Returns JSON: the per-policy rows, the response the caller would have
     received, the aggregated risk, and how long the pipeline itself took.
 
+    `"fetched": {"name", "args", "returns"}` is a tool the agent called first,
+    and the text that tool handed back: a document it went to read before it
+    made the call in `tool_call`. A `tool_call` may carry a `"role"`.
+
     A held tool call comes back with `approval: {"id", "status": "pending"}`.
     Sending the same submission again with `"approval": {"id", "approved",
     "decided_by", "note"}` is the human's decision: it is written to the
@@ -347,6 +399,7 @@ async def run_pipeline(payload_json: str) -> str:
     text = payload.get("text", "")
     tool_call = payload.get("tool_call")
     decision = payload.get("approval")
+    fetched = payload.get("fetched")
 
     before = len(_SINK.rows)
     blocked_by = ""
@@ -366,11 +419,36 @@ async def run_pipeline(payload_json: str) -> str:
 
     # The agent only gets to attempt a tool call if the prompt survived the
     # input gates — which is the point of running them first.
+    # What the agent read before it acted. The read is a tool call like any
+    # other, so it goes through the firewall, and its result is scanned.
+    read_first = None
+    if fetched is not None and not blocked_by:
+        runs_before = len(_TOOL_RUNS)
+        scan = None
+        try:
+            _, read_ctx = await _reader(
+                fetched["name"], fetched.get("returns", "")
+            ).call_with_context(fetched.get("args", {}))
+            scan = read_ctx.metadata.get("tool_output")
+        except ActionBlockedError as exc:
+            scan = exc.context.metadata.get("tool_output")
+        if scan is not None:
+            ctx.metadata["tool_output"] = scan
+        read_first = {
+            "name": fetched["name"],
+            "args": fetched.get("args", {}),
+            "returned": fetched.get("returns", ""),
+            "executed": len(_TOOL_RUNS) > runs_before,
+            "flagged": bool(scan and scan.get("flagged")),
+            "risk": (scan or {}).get("risk", 0.0),
+        }
+
     attempted_tool = None
     approval = None
     if tool_call is not None and not blocked_by:
         name = tool_call["name"]
         rule = TOOL_RULES.rules.get(name)
+        role = tool_call.get("role")
         runs_before = len(_TOOL_RUNS)
         firewall_meta = None
         approval_id = ""
@@ -403,7 +481,7 @@ async def run_pipeline(payload_json: str) -> str:
         if approval is None or approval["status"] == "approved":
             try:
                 _, tool_ctx = await _tool(name).call_with_context(
-                    tool_call.get("args", {}), approval_id=approval_id
+                    tool_call.get("args", {}), approval_id=approval_id, role=role
                 )
                 firewall_meta = tool_ctx.metadata["tool_firewall"]
                 if approval is not None:
@@ -428,6 +506,7 @@ async def run_pipeline(payload_json: str) -> str:
         attempted_tool = {
             "name": name,
             "args": tool_call.get("args", {}),
+            "role": role or "",
             "rule": rule.model_dump(exclude_defaults=True) if rule is not None else {},
             # Read off the tool, not inferred from the verdict.
             "executed": len(_TOOL_RUNS) > runs_before,
@@ -436,6 +515,8 @@ async def run_pipeline(payload_json: str) -> str:
 
     risk, categories = aggregate_risk(ctx)
     reached = {"tool_firewall"} if tool_call is None else set()
+    if read_first is None:
+        reached.add("tool_output")
 
     # Where the block happened changes how it should be described: a prompt
     # rejected on the way in never reached the model, whereas a refused tool
@@ -468,6 +549,8 @@ async def run_pipeline(payload_json: str) -> str:
             "blocked_reason": blocked_reason,
             "stage": stage,
             "tool_call": attempted_tool,
+            # None unless the agent read something through a tool first.
+            "fetched": read_first,
             # None unless the call needed a human: then who it is waiting on,
             # or what they decided and why.
             "approval": approval,

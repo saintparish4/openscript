@@ -82,7 +82,11 @@ const times = [];
 for (const ex of EXAMPLES) {
   let result;
   try {
-    result = JSON.parse(await run(JSON.stringify({ text: ex.text, tool_call: ex.toolCall ?? null })));
+    result = JSON.parse(
+      await run(
+        JSON.stringify({ text: ex.text, tool_call: ex.toolCall ?? null, fetched: ex.fetched ?? null }),
+      ),
+    );
   } catch (e) {
     console.error(`  ${ex.id}: raised ${String(e).split("\n").slice(-3).join(" ")}`);
     failures++;
@@ -136,8 +140,15 @@ for (const ex of EXAMPLES) {
       ok = false;
     };
 
-    if (!(ex.approval.approver?.name && ex.approval.approver?.role && ex.approval.denyNote)) {
-      complain("approval needs an approver with a name and a role, and a denyNote");
+    if (
+      !(
+        ex.approval.approver?.name &&
+        ex.approval.approver?.role &&
+        ex.approval.denyNote &&
+        ex.approval.otherArgs
+      )
+    ) {
+      complain("approval needs an approver with a name and a role, a denyNote and otherArgs");
     }
     if (result.approval?.status !== "pending" || !result.approval?.id) {
       complain("held, but the pipeline issued no pending approval");
@@ -166,15 +177,41 @@ for (const ex of EXAMPLES) {
         await run(
           JSON.stringify({
             text: ex.text,
-            tool_call: { name: ex.toolCall.name, args: { to: "someone-else@example.com" } },
+            tool_call: { name: ex.toolCall.name, args: ex.approval.otherArgs },
             approval: answer(third.approval?.id, true),
           }),
         ),
       );
       if (other.tool_call?.executed !== false) {
-        complain("an approval for one recipient was spent on another");
+        complain("an approval for one call was spent on the same tool with other arguments");
       }
     }
+  }
+
+  // The indirect-injection prompt makes a claim in two halves and both are
+  // checked: the read ran and its result was flagged but let through, and the
+  // call the injection asked for did not run. If the scan ever starts
+  // blocking, or stops noticing, the copy is wrong and this fails.
+  if (ex.fetched) {
+    const scan = result.rows.find((r) => r.key === "tool_output");
+    if (!result.fetched?.executed) {
+      console.error(`  ${ex.id}: the read the agent starts with did not run`);
+      ok = false;
+    }
+    if (!result.fetched?.flagged || scan?.verdict !== "flag") {
+      console.error(`  ${ex.id}: the tool result was not flagged: ${scan?.explanation}`);
+      ok = false;
+    }
+    if (result.blocked_by !== "Tool firewall") {
+      console.error(`  ${ex.id}: stopped by ${result.blocked_by || "nothing"}, not by the tool rule`);
+      ok = false;
+    }
+  }
+
+  // A role-restricted tool is only shown being refused if the call carried a role.
+  if (ex.toolCall?.role && result.tool_call?.role !== ex.toolCall.role) {
+    console.error(`  ${ex.id}: the pipeline did not report the role the call was made with`);
+    ok = false;
   }
 
   if (ex.toolCall && result.tool_call?.name !== ex.toolCall.name) {
@@ -196,7 +233,7 @@ for (const ex of EXAMPLES) {
   // what the agent was actually called with.
   if (ex.expect === "secrets") {
     const given = result.model_input ?? "";
-    const leaked = /AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}/.test(given);
+    const leaked = /AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{36,}/.test(given);
     if (!given || given === result.prompt || leaked) {
       console.error(`  ${ex.id}: the model was handed the credential: ${given || "(nothing reported)"}`);
       ok = false;
@@ -220,7 +257,13 @@ for (const ex of EXAMPLES) {
 
   if (!ok) failures++;
 
-  const verdict = ex.expect ? `${ex.expect}=${row ? row.verdict : "absent"}` : quiet ? "all clear" : "unexpectedly flagged";
+  const verdict = ex.expect
+    ? `${ex.expect}=${row ? row.verdict : "absent"}`
+    : !quiet
+      ? "unexpectedly flagged"
+      : ex.miss
+        ? "missed, as it says"
+        : "all clear";
   console.log(
     `  ${ok ? "ok  " : "FAIL"} ${ex.id.padEnd(10)} ${verdict.padEnd(24)} risk ${String(result.risk).padEnd(5)} ${result.latency_ms.toFixed(1)}ms`,
   );
@@ -230,6 +273,23 @@ for (const ex of EXAMPLES) {
 }
 
 server.close();
+
+// The gallery is six people with three prompts each, and the page says so.
+const perPerson = {};
+for (const ex of EXAMPLES) perPerson[ex.persona.name] = (perPerson[ex.persona.name] ?? 0) + 1;
+const people = Object.keys(perPerson);
+if (people.length !== 6 || people.some((name) => perPerson[name] !== 3)) {
+  console.error(`  the gallery is not six people with three prompts each: ${JSON.stringify(perPerson)}`);
+  failures++;
+}
+// One person, one role: a name is introduced once above the window.
+for (const name of people) {
+  const roles = new Set(EXAMPLES.filter((ex) => ex.persona.name === name).map((ex) => ex.persona.role));
+  if (roles.size !== 1) {
+    console.error(`  ${name} has ${roles.size} different roles across their prompts`);
+    failures++;
+  }
+}
 
 const sorted = [...times].sort((a, b) => a - b);
 console.log(

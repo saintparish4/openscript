@@ -70,8 +70,9 @@ export async function runPipeline(
   text: string,
   toolCall: ToolCall | null = null,
   approval: Decision | null = null,
+  fetched: { name: string; args: Record<string, unknown>; returns: string } | null = null,
 ): Promise<PipelineResult> {
   const run = py.globals.get("run_pipeline");
   if (!run) throw new Error("the pipeline module did not define run_pipeline");
-  return JSON.parse(await run(JSON.stringify({ text, tool_call: toolCall, approval })));
+  return JSON.parse(await run(JSON.stringify({ text, tool_call: toolCall, approval, fetched })));
 }

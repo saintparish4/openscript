@@ -49,12 +49,22 @@ export function outcomeOf(result: PipelineResult): Outcome {
  */
 export interface Stage {
   name: string;
-  state: "passed" | "acted" | "unreached";
+  /** `noted` is a finding that was recorded and deliberately not acted on. */
+  state: "passed" | "acted" | "noted" | "unreached";
   /** One word for what happened here. */
   note: string;
 }
 
-export function stagesOf(result: PipelineResult): Stage[] {
+/**
+ * A run of a prompt the gallery shows *because* nothing catches it. The
+ * pipeline reports "no policy matched", and for this one prompt that is a
+ * miss, so it is not allowed to look like the green of an ordinary pass.
+ */
+export function missedOutcome(outcome: Outcome): Outcome {
+  return outcome.tone === "clean" ? { tone: "flag", label: "Missed" } : outcome;
+}
+
+export function stagesOf(result: PipelineResult, miss = false): Stage[] {
   const stoppedAtPrompt = result.blocked && result.stage === "prompt";
   const { input, output } = rewrites(result);
   const held = result.rows.some((r) => r.verdict === "approval");
@@ -64,11 +74,23 @@ export function stagesOf(result: PipelineResult): Stage[] {
       ? { name: "Prompt", state: "acted", note: "Blocked" }
       : input
         ? { name: "Prompt", state: "acted", note: "Redacted" }
-        : { name: "Prompt", state: "passed", note: "Checked" },
+        : miss
+          ? { name: "Prompt", state: "noted", note: "Missed" }
+          : { name: "Prompt", state: "passed", note: "Checked" },
     stoppedAtPrompt
       ? { name: "Agent", state: "unreached", note: "Never ran" }
       : { name: "Agent", state: "passed", note: "Ran" },
   ];
+
+  // What a tool handed back is a second way in, and gets its own checkpoint
+  // when the agent read something.
+  if (result.fetched) {
+    stages.push(
+      result.fetched.flagged
+        ? { name: "Tool result", state: "noted", note: "Flagged" }
+        : { name: "Tool result", state: "passed", note: "Read" },
+    );
+  }
 
   // Only when the agent reached for a tool: most prompts never do, and an
   // empty checkpoint on every other result would be noise.
