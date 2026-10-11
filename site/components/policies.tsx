@@ -113,7 +113,7 @@ export function Policies() {
             <p className="limits__text">
               Attacks in languages other than English, novel paraphrase, and anything that needs
               to understand a sentence rather than match it. Measured on attacks nobody wrote a
-              pattern for, the detectors block 2 to 4%, and that number is published next to
+              pattern for, the detectors block 2 to 6%, and that number is published next to
               the 100% ones. The tool rules, approvals and redaction do not depend on
               recognising an attack.
             </p>

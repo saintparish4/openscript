@@ -28,6 +28,7 @@ number that decides whether anyone leaves a security tool switched on.
 | `holdout.jsonl` | The same idea, written after the last round of fixes. **Never fixed against** |
 | `public_deepset.jsonl` | [`deepset/prompt-injections`](https://huggingface.co/datasets/deepset/prompt-injections), all 662 rows, unfiltered. **Nobody here wrote a row or a label in it, and it is never fixed against** |
 | `public_notinject.jsonl` | [`leolee99/NotInject`](https://huggingface.co/datasets/leolee99/NotInject) (MIT, from the InjecGuard paper, arXiv 2410.22770), all 339 rows. Benign only: prompts built around the words guardrails over-block on. **Never fixed against** |
+| `public_xstest.jsonl` | [`Paul/XSTest`](https://huggingface.co/datasets/Paul/XSTest) (CC-BY-4.0, Röttger et al., arXiv 2308.01263), all 450 rows: 250 safe prompts in the vocabulary of unsafe ones, and 200 unsafe contrasts. **Never fixed against** |
 
 Each row is `{"text", "label", "category", "tag", "expect"}`.
 
@@ -48,9 +49,10 @@ they score, alongside those patterns. That is fine for what the first three
 are (conformance tests) and a real limit on the benign rows: negatives chosen
 by the person who wrote the rules test the near-misses that person thought of.
 
-The two `public_*` files are the answer to that. They are copied whole from
-their sources (`deepset/prompt-injections`, Apache-2.0, and
-`leolee99/NotInject` at revision `847ae76`, MIT), with only the field names changed,
+The three `public_*` files are the answer to that. They are copied whole from
+their sources (`deepset/prompt-injections`, Apache-2.0;
+`leolee99/NotInject` at revision `847ae76`, MIT; and `Paul/XSTest` at revision
+`f600c99`, CC-BY-4.0), with only the field names changed,
 and nothing in `sdk/` is ever edited because of a row in them.
 
 ## Dev and holdout

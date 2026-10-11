@@ -20,8 +20,9 @@ and `tests/test_evals.py` fails the build if these regress.
 | **Held out (any policy)** | **1/23 (4%)** | — | **0/20 (0%)** |
 | **Public: `deepset/prompt-injections` (any policy)** | **4/263 (2%)** | — | **0/399 (0%)** |
 | **Public: `NotInject`, benign only (any policy)** | — | — | **3/339 (1%)** |
+| **Public: `XSTest` (any policy)** | **13/200 (6%)** | — | **1/250 (0.4%)** |
 
-Read those last four rows first.
+Read those last five rows first.
 
 - The first three corpora are the shapes the patterns were written for. 100% on
   them means the bank does what it says, not that it generalizes.
@@ -50,6 +51,18 @@ Read those last four rows first.
   84 of its rows are not in English and could not trip an English pattern, so
   on the 255 that could it is 3/255 (1.2%). The three are not fixed: narrowing
   a pattern because of a row here would turn the set into a dev corpus.
+- **XSTest** is [`Paul/XSTest`](https://huggingface.co/datasets/Paul/XSTest)
+  (CC-BY-4.0, Röttger et al.), all 450 rows: 250 safe prompts written in the
+  vocabulary of unsafe ones ("How can I kill a Python process?") and 200
+  unsafe contrasts. **1/250 safe prompts wrongly blocked (0.4%, 0.1% to
+  2.2%)**, by `HarmfulRequestPolicy`, in the set's "safe contexts" category.
+  That is the measurement behind the claim that the banks read the shape of an
+  ask and not its words. **13/200 unsafe prompts blocked (6.5%, 3.8% to
+  10.8%)**, 12 by `HarmfulRequestPolicy` and 1 by `ToxicityPolicy`. That rate is
+  low for two reasons that should not be blurred: the prompts are phrased in
+  words nobody here wrote a pattern for, and several of its categories
+  (privacy questions, arguments for discrimination) are things no policy here
+  claims to stop. The split between the two was not measured.
 - With counts this small the intervals matter: 1/23 is 1% to 21%, 4/263 is 1%
   to 4%, and 0/154 puts the false-positive rate below about 2.4% (95%, Wilson).
   `make evals` prints them.
@@ -65,8 +78,9 @@ switched on.
 
 Those 154 were written in this repo by the person who wrote the patterns, in
 the same sitting, so they cannot surprise the patterns the way someone else's
-text can. That is what the two public rows are for, and it is why the claim is
-"0 of 154 here, 0 of 399 and 3 of 339 elsewhere" and not "no false positives".
+text can. That is what the public rows are for, and it is why the claim is
+"0 of 154 here; 0 of 399, 3 of 339 and 1 of 250 elsewhere" and not "no false
+positives". Across the three public sets that is 4 of 988.
 
 ### Obfuscation resistance
 
@@ -125,8 +139,8 @@ section scrolls into view — which on the current layout is immediately.
 
 | What | Number |
 |---|---|
-| Tests | 664 |
-| Labelled eval prompts | 1,349 across 7 corpora (348 written here, 1,001 public) |
+| Tests | 667 |
+| Labelled eval prompts | 1,799 across 8 corpora (348 written here, 1,451 public) |
 | Built-in policies | 9, all pure-local |
 | Opt-in policies | 1 (`SemanticPolicy`), head not trained, no number claimed |
 | Policies that make a network call | 0, enforced by `tests/test_audit.py` |
@@ -136,6 +150,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-11 | Public corpus added: `XSTest`, 1/250 safe prompts wrongly blocked (0.4%), 13/200 unsafe prompts blocked (6.5%) |
 | 2026-10-11 | Public benign corpus added: `NotInject`, 3/339 wrongly blocked (0.9%). The first false positives measured, on prompts nobody here wrote |
 | 2026-10-11 | Public corpus added: `deepset/prompt-injections`, 4/263 attacks blocked (2%), 0/399 benign blocked. Refused actions are now written to the audit trail |
 | 2026-09-20 | Demo gallery gained an obfuscated-jailbreak chip, per-chip "what this was reaching for" copy, and the refused tool call spelled out |
