@@ -147,7 +147,7 @@ What that buys, and what it does not:
 - **`ToolFirewallPolicy` belongs in a `SecureTool`'s list.** It acts on tool calls only; in a `SecureAgent`'s list it sees none and does nothing.
 - **Arguments are checked by name, with the tool's own defaults filled in.** A bound on `amount` applies to the amount the tool will actually use, including when the caller leaves it out. `unlisted_args: deny` is about what the caller passes: an argument left to its default is not refused for being unlisted, but is still held to any rule that names it.
 - **A value a rule cannot evaluate is refused.** Numeric text is read as the number it spells, so `"9999"` does not slip under a `max`; NaN, booleans and anything else that is not a number are denied. A list is checked item by item.
-- **`pattern` has to match the whole value**, so an allowlist for `example.com` is not satisfied by `example.com.attacker.io`.
+- **`pattern` has to match the whole value**, so an allowlist for `example.com` is not satisfied by `example.com.attacker.io`. That is also how a host allowlist on a URL is written (`url: {pattern: 'https://vendor\.example\.com(/.*)?'}`), and it reads the URL the agent asked for: where that page redirects to is not something the rule sees.
 - **`path_prefix` resolves `..` before comparing** and does not expand `~`. It reads the path as text, so it cannot see a symlink inside the allowed directory that leads back out.
 - **A misspelt key fails the load.** A rules file that reads as enforced and enforces nothing is worse than no file.
 - **Output policies in the tool's list apply to what the tool returns.** `PIIPolicy` and `SecretsPolicy` redact it. `PromptInjectionPolicy` scores it, because a tool's result is how the text of a fetched page or an email reaches the model. That score is recorded and let through by default (`tool_output="annotate"`), since the patterns behind it miss most attacks they were not written for; `tool_output="deny"` withholds the result. Withholding is not undoing: by then the tool has run.
@@ -407,6 +407,10 @@ mypy --strict sdk/ contracts/
 # Measure detection and false positives against the labelled corpora
 make evals
 make evals-misses       # plus every prompt the policies got wrong
+
+# The browser demo and the extension, headless
+make demo-verify        # export the site and run every gallery prompt through it
+make extension-check    # drive the extension's agent in headless Chromium and check what reached the network
 ```
 
 CI skips every job for changes that only touch markdown, so documentation edits

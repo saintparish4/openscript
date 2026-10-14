@@ -51,6 +51,16 @@ rules:
       currency:
         one_of: ["USD", "EUR"]
 
+  # A host allowlist is a pattern on the URL. Like every pattern it is matched
+  # against the whole value, so "https://vendor.example.com.attacker.io/" fails
+  # it. It is checked against the URL the agent asked for: where that page
+  # redirects to is not something the rule sees.
+  open_page:
+    args:
+      url:
+        required: true
+        pattern: 'https://vendor\.example\.com(/.*)?'
+
   # Paths: the value must sit inside one of these directories once ".." has
   # been resolved. The check is on the text of the path. It does not expand
   # "~" and cannot see a symlink that leads back out.
