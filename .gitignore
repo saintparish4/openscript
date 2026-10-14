@@ -103,6 +103,8 @@ demo/*.mp4
 # Browser wheel bundle — rebuilt by `make browser-wheels`
 web/wheels/
 node_modules/
+# Extension runtime bundle — rebuilt by `make extension`
+extension/vendor/
 
 # Demo app build output
 site/.next/

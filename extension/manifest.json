@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "OpenScript browsing agent",
+  "description": "A scripted browsing agent whose every action goes through OpenScript's tool firewall and approval gate, in this browser. A demonstration, not a product.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "116",
+  "action": { "default_title": "Open the OpenScript panel" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["sidePanel", "scripting", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}

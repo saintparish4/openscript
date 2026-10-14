@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenScript</title>
+<style>
+  /* Dark, like the demo site, and system fonts: a panel that tells you it
+     sends nothing anywhere should not fetch a font to say so. */
+  :root { color-scheme: dark; --bg: #0b0c0f; --panel: #14161b; --line: #262a33; --text: #e6e8ee;
+          --muted: #9aa3b2; --ok: #4ade80; --held: #fbbf24; --no: #f87171; --flag: #f59e0b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 14px; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size: 15px; margin: 0; letter-spacing: 0.01em; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .status { margin: 0; color: var(--muted); font-size: 12px; }
+  .status[data-ready] { color: var(--ok); }
+  .label { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase;
+           letter-spacing: 0.08em; margin: 14px 0 4px; }
+  .tab { margin: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .tasks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+           border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.yes { border-color: var(--ok); } button.no { border-color: var(--no); }
+  .log { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+  .step { background: var(--panel); border: 1px solid var(--line); border-left-width: 3px;
+          border-radius: 8px; padding: 8px 10px; }
+  .step--ran { border-left-color: var(--ok); } .step--held { border-left-color: var(--held); }
+  .step--refused, .step--failed, .step--skipped { border-left-color: var(--no); }
+  .step code { display: block; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+               overflow-wrap: anywhere; }
+  .step strong { display: block; margin-top: 4px; font-size: 12px; text-transform: uppercase;
+                 letter-spacing: 0.06em; }
+  .step--ran strong { color: var(--ok); } .step--held strong { color: var(--held); }
+  .step--refused strong, .step--failed strong, .step--skipped strong { color: var(--no); }
+  .step p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+  .scan--flagged, .scan--missed { color: var(--flag); }
+  .returned { white-space: pre-wrap; max-height: 9em; overflow: auto; font-size: 12px;
+              border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; }
+  .approval { margin-top: 10px; padding: 10px; border: 1px solid var(--held); border-radius: 8px; }
+  .approval[data-status="approved"] { border-color: var(--ok); }
+  .approval[data-status="denied"], .approval[data-status="spent"] { border-color: var(--no); }
+  .approval p { margin: 0 0 8px; }
+  .approval .actions { display: flex; gap: 6px; }
+  .said { margin: 12px 0 0; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; }
+  .said:empty { display: none; }
+  footer { margin-top: 16px; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>OpenScript</h1>
+  <p id="status" class="status" role="status">Starting…</p>
+</header>
+
+<span class="label">Acting on</span>
+<p id="tab" class="tab">—</p>
+
+<span class="label">Ask the agent to</span>
+<div class="tasks">
+  <button id="task-read" disabled>Read this page</button>
+  <button id="task-price" disabled>Report the enterprise price</button>
+  <button id="task-buy" disabled>Buy 40 seats</button>
+</div>
+
+<ol id="log" class="log" data-runs="0" aria-label="What the agent did"></ol>
+
+<div id="approval" class="approval" hidden>
+  <p id="approval-text"></p>
+  <div class="actions">
+    <button id="approve" class="yes">Approve</button>
+    <button id="deny" class="no">Deny</button>
+  </div>
+</div>
+
+<p id="said" class="said" aria-live="polite"></p>
+
+<footer>
+  No model runs here. The agent is a stand-in with a fixed plan for each task,
+  and it follows any note a page addresses to assistants, on purpose. What it
+  may actually do is decided by <code>tools.yaml</code>, through the same
+  package the demo site runs. Nothing leaves this browser.
+</footer>
+
+<script type="module" src="sidepanel.js"></script>
+</body>
+</html>

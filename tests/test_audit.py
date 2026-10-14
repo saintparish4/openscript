@@ -90,10 +90,11 @@ def test_opt_in_policy_keeps_its_model_out_of_import_time(row):
     assert row["lazy_heavy"], f"{row['policy']} is declared opt-in but imports no model"
 
 
-def test_the_browser_demo_runs_no_opt_in_policy():
-    """The demo's privacy and no-backend claims rest on the pure-local set."""
-    pipeline = (REPO_ROOT / "site/public/pipeline.py").read_text()
-    assert "semantic" not in pipeline.lower()
+@pytest.mark.parametrize("page", ["site/public/pipeline.py", "extension/agent.py"])
+def test_the_browser_demo_runs_no_opt_in_policy(page):
+    """The demo's and the extension's privacy and no-backend claims rest on the
+    pure-local set."""
+    assert "semantic" not in (REPO_ROOT / page).read_text().lower()
 
 
 @pytest.mark.parametrize("row", audit(), ids=lambda r: r["policy"])

@@ -199,3 +199,23 @@ demo-verify: demo-build  ## Run every gallery example through the exported app
 .PHONY: demo-serve
 demo-serve: demo-build  ## Serve the exported demo at :8081
 	$(PYTHON) -m http.server 8081 --directory site/out
+
+# ── Browser extension ─────────────────────────────────────────────────────────
+
+# extension/vendor/ is not committed: it is the Pyodide runtime out of
+# site/node_modules plus the wheels in web/wheels, so it is rebuilt from them.
+
+.PHONY: extension
+extension: browser-wheels site/node_modules  ## Assemble extension/vendor/ so the extension can be loaded unpacked
+	bash tools/build_extension.sh
+
+extension/node_modules:
+	cd extension && $(NPM) ci
+
+.PHONY: extension-check
+extension-check: extension extension/node_modules  ## Drive the extension's agent in headless Chromium and check what reached the network
+	cd extension && $(NPM) run check
+
+.PHONY: extension-fixture
+extension-fixture:  ## Serve the two local sites the extension's agent acts on (:8090 vendor, :8091 collect)
+	node extension/fixture/serve.mjs

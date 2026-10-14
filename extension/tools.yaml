@@ -1,0 +1,30 @@
+# What the agent in the panel may do, and nothing else. A tool with no rule is
+# refused (default_deny), which is what stops a call nobody anticipated — the
+# only kind an injected agent makes. Same shape as the demo site's rules.
+#
+# The origin here has to agree with VENDOR in sidepanel.js. The pattern is
+# matched against the whole URL (re.fullmatch), so a value that merely begins
+# with the origin — http://localhost:8090@elsewhere/ — does not satisfy it.
+default_deny: true
+rules:
+  # The agent may read the page it is on, if it is one of the vendor's. The
+  # URL it claims is checked here; the tool itself refuses to read a tab that
+  # is somewhere else.
+  read_page:
+    unlisted_args: deny
+    args:
+      url: {required: true, pattern: 'http://localhost:8090(/.*)?'}
+  # It may open the vendor's pages. Where one of them redirects to is not
+  # something this rule sees: it reads the URL the agent asked for, as text.
+  open_page:
+    unlisted_args: deny
+    args:
+      url: {required: true, pattern: 'http://localhost:8090(/.*)?'}
+  # Submitting a form is a purchase or a disclosure. Only on the vendor's own
+  # site, and a person signs it off.
+  submit_form:
+    requires_approval: true
+    unlisted_args: deny
+    args:
+      url: {required: true, pattern: 'http://localhost:8090(/.*)?'}
+      fields: {}

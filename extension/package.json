@@ -1,0 +1,14 @@
+{
+  "name": "openscript-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Headless check and local fixture for the OpenScript browsing-agent extension",
+  "scripts": {
+    "check": "node check.mjs",
+    "fixture": "node fixture/serve.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "1.63.0"
+  }
+}

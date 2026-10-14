@@ -27,6 +27,10 @@ make demo-serve    # build the wheel bundle, export the app, serve it on :8081
 make demo-verify   # run every gallery example through the export, headless
 ```
 
+### The same package, in a browser extension
+
+`extension/` is an unpacked Chrome extension whose side panel runs OpenScript locally around a scripted browsing agent. The agent has three tasks on a local stand-in vendor site; each of its actions — open a page, read it, submit a form — is a `SecureTool` call held to `extension/tools.yaml`, so a page that carries a note for the agent provokes a form post that the rules refuse, and a purchase waits in the panel for you to approve or deny. It guards that agent's own actions, not your browsing, and there is no model in it: the stand-in follows any note a page addresses to assistants, on purpose, so the consequence is on screen rather than probabilistic. `make extension` assembles the runtime bundle, `make extension-check` drives it in headless Chromium and checks what reached the network, and `extension/README.md` has the rest.
+
 ## Getting Started in 5 Minutes
 
 ### 1. Install
