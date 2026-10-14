@@ -1,10 +1,9 @@
 # AgentDojo with a model: protocol
 
-> **Draft, not frozen.** Written 2026-10-14, before any model has been sent a
-> request. It is frozen by the commit that removes this note, which also pins
-> its sha256 and that of `markers.yaml` in `tests/test_agentdojo_results.py`,
-> and that commit comes before the first paid request. The points marked
-> **Decide** are Sharif's to settle first.
+Written and frozen 2026-10-14, before any model was sent a request. The
+commit that freezes it also pins its sha256 and that of `markers.yaml` in
+`tests/test_agentdojo_results.py`. Results come in later commits and do not
+edit either. The choices below that were Sharif's were made the same day.
 
 The replay (`PROTOCOL.md`, frozen) made AgentDojo's own scripted calls and so
 could answer only what a policy costs on the minimal solution and what it
@@ -49,20 +48,20 @@ that way.
 
 ## Models
 
-**Decide** (proposed, from the conversation of 2026-10-14):
+Chosen by Sharif, 2026-10-14:
 
 | Order | Model | Why |
 |---|---|---|
 | 1 | `claude-haiku-4-5` | Older and cheaper; the pilot that costs the run |
 | 2 | `claude-sonnet-5-5` | Current; answers "you picked a weak model" whichever way it comes out |
 
-Each model as it ships. **Decide:**
+Each model as it ships:
 
 - No `temperature` (Claude Sonnet 5.5 refuses a non-default value, so the
   two models are run alike). AgentDojo's own runs used 0.
 - Thinking at each model's default: none for Haiku 4.5; adaptive at effort
-  `high` for Sonnet 5.5. Lowering Sonnet's effort would cut its cost and
-  measure something other than the model as shipped.
+  `high` for Sonnet 5.5. A lower effort was considered and not chosen: it
+  would cut the cost and measure something other than the model as shipped.
 - `max_tokens` 16000. No refusal fallbacks: a fallback answers with another
   model in the middle of a run. A refusal is counted and reported.
 - Prompt caching on. It changes the bill, not the answer. It does nothing on
@@ -150,10 +149,10 @@ it again on banking, where the replay found 12 of 16 for both
 
 ## Budget
 
-**Decide.** $100 of credits in total. Proposed caps, enforced by `--budget`,
-which stops a run before a request once the cap is reached (it can go over by
-the request in flight) and counts everything already spent when a run is
-resumed:
+$100 of credits in total. The caps, chosen 2026-10-14, are enforced by
+`--budget`, which stops a run before a request once the cap is reached (it
+can go over by the request in flight) and counts everything already spent
+when a run is resumed:
 
 | Model | Cap | Expected |
 |---|---|---|
@@ -170,7 +169,7 @@ the pilot shows is more informative.
 
 ## Order
 
-1. Freeze this file and `markers.yaml` (the commit that removes the draft note).
+1. Freeze this file and `markers.yaml`.
 2. `claude-haiku-4-5`, banking, all six runs. Publish whatever it shows.
 3. `claude-sonnet-5-5`, banking, all six runs. Publish.
 4. Decide about a second suite by amendment.

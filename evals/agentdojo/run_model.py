@@ -26,6 +26,8 @@ import argparse
 import json
 import logging
 import multiprocessing
+import os
+import re
 import sys
 import warnings
 from collections import defaultdict
@@ -488,6 +490,20 @@ def summarize(out: Path) -> str:
     return "\n".join(lines)
 
 
+def _key_from_dotenv() -> None:
+    """ANTHROPIC_API_KEY from the repository's .env, when the shell does not set it.
+
+    The SDK reads only the environment. Worker processes inherit what is set here.
+    """
+    path = HERE.parents[1] / ".env"
+    if os.environ.get("ANTHROPIC_API_KEY") or not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        found = re.match(r"\s*(?:export\s+)?ANTHROPIC_API_KEY\s*=\s*(.*)$", line)
+        if found:
+            os.environ["ANTHROPIC_API_KEY"] = found.group(1).strip().strip("'\"")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--model", choices=["scripted", *PROFILES])
@@ -531,6 +547,7 @@ def main() -> int:
             return 0
         import anthropic
 
+        _key_from_dotenv()
         try:
             # Free, and fails fast on a missing key or a model name the API does not know.
             anthropic.Anthropic().models.retrieve(name)

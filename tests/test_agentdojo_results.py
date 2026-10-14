@@ -25,6 +25,9 @@ HERE = Path(__file__).resolve().parents[1] / "evals" / "agentdojo"
 FROZEN = {
     "classification.yaml": "acf0bdf1147787164a3a8504da52316d202079599d005a4c540357d9696e6103",
     "PROTOCOL.md": "e59f13d2f09ba361b137bd3f115c04127fca6449c1feb8cc43dd0cc415a2bbe1",
+    # The run with a model, frozen before any model was sent a request.
+    "PROTOCOL-model.md": "5146bd42aae523d5aa966b5cea5f2b2a784e0e16cccac70341e76d0e68aa63b6",
+    "markers.yaml": "275ba25d153a1e125f573b8c5f904249ef6407fe5cf4165657bd7ff7014cce51",
 }
 
 
@@ -46,7 +49,7 @@ def test_the_protocol_and_the_tool_lists_have_not_moved_since_the_freeze():
         assert hashlib.sha256((HERE / name).read_bytes()).hexdigest() == digest, (
             f"{name} was written before any result and is frozen. If the change is "
             "deliberate it is a new, labelled version: say so in evals/agentdojo/README.md, "
-            "re-run the replay, and update this hash."
+            "re-run what it governs, and update this hash."
         )
 
 

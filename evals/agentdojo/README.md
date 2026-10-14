@@ -56,8 +56,8 @@ uv pip install --python .venv/bin/python -r requirements.txt -e ../..
 | `guard.py` | `GuardedRuntime`: AgentDojo's tool runtime with the policies in the call path |
 | `replay.py` | The replay. Writes one row per case |
 | `summarize.py` | The tables, from those rows |
-| `PROTOCOL-model.md` | The run with a model. Draft until frozen |
-| `markers.yaml` | The attacker's values, which the `careful` approver refuses in a model run |
+| `PROTOCOL-model.md` | The run with a model: models, runs, approvers, budget. Frozen |
+| `markers.yaml` | The attacker's values, which the `careful` approver refuses in a model run. Frozen |
 | `model.py` | `Claude`, a metered model element, and `ScriptedAgent`, the replay's agent as one |
 | `run_model.py` | The run with a model, its budget, and its tables |
 | `results/benign.csv` | 97 tasks x 8 runs |
@@ -100,13 +100,14 @@ only the calls in the minimal solution. A model does neither. So against a
 real model the attack numbers here are a ceiling and the approval counts are a
 floor. `run_model.py` puts a model where the script was, in AgentDojo's own
 pipeline, with the same `GuardedRuntime` in the call path.
-[`PROTOCOL-model.md`](PROTOCOL-model.md) says what is run; it is a draft until
-it is frozen, and **no model has been run yet**.
+[`PROTOCOL-model.md`](PROTOCOL-model.md) says what is run. It and
+[`markers.yaml`](markers.yaml) were frozen before any model was sent a
+request, and `tests/test_agentdojo_results.py` fails if either is edited.
 
 ```bash
 .venv/bin/python run_model.py --model scripted                  # free: the harness against the replay
 .venv/bin/python run_model.py --model haiku --budget 25         # prints the plan, sends nothing
-.venv/bin/python run_model.py --model haiku --budget 25 --yes   # spends; needs ANTHROPIC_API_KEY
+.venv/bin/python run_model.py --model haiku --budget 25 --yes   # spends; needs ANTHROPIC_API_KEY (or the repo's .env)
 .venv/bin/python run_model.py --summary results/model/claude-haiku-4-5
 ```
 
