@@ -73,11 +73,12 @@ export function Hero() {
     <>
       <Beams />
       <header className="hero">
-        <h1>A checkpoint between your app and its agent.</h1>
+        <h1>Hard limits for when the agent gets it wrong.</h1>
         <p className="hero__lede">
-          An agent does what it is told, including by whoever slipped a line into the prompt.
-          OpenScript sits in front of the agent and each of its tools, and checks every message,
-          reply and tool call before it goes through.
+          Models have got good at ignoring instructions slipped into what they read, and they
+          still get things wrong. OpenScript sits in front of an agent and each of its tools, and
+          checks every message, reply and tool call against rules you wrote, whatever the model
+          was persuaded of.
         </p>
         <div className="hero__actions">
           <a className="btn" href="#demo">

@@ -1,6 +1,8 @@
 # OpenScript
 
-**Security gateway SDK for LLM/agent workflows.** Firewall the tools an agent calls, gate risky actions behind human approval, redact PII and secrets, record every action and every refusal, and flag known prompt-injection shapes — across any LLM provider.
+**A security gateway for LLM agents: hard limits and a record, for when the model gets it wrong.** OpenScript sits between an agent and its tools. It refuses calls outside rules you write (which tools, which recipients, how much), holds the ones you choose for a person to approve, redacts secrets before the model sees them and PII before the caller gets it back, and records every action and every refusal — across any LLM provider. None of that depends on recognising an attack.
+
+**Why, when models already resist prompt injection.** They do, and it is measured here: on AgentDojo's banking suite, Claude Haiku 4.5 and Claude Sonnet 5.5 followed none of the planted instructions in 3,456 attacked conversations ([numbers](docs/metrics.md#tool-policies-on-agentdojo-with-a-model-in-the-loop)). OpenScript is not a replacement for that judgement. It is what still holds when the judgement fails — an attack written for the model, a different or older model, an honest mistake with real money — and what judgement does not give you: a limit you can state in advance, an approval bound to the exact call, and a record. It does not make approvals rare. With Claude Sonnet 5.5 doing AgentDojo's banking tasks, the rule that holds every state-changing call after an untrusted read asked on 11 of 16, as often as asking every time, and that is published too.
 
 OpenScript wraps any agent in a **policy pipeline**: policies run before and after every action, and each one can allow, mutate (redact), deny, or require human approval. The pipeline itself contains zero detection logic — everything is a `Policy` you can swap, configure from YAML, or write yourself.
 
@@ -198,7 +200,7 @@ It reads none of the text, so it cannot be talked round by how an attack is word
 | `SecretsPolicy` | input + output | Redacts or denies AWS/GitHub/Slack tokens, JWTs, private-key blocks; separately flags internal URLs/private IPs (`internal_url_mode`: annotate by default, plus allowlist) |
 | `CompliancePolicy` | input + output | Honestly-scoped presets: `phi_detection`, `credential_output_guard`, `data_access_audit` — see [Compliance positioning](#compliance-positioning) |
 | `ToolFirewallPolicy` | tool call | Per-tool deny/RBAC and per-argument rules (bounds, allowlists, patterns, path prefixes); can require human approval. Acts on tool calls only, so it goes in a [`SecureTool`](#4-guard-the-tools-the-agent-calls)'s list, not a `SecureAgent`'s. Also usable standalone via `validate_tool_call()` or `POST /v1/tools/validate` |
-| `SessionTaintPolicy` | tool call | Remembers which sessions have read untrusted content (the tools you name as sources) and holds, or refuses, every later call to a tool you name as state-changing. It reads no text, so it does not depend on recognising an attack, and it holds the benign follow-up too. Goes in a [`SecureTool`](#5-hold-what-follows-an-untrusted-read)'s list, one instance shared by all of a session's tools |
+| `SessionTaintPolicy` | tool call | Remembers which sessions have read untrusted content (the tools you name as sources) and holds, or refuses, every later call to a tool you name as state-changing. It reads no text, so it does not depend on recognising an attack, and it holds the benign follow-up too: with a model doing AgentDojo's banking tasks it asked on 11 of 16. Goes in a [`SecureTool`](#5-hold-what-follows-an-untrusted-read)'s list, one instance shared by all of a session's tools |
 | `OutputSchemaPolicy` | output | Pydantic schema validation, dangerous-content scan, optional hallucination/grounding check against a source |
 | `AuditPolicy` | both | Writes every action to the event store, and an `action_blocked` event for every action the pipeline refuses; place it **last** so its events carry the final risk score |
 
@@ -222,7 +224,7 @@ Read the four bold rows first. The top three are conformance tests, written alon
 
 **Detection of unseen attacks is 2 to 7%.** A pattern bank recognises shapes, so it is close to perfect on attack families it has seen, including disguised ones, and close to useless against an attack phrased in words nobody wrote a rule for. Two caveats on the public rows: about three in ten of the deepset attacks are in German, and part of XSTest's unsafe half asks for things no policy here claims to stop.
 
-That is why the detectors are not the boundary. The tool rules, approvals, redaction and audit are, and they do not depend on recognising an attack.
+That is why the detectors are not the boundary. The tool rules, approvals, redaction and audit are, and they do not depend on recognising an attack. With a model in the loop on AgentDojo, the detector withheld nothing and the models ignored every planted instruction themselves: the first line is the model, and these are the limits behind it.
 
 **False positives are 0 of 154 on prompts written here, and 4 of 988 across the three public sets.** A gateway that blocks the security team gets switched off, so this number matters as much as the first.
 

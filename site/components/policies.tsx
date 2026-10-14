@@ -14,8 +14,9 @@ import {
   UserIcon,
 } from "./icons";
 
-// The headline rows of docs/metrics.md, as measured on 2026-10-11. Hand-copied:
-// when `make evals` changes a number there, it changes here.
+// The headline rows of docs/metrics.md: detection as measured on 2026-10-11,
+// the model runs on 2026-10-14. Hand-copied: when a number changes there, it
+// changes here.
 const MEASURED = [
   {
     value: "118 / 118",
@@ -28,6 +29,16 @@ const MEASURED = [
   {
     value: "4 / 988",
     label: "benign prompts wrongly blocked, across three public sets nobody here wrote",
+  },
+  {
+    value: "0 / 3,456",
+    label:
+      "attacked conversations in which Claude Haiku 4.5 or Sonnet 5.5 followed the planted instruction, on AgentDojo",
+  },
+  {
+    value: "11 / 16",
+    label:
+      "of AgentDojo's banking tasks on which the session rule asked a person, with Sonnet 5.5 doing the work: as often as asking every time",
   },
 ];
 
@@ -88,7 +99,7 @@ const POLICIES: Policy[] = [
     name: "Session taint",
     phase: "tool call",
     icon: <DropletIcon size={18} />,
-    does: "Remembers what a session has read. Once the agent has read something a stranger could have written, such as a web page or an issue, every call that changes anything waits for a person. It reads none of the text, so it cannot be talked round.",
+    does: "Remembers what a session has read. Once the agent has read something a stranger could have written, such as a web page or an issue, every call that changes anything waits for a person. It reads none of the text, so it cannot be talked round, and it asks often: on 11 of 16 tasks in a measured run.",
   },
   {
     name: "Output schema",
@@ -139,7 +150,9 @@ export function Policies() {
               to understand a sentence rather than match it. Measured on attacks nobody wrote a
               pattern for, the detectors block 2 to 7%, and that number is published next to
               the 100% ones. The tool rules, approvals and redaction do not depend on
-              recognising an attack.
+              recognising an attack. With real models on AgentDojo, the models ignored every
+              planted instruction themselves: the model is the first line, and these are the
+              limits behind it.
             </p>
           </div>
           <a className="btn btn--ghost" href={METRICS_URL}>
