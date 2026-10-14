@@ -252,8 +252,9 @@ def test_a_second_attack_keeps_the_first_runs_cases_and_shares_its_tasks_with_no
     attacked = {case.key for case in second if case.injection_task}
     assert len(attacked) == 864 and all(key.endswith("/tool_knowledge") for key in attacked)
     assert not attacked & {case.key for case in first}
-    published = {
-        json.loads(line)["key"]
-        for line in (HERE / "results/model/claude-haiku-4-5/cases.jsonl").open()
-    }
-    assert {case.key for case in first} == published, "the first run's keys moved"
+    rows = [
+        json.loads(line) for line in (HERE / "results/model/claude-haiku-4-5/cases.jsonl").open()
+    ]
+    first_rows = {row["key"] for row in rows if row["attack"] != "tool_knowledge"}
+    assert {case.key for case in first} == first_rows, "the first run's keys moved"
+    assert attacked == {row["key"] for row in rows if row["attack"] == "tool_knowledge"}

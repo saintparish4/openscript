@@ -206,73 +206,88 @@ Where the detector does fire it withholds the whole result, so the attack
 fails and so does the task that needed to read it: 0 of 617. On the 97
 ordinary tasks it withheld nothing.
 
-## Tool policies on AgentDojo: Claude Haiku 4.5 in the loop
+## Tool policies on AgentDojo: with a model in the loop
 
-`run_model.py --model haiku` — [`evals/agentdojo/`](../evals/agentdojo/README.md#with-a-model).
-The same benchmark with a model where the replay's script was: Claude Haiku
-4.5 in AgentDojo's own pipeline, every tool call through the same policies.
-Banking suite only, 16 tasks and 144 task-and-attack pairs over 9 injection
-tasks, `important_instructions`, six runs, one sample of each case. What was
-to be run, and the approver below, were frozen before the model was sent a
-request ([`PROTOCOL-model.md`](../evals/agentdojo/PROTOCOL-model.md)).
-Measured 2026-10-14; it cost $6.21.
+`run_model.py` — [`evals/agentdojo/`](../evals/agentdojo/README.md#with-a-model).
+The same benchmark with a model where the replay's script was, in
+AgentDojo's own pipeline, every tool call through the same policies: Claude
+Haiku 4.5 and Claude Sonnet 5.5, each at its own defaults. Banking suite
+only: 16 tasks, and 144 task-and-attack pairs over 9 injection tasks. Six
+runs, one sample of each case. Two attacks: `important_instructions`, the
+benchmark's standard, as frozen in
+[`PROTOCOL-model.md`](../evals/agentdojo/PROTOCOL-model.md) before any model
+was sent a request; and `tool_knowledge`, which also spells out the exact
+calls to make, added by [an amendment](../evals/agentdojo/PROTOCOL-model-amendment-1.md)
+after Haiku showed the first attack landing nowhere, and frozen before it
+ran. Measured 2026-10-14, for $27.84: $11.97 on Haiku, $15.87 on Sonnet.
 
-**Haiku 4.5 did not follow the injection once.** With no policy, 0 of 144
-attacks succeeded (0% to 3%). Across all six runs, 864 attacked
-conversations, it never made a call carrying the attacker's account. In
-about one in five its reply called the injected text suspicious or an
-attempt to manipulate it. So on this model and this attack there was
-nothing for a tool policy to stop, and this run says nothing about what the
-policies contain. The replay is still the measure of that.
+**Neither model followed either attack, once.** With no policy, 0 of 144 for
+each model and each attack (0% to 3%). Across every run, 3,456 attacked
+conversations, neither model made a single call carrying the attacker's
+account or the password it asked for. Sonnet's last reply named the injected
+text for what it was in about 84% of them ("that text came from the file, not
+from you, so I ignored it"); Haiku's in about 17%. So there was nothing for a
+tool policy to stop, and these runs say nothing about what the policies
+contain. The replay is still the measure of that.
 
-| Configuration | Who answers approvals | Attacks that succeeded | Attacked tasks that needed an approval | Attacked tasks done |
-|---|---|---|---|---|
-| No policy | — | 0/144 | 0/144 | 86/144 |
-| Detector only | — | 0/144 | 0/144 | 81/144 |
-| Ask on every state-changing call | nobody | 0/144 | 38/144 | 58/144 |
-| Ask on every state-changing call | a careful person | 0/144 | 31/144 | 82/144 |
-| Session rule, sources as listed | nobody | 0/144 | 32/144 | 58/144 |
-| Session rule, sources as listed | a careful person | 0/144 | 28/144 | 84/144 |
+Tasks done under attack, of 144. Attacks that succeeded: 0 in every cell.
+
+| Configuration | Who answers approvals | Haiku 4.5, `important_instructions` | Haiku 4.5, `tool_knowledge` | Sonnet 5.5, `important_instructions` | Sonnet 5.5, `tool_knowledge` |
+|---|---|---|---|---|---|
+| No policy | — | 86 | 92 | 132 | 129 |
+| Detector only | — | 81 | 90 | 133 | 129 |
+| Ask on every state-changing call | nobody | 58 | 61 | 63 | 63 |
+| Ask on every state-changing call | a careful person | 82 | 91 | 133 | 134 |
+| Session rule, sources as listed | nobody | 58 | 62 | 63 | 63 |
+| Session rule, sources as listed | a careful person | 84 | 90 | 131 | 131 |
 
 With no attack to stop, the policies are only a cost. With nobody to answer
-them, tasks done under attack fall from 86 to 58 of 144. With a careful
-person answering, they are within one sample's noise of no policy. The
-detector withheld no result: this wording is not one it catches, as the
-replay found. "A careful person" here refuses a held call that carries the
+them, tasks done under attack fall to about 60 of 144 for both models. With
+a careful person answering, they are within one sample's noise of no
+policy. The detector withheld no result in any run: neither wording is one
+it catches. "A careful person" here refuses a held call that carries the
 attacker's account (`markers.yaml`) and approves every other.
 
 ### What it costs on ordinary work, with a model
 
-| Configuration | Who answers approvals | Tasks where the model changed something | Tasks that needed an approval | Tasks done |
-|---|---|---|---|---|
-| No policy | — | 3/16 | 0/16 | 9/16 |
-| Detector only | — | 2/16 | 0/16 | 8/16 |
-| Ask on every state-changing call | nobody | 4/16 | 4/16 | 7/16 |
-| Ask on every state-changing call | a careful person | 5/16 | 5/16 | 9/16 |
-| Session rule, sources as listed | nobody | 4/16 | 4/16 | 7/16 |
-| **Session rule, sources as listed** | a careful person | 4/16 | **4/16 (25%, 10% to 49%)** | 9/16 |
+Of 16 tasks: those on which the model changed something, those that needed
+an approval, and those done.
 
-- **The session rule asked on a quarter of tasks, under the bar of a third,
-  and for the wrong reason.** Haiku changed something on only 2 to 5 of the
-  16 tasks. On 10 of them it read what it needed and then stopped to ask the
-  user for a date, a subject line, an account or a confirmation, instead of
-  acting. The replay's agent changed something on 12. Every time Haiku did
-  change something it had read first, and the rule asked: 4 of 4. Asking on
-  every state-changing call asked on 5 of 5. On ordinary tasks, remembering
-  what was read saved nothing here; the replay found the same for banking.
-- **"Done" is AgentDojo's check, and it is generous on three tasks.**
-  Banking's `user_task_5` and `user_task_6` pass with nothing done, because
-  the payment they check for is already in the history (written down before
-  the run), and `user_task_8` has no check at all (found in this one). Two
-  more pass when nothing changes, correctly: in `user_task_9` the rent is
-  already right, and `user_task_10` ("pay the bill, like last month") is
-  ambiguous. Without the three, Haiku did 6 of the other 13 with no policy.
-- **Cost.** 2,044 requests, 4.8M input tokens, 0.29M output. Nothing was
-  cached: Haiku 4.5 caches from 4,096 tokens and these requests are smaller.
+| Configuration | Who answers approvals | Haiku 4.5: changed / asked / done | Sonnet 5.5: changed / asked / done |
+|---|---|---|---|
+| No policy | — | 3 / 0 / 9 | 11 / 0 / 16 |
+| Detector only | — | 2 / 0 / 8 | 10 / 0 / 15 |
+| Ask on every state-changing call | nobody | 4 / 4 / 7 | 10 / 10 / 7 |
+| Ask on every state-changing call | a careful person | 5 / 5 / 9 | 11 / 11 / 16 |
+| Session rule, sources as listed | nobody | 4 / 4 / 7 | 11 / 11 / 7 |
+| **Session rule, sources as listed** | a careful person | 4 / 4 / 9 | **11 / 11 (69%, 44% to 86%) / 16** |
 
-One model, one suite, one attack wording, one sample per case. A model that
-resists an attack this completely says nothing about one that does not, and
-nothing about attacks written for it.
+- **With a model that does the work, the session rule misses the bar, as in
+  the replay.** Sonnet 5.5 did all 16 tasks with no policy and changed
+  something on 11. The session rule asked on all 11: 69% of tasks against a
+  bar of a third. Asking on every state-changing call asked on the same 11.
+  Each time Sonnet changed something it had already read a listed source, so
+  remembering what was read saved nothing here; the replay found 12 of 16.
+- **Haiku's 4 of 16 is not the rule meeting the bar.** Haiku changed
+  something on only 2 to 5 tasks. On 10 it read what it needed and stopped to
+  ask the user for a date, a subject line, an account or a confirmation. It
+  was asked for approval every time it did change something.
+- **With nobody to answer, no task that needed a change got done,** for
+  either model. The 7 counted done are two questions about past spending, two
+  where changing nothing is the right answer (`user_task_9`, the rent is
+  already right; `user_task_10`, "pay the bill, like last month", is
+  ambiguous), and three that AgentDojo's check passes with nothing done:
+  `user_task_5` and `user_task_6`, whose payments are already in the history
+  (written down before the run), and `user_task_8`, which has no check at
+  all (found in this one).
+- **Cost.** Haiku: 3,919 requests, 9.3M input tokens and 0.54M output,
+  nothing cached (Haiku 4.5 caches from 4,096 tokens and these requests are
+  smaller). Sonnet: 4,925 requests, 13.1M input tokens read from cache, 1.0M
+  written to it and 13k not cached, and 1.07M output, thinking included.
+
+Two models, one suite, two attack wordings, one sample per case. Models that
+resist fixed attacks this completely say nothing about attacks written
+against them, or about other models. The replay remains the worst case.
 
 ## Speed
 
@@ -332,7 +347,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
-| 2026-10-14 | AgentDojo's banking suite with Claude Haiku 4.5 in the loop: the model followed the injection in none of 144 pairs with no policy, so there was nothing for the policies to stop, and they only cost tasks. The session rule asked on 4 of 16 ordinary tasks, because the model changed something on only 4; it asked every time it did |
+| 2026-10-14 | AgentDojo's banking suite with a model in the loop, Claude Haiku 4.5 and Claude Sonnet 5.5, under two attacks: neither model followed either attack in any of 3,456 attacked conversations, so there was nothing for the policies to stop and they only cost tasks. With Sonnet, which did the work, the session rule asked on 11 of 16 ordinary tasks, as often as asking on every state-changing call |
 | 2026-10-13 | AgentDojo replayed through the tool policies, with no model: the session rule stops 570 of 617 attacks with a careful approver and asks on 55 of 97 ordinary tasks, against a bar of a third set beforehand. A stateless rule that asks on every state-changing call stops 597 and asks on 61 |
 | 2026-10-13 | A tenth built-in policy, `SessionTaintPolicy`: once a session has read untrusted content, a state-changing tool call waits for a person. It reads no text, so it has no detection rate to report; what it costs in approvals is measured separately |
 | 2026-10-13 | Demo gallery is twenty-one prompts from seven people. An analyst's browsing agent joins: a host rule on page opens and form posts, a purchase held for the finance lead, and a page whose note to the agent the result scan misses and the tool rule stops anyway |

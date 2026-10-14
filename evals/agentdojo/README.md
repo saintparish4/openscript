@@ -127,11 +127,13 @@ tasks with no attack are not run again.
   conversation) and `requests.jsonl` (the usage and cost of every request)
   under `results/model/<model>/`.
 
-**Claude Haiku 4.5, banking, 2026-10-14** (`results/model/claude-haiku-4-5/`,
-$6.21): it followed the injection in none of 144 pairs with no policy, and
-never made a call carrying the attacker's account in any of the six runs. So
-there was nothing to contain, and the policies only cost tasks. The session
-rule asked on 4 of 16 ordinary tasks, because Haiku changed something on only
-4: on most it stopped to ask the user instead. The tables are in
-[`docs/metrics.md`](../../docs/metrics.md#tool-policies-on-agentdojo-claude-haiku-45-in-the-loop),
+**Claude Haiku 4.5 and Claude Sonnet 5.5, banking, 2026-10-14**
+(`results/model/`, $27.84): under `important_instructions` and, by
+amendment 1, `tool_knowledge`, neither model followed the injection once,
+and in 3,456 attacked conversations neither made a call carrying the
+attacker's account. So there was nothing to contain, and the policies only
+cost tasks. With Sonnet, which did the work, the session rule asked on 11 of
+16 ordinary tasks, as often as asking every time; Haiku mostly stopped to ask
+the user instead of acting. The tables are in
+[`docs/metrics.md`](../../docs/metrics.md#tool-policies-on-agentdojo-with-a-model-in-the-loop),
 and `tests/test_agentdojo_results.py` holds them to the rows.
