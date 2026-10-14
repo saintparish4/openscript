@@ -36,8 +36,14 @@ from sdk.observability.risk import aggregate_risk
 
 # Tool rules the sandboxed agents are held to. One of each kind of check the
 # firewall makes, so the gallery can show each of them refusing something: an
-# allowlist, a bound, a path, a role, a tool that is never allowed, and two
-# that need a person.
+# allowlist, a bound, a path, a host, a role, a tool that is never allowed, and
+# three that need a person.
+
+# The one site a browsing agent may open pages on and submit forms to. Anchored
+# by the firewall to the whole value (re.fullmatch), so a host that merely
+# begins with this one does not satisfy it.
+_VENDOR_URL = r"https://vendor\.example\.com(/.*)?"
+
 TOOL_RULES = ToolRules.model_validate(
     {
         # A tool with no rule is refused. This is what stops a call nobody
@@ -61,6 +67,20 @@ TOOL_RULES = ToolRules.model_validate(
                 "args": {"env": {"required": True, "one_of": ["staging", "production"]}},
             },
             "rotate_keys": {"allowed_roles": ["admin"]},
+            # A browsing agent may open the vendor's pages, and nothing else.
+            # The rule reads the URL the agent asked for, as text: where that
+            # page redirects to is not something it sees.
+            "open_page": {
+                "unlisted_args": "deny",
+                "args": {"url": {"required": True, "pattern": _VENDOR_URL}},
+            },
+            # Submitting a form is a purchase or a disclosure. Only on the
+            # vendor's own site, and a person signs it off.
+            "submit_form": {
+                "requires_approval": True,
+                "unlisted_args": "deny",
+                "args": {"url": {"required": True, "pattern": _VENDOR_URL}, "fields": {}},
+            },
         },
     }
 )

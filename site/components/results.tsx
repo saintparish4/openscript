@@ -138,7 +138,7 @@ export function CrisisNotice({ result }: { result: PipelineResult }) {
  * innocent; this is where the instruction came from, and a visitor who cannot
  * read it has to take "indirect injection" on trust.
  */
-function FetchedView({ fetched }: { fetched: FetchedTool }) {
+function FetchedView({ fetched, missed }: { fetched: FetchedTool; missed: boolean }) {
   const args = Object.entries(fetched.args)
     .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
     .join(", ");
@@ -150,10 +150,12 @@ function FetchedView({ fetched }: { fetched: FetchedTool }) {
       </code>
       <p className="toolcall__rule">This call is allowed, and it ran. It returned:</p>
       <p className="diff__text toolcall__returned">{fetched.returned}</p>
-      <p className={`toolcall__scan${fetched.flagged ? " toolcall__scan--flagged" : ""}`}>
+      <p className={`toolcall__scan${fetched.flagged || missed ? " toolcall__scan--flagged" : ""}`}>
         {fetched.flagged
           ? `The scan of this result scored it ${fetched.risk.toFixed(2)} for injection and recorded that. It did not block it: the result still reached the agent.`
-          : "The scan of this result found nothing that read as an instruction to the model."}
+          : missed
+            ? `The scan of this result scored it ${fetched.risk.toFixed(2)}: nothing in it matched a pattern. The instruction is there, in the last paragraph. This is what the detector missing an attack looks like, and the call below is what the rules do about it.`
+            : "The scan of this result found nothing that read as an instruction to the model."}
       </p>
     </div>
   );
@@ -260,8 +262,16 @@ export function headlineOf(result: PipelineResult): Headline {
  * strip, so walking the gallery shows the checkpoints rather than describing
  * them: the first five stop at the prompt, the last two at the tool.
  */
-function StageStrip({ result, miss }: { result: PipelineResult; miss: boolean }) {
-  const stages = stagesOf(result, miss);
+function StageStrip({
+  result,
+  miss,
+  scanMiss,
+}: {
+  result: PipelineResult;
+  miss: boolean;
+  scanMiss: boolean;
+}) {
+  const stages = stagesOf(result, miss, scanMiss);
   return (
     <ol
       className={`checkpoints checkpoints--${stages.length}`}
@@ -305,6 +315,10 @@ export function Results({
   const plain = outcomeOf(result);
   // Only a miss if it really did get through: verify.mjs holds that to be so.
   const missed = example.miss === true && plain.tone === "clean";
+  // Same discipline for the scan of a tool result: only a miss if it really
+  // did find nothing, which verify.mjs holds it to as well.
+  const scanMissed =
+    example.scanMiss === true && result.fetched !== null && !result.fetched.flagged;
   const { tone } = missed ? missedOutcome(plain) : plain;
   const headline = missed
     ? {
@@ -329,7 +343,7 @@ export function Results({
         {headline.reason ? <p className="outcome__reason">{headline.reason}</p> : null}
       </div>
 
-      <StageStrip result={result} miss={missed} />
+      <StageStrip result={result} miss={missed} scanMiss={scanMissed} />
 
       {/* A badge says a policy fired. It does not say what the agent would
           have done with the prompt, or what the pipeline did instead — which
@@ -347,7 +361,7 @@ export function Results({
         </div>
       </dl>
 
-      {result.fetched ? <FetchedView fetched={result.fetched} /> : null}
+      {result.fetched ? <FetchedView fetched={result.fetched} missed={scanMissed} /> : null}
       {result.tool_call ? (
         <ToolCallView call={result.tool_call} after={result.fetched !== null} />
       ) : null}

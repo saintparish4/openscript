@@ -64,7 +64,7 @@ export function missedOutcome(outcome: Outcome): Outcome {
   return outcome.tone === "clean" ? { tone: "flag", label: "Missed" } : outcome;
 }
 
-export function stagesOf(result: PipelineResult, miss = false): Stage[] {
+export function stagesOf(result: PipelineResult, miss = false, scanMiss = false): Stage[] {
   const stoppedAtPrompt = result.blocked && result.stage === "prompt";
   const { input, output } = rewrites(result);
   const held = result.rows.some((r) => r.verdict === "approval");
@@ -88,7 +88,9 @@ export function stagesOf(result: PipelineResult, miss = false): Stage[] {
     stages.push(
       result.fetched.flagged
         ? { name: "Tool result", state: "noted", note: "Flagged" }
-        : { name: "Tool result", state: "passed", note: "Read" },
+        : scanMiss
+          ? { name: "Tool result", state: "noted", note: "Missed" }
+          : { name: "Tool result", state: "passed", note: "Read" },
     );
   }
 

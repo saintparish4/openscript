@@ -128,7 +128,7 @@ a second pass.
 |---|---|---|
 | Cold load, iOS Safari (cellular) | ~5-6 s to ready | By hand, 2026-09-20 |
 | Cold load, desktop Chrome | ~5-6 s to ready | By hand, 2026-09-20 |
-| Every gallery prompt behaves as advertised | 18/18 | `make demo-verify`, 2026-10-11. Ten of the original prompts were also checked by hand on device on 2026-09-20; the eighteen as they stand have not been |
+| Every gallery prompt behaves as advertised | 21/21 | `make demo-verify`, 2026-10-13. Ten of the original prompts were also checked by hand on device on 2026-09-20; the twenty-one as they stand have not been |
 | Over the wire, cold | ~7.2 MB brotli | DevTools, 2026-09-16 |
 | Self-hosted wheels | 164 KB (80 KB openscript + 76 KB structlog) | `du -sh site/public/wheels` |
 
@@ -150,6 +150,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | Demo gallery is twenty-one prompts from seven people. An analyst's browsing agent joins: a host rule on page opens and form posts, a purchase held for the finance lead, and a page whose note to the agent the result scan misses and the tool rule stops anyway |
 | 2026-10-11 | Demo gallery is eighteen prompts from six people. It gained tool rules for paths, roles and an allowlist, an approval that can be answered both ways, an injection arriving through a tool result, and one attack shown getting through |
 | 2026-10-11 | Public corpus added: `XSTest`, 1/250 safe prompts wrongly blocked (0.4%), 13/200 unsafe prompts blocked (6.5%) |
 | 2026-10-11 | Public benign corpus added: `NotInject`, 3/339 wrongly blocked (0.9%). The first false positives measured, on prompts nobody here wrote |

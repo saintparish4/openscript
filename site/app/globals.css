@@ -368,11 +368,11 @@ kbd {
   text-shadow: 0 1px 12px rgb(0 0 0 / 0.5);
 }
 
-/* A grid, not a wrapping row: six cards in two rows of three, every one the
+/* A grid, not a wrapping row: seven cards, four and then three, every one the
    same width and the same height whatever the length of the name or the role. */
 .cast__people {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
   margin: 0;
   padding: 0;

@@ -198,7 +198,14 @@ for (const ex of EXAMPLES) {
       console.error(`  ${ex.id}: the read the agent starts with did not run`);
       ok = false;
     }
-    if (!result.fetched?.flagged || scan?.verdict !== "flag") {
+    if (ex.scanMiss) {
+      // Shown because the scan misses it. If a pattern ever starts catching
+      // this wording, the copy is wrong the other way round, and this fails.
+      if (result.fetched?.flagged || scan?.verdict !== "allow") {
+        console.error(`  ${ex.id}: the page says the scan misses this, but it was flagged: ${scan?.explanation}`);
+        ok = false;
+      }
+    } else if (!result.fetched?.flagged || scan?.verdict !== "flag") {
       console.error(`  ${ex.id}: the tool result was not flagged: ${scan?.explanation}`);
       ok = false;
     }
@@ -274,12 +281,12 @@ for (const ex of EXAMPLES) {
 
 server.close();
 
-// The gallery is six people with three prompts each, and the page says so.
+// The gallery is seven people with three prompts each, and the page says so.
 const perPerson = {};
 for (const ex of EXAMPLES) perPerson[ex.persona.name] = (perPerson[ex.persona.name] ?? 0) + 1;
 const people = Object.keys(perPerson);
-if (people.length !== 6 || people.some((name) => perPerson[name] !== 3)) {
-  console.error(`  the gallery is not six people with three prompts each: ${JSON.stringify(perPerson)}`);
+if (people.length !== 7 || people.some((name) => perPerson[name] !== 3)) {
+  console.error(`  the gallery is not seven people with three prompts each: ${JSON.stringify(perPerson)}`);
   failures++;
 }
 // One person, one role: a name is introduced once above the window.

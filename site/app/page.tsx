@@ -25,9 +25,10 @@ export default function Page() {
                 Kept to a line and a row so the window stays in the first screen. */}
             <div className="cast">
               <p className="cast__lede">
-                {EXAMPLES.length} prompts from six people, three each: a customer, a contractor,
-                a support agent and three engineers. Pick one and it runs through the real
-                pipeline, next to what would have happened without it.
+                {EXAMPLES.length} prompts from seven people, three each: a customer, a
+                contractor, a support agent, three engineers and an analyst with a browsing
+                agent. Pick one and it runs through the real pipeline, next to what would have
+                happened without it.
               </p>
               <ul className="cast__people">
                 {CAST.map((person) => (

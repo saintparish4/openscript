@@ -13,10 +13,11 @@ export interface Example {
   label: string;
   /** What a visitor should expect to see, in one clause. */
   teaser: string;
-  /** Three fictional people share the gallery: a customer, a contractor and a
-   *  support agent. Attack prompts arriving from named users with a reason to
-   *  be talking to the agent is closer to what a gateway actually sees than a
-   *  list of disembodied payloads. */
+  /** The senders are fictional people with a reason to be talking to the
+   *  agent: a customer, a contractor, a support agent, three engineers and an
+   *  analyst with a browsing agent. Attack prompts arriving from named users
+   *  is closer to what a gateway actually sees than a list of disembodied
+   *  payloads. */
   persona: Persona;
   text: string;
   /** What the prompt is trying to do, in the sender's terms. */
@@ -42,6 +43,10 @@ export interface Example {
    *  the same way as everything else: if a pattern ever starts catching it,
    *  the copy that says it gets through is wrong and verify.mjs fails. */
   miss?: boolean;
+  /** The injection in `fetched` is one the scan of the tool's result is known
+   *  not to catch, shown on purpose: the tool rule stops the call anyway.
+   *  Asserted both ways by verify.mjs, like `miss`. */
+  scanMiss?: boolean;
   /** The policy this example is meant to demonstrate, asserted by verify.mjs. */
   expect: string;
 }
