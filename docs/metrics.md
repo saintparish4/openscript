@@ -150,6 +150,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-13 | A tenth built-in policy, `SessionTaintPolicy`: once a session has read untrusted content, a state-changing tool call waits for a person. It reads no text, so it has no detection rate to report; what it costs in approvals is measured separately |
 | 2026-10-13 | Demo gallery is twenty-one prompts from seven people. An analyst's browsing agent joins: a host rule on page opens and form posts, a purchase held for the finance lead, and a page whose note to the agent the result scan misses and the tool rule stops anyway |
 | 2026-10-11 | Demo gallery is eighteen prompts from six people. It gained tool rules for paths, roles and an allowlist, an approval that can be answered both ways, an injection arriving through a tool result, and one attack shown getting through |
 | 2026-10-11 | Public corpus added: `XSTest`, 1/250 safe prompts wrongly blocked (0.4%), 13/200 unsafe prompts blocked (6.5%) |

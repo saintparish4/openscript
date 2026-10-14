@@ -14,8 +14,8 @@ OpenScript wraps any agent in a **policy pipeline**: policies run before and aft
 that runs **this package** — compiled to WebAssembly with Pyodide — entirely inside your
 tab. Pick a prompt from the gallery and every policy runs locally: there is no backend and
 no API endpoint, so the prompt and the verdicts never leave the tab, and the network tab
-proves it. That is possible because all nine built-in policies are pure-local heuristics, a
-property enforced in CI rather than merely asserted. Requires a browser with WebAssembly and
+proves it. That is possible because all ten built-in policies are pure-local (patterns, heuristics,
+checksums and declarative rules), a property enforced in CI rather than merely asserted. Requires a browser with WebAssembly and
 access to the jsDelivr CDN (which serves the Pyodide runtime).
 
 The gallery is twenty-one prompts from seven fictional people, three each — a customer, a contractor, a support agent, three engineers (a security engineer testing the gateway, a backend developer with a coding agent, and a platform engineer with an ops agent) and a procurement analyst with a browsing agent. Each one shows what the sender is asking for, what reaching the agent unchecked would have meant, and what the pipeline did instead; tool prompts show the call the firewall refused next to the rule it hit, the held call can be approved or denied as the team lead it was sent to, to see it run once or come back with a reason, and the disguised jailbreak names the obfuscation that had to be undone before any pattern matched. One prompt is there because it gets through: a jailbreak reworded so that no pattern covers it, shown as a miss. Two are the reason that matters less than it sounds. An injection that arrives inside an issue the agent reads is only flagged by the detector, and the shell command it asks for is refused by the tool rules anyway. The last one is the same thing without the flag: a pricing page carries a politely worded note for the agent, send the session somewhere first and do not mention it, which the detector scores at zero, and the form post it provokes is refused because the destination is not the vendor's site. The rules never had to notice the attack to stop it.
@@ -155,6 +155,37 @@ What that buys, and what it does not:
 
 Start from `sdk/policies/tools_example.yaml`. The same check is available without the wrapper as `validate_tool_call(call, rules=rules)` and `POST /v1/tools/validate`.
 
+### 5. Hold What Follows an Untrusted Read
+
+The rules above judge one call at a time. `SessionTaintPolicy` remembers. A prompt injection works in two steps: the agent reads something a stranger wrote, then it acts. Once a session has read untrusted content, every call that changes anything waits for a person:
+
+```python
+from sdk import SecureTool, SessionTaintPolicy, ToolFirewallPolicy
+
+firewall = ToolFirewallPolicy(rules_path="tools.yaml")
+taint = SessionTaintPolicy(
+    sources=["fetch_issue", "read_page"],   # what they return, a stranger may have written
+    sinks=["send_email", "run_shell"],      # what they do cannot be taken back
+)
+
+fetch = SecureTool(fetch_issue, policies=[firewall, taint])
+send = SecureTool(send_email, policies=[firewall, taint])
+
+await send.call({"to": "ops@example.com"}, session_id="s1")   # runs: nothing untrusted read yet
+await fetch.call({"number": 482}, session_id="s1")            # runs, and taints the session
+await send.call({"to": "ops@example.com"}, session_id="s1")   # ActionBlockedError, with an approval_id
+```
+
+It reads none of the text, so it cannot be talked round by how an attack is worded. For the same reason it cannot tell a hostile page from an ordinary one: it holds the benign follow-up exactly as it holds the attack. What that buys, and what it does not:
+
+- **One instance for all of a session's tools.** What a session has read is remembered on the policy instance. A sink wrapped with a second instance never hears about a read seen by the first.
+- **A tool that is not listed is not held.** `sinks="*"` holds every tool. A read whose arguments can carry data out (a URL to fetch) is a source *and* a sink: list it in both.
+- **An approval buys one call.** It is bound to the tool and its exact arguments, like every approval here, and the session stays tainted afterwards. `on_taint="deny"` refuses instead of asking.
+- **A read that never returned taints nothing.** One the firewall refused, or that raised, gave the model nothing. One whose result a later policy withholds still taints, which is the safe side to be wrong on.
+- **Sessions are what you say they are.** Calls made without a `session_id` share one, which errs towards holding. `reset(session_id)` is for when the model's context has been discarded, and `taint(session_id, source)` is for content that arrives some other way, such as an uploaded file.
+- **The memory is this process's.** Like the in-memory approval store, it is not shared between workers and does not survive a restart.
+- **Put the firewall before it,** so a call the rules refuse outright is refused, not sent to a person first.
+
 ## Built-in Policies
 
 | Policy | Phase | What it does |
@@ -166,6 +197,7 @@ Start from `sdk/policies/tools_example.yaml`. The same check is available withou
 | `SecretsPolicy` | input + output | Redacts or denies AWS/GitHub/Slack tokens, JWTs, private-key blocks; separately flags internal URLs/private IPs (`internal_url_mode`: annotate by default, plus allowlist) |
 | `CompliancePolicy` | input + output | Honestly-scoped presets: `phi_detection`, `credential_output_guard`, `data_access_audit` — see [Compliance positioning](#compliance-positioning) |
 | `ToolFirewallPolicy` | tool call | Per-tool deny/RBAC and per-argument rules (bounds, allowlists, patterns, path prefixes); can require human approval. Acts on tool calls only, so it goes in a [`SecureTool`](#4-guard-the-tools-the-agent-calls)'s list, not a `SecureAgent`'s. Also usable standalone via `validate_tool_call()` or `POST /v1/tools/validate` |
+| `SessionTaintPolicy` | tool call | Remembers which sessions have read untrusted content (the tools you name as sources) and holds, or refuses, every later call to a tool you name as state-changing. It reads no text, so it does not depend on recognising an attack, and it holds the benign follow-up too. Goes in a [`SecureTool`](#5-hold-what-follows-an-untrusted-read)'s list, one instance shared by all of a session's tools |
 | `OutputSchemaPolicy` | output | Pydantic schema validation, dangerous-content scan, optional hallucination/grounding check against a source |
 | `AuditPolicy` | both | Writes every action to the event store, and an `action_blocked` event for every action the pipeline refuses; place it **last** so its events carry the final risk score |
 

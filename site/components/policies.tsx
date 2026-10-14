@@ -3,6 +3,7 @@ import { METRICS_URL } from "@/lib/links";
 import {
   ArrowUpRight,
   BracesIcon,
+  DropletIcon,
   FileTextIcon,
   KeyIcon,
   ListIcon,
@@ -84,6 +85,12 @@ const POLICIES: Policy[] = [
     does: "Decides whether a tool call may run, from rules you write: which tools, which roles, which argument values. A refund over the limit is refused, and a risky call can wait for a human.",
   },
   {
+    name: "Session taint",
+    phase: "tool call",
+    icon: <DropletIcon size={18} />,
+    does: "Remembers what a session has read. Once the agent has read something a stranger could have written, such as a web page or an issue, every call that changes anything waits for a person. It reads none of the text, so it cannot be talked round.",
+  },
+  {
     name: "Output schema",
     phase: "output",
     icon: <BracesIcon size={18} />,
@@ -102,7 +109,7 @@ export function Policies() {
     <section id="policies" className="section">
       <div className="container">
         <p className="eyebrow">Built-in policies</p>
-        <h2 className="section__title">Nine policies. No network calls.</h2>
+        <h2 className="section__title">Ten policies. No network calls.</h2>
         <p className="section__lede">
           Each one is regex, heuristics, checksums or declarative rules. None calls a model or a
           server, and CI fails if one tries — which is the only reason this page can run without

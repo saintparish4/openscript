@@ -26,6 +26,7 @@ from sdk import (
     SecretsPolicy,
     SecureAgent,
     SecureTool,
+    SessionTaintPolicy,
     ToolFirewallPolicy,
     ToolRules,
     ToxicityPolicy,
@@ -140,6 +141,24 @@ try:
 except ActionBlockedError:
     refused = True
 record("secure_tool", refused and not refunds, f"refused={refused} tool_ran={bool(refunds)}")
+
+
+# 7c — the session rule: a read taints the session, and the next call that
+# changes anything waits for a person. One policy instance, both tools.
+taint = SessionTaintPolicy(sources=["fetch_issue"], sinks=["refund_tool"])
+
+
+async def fetch_issue(number):
+    return "Build fails on arm64."
+
+
+await SecureTool(fetch_issue, [taint])(number=482)
+try:
+    await SecureTool(refund_tool, [taint])(amount=5)
+    held = False
+except ActionBlockedError as exc:
+    held = bool(exc.approval_id)
+record("session_taint", held and not refunds, f"held={held} tool_ran={bool(refunds)}")
 
 
 # 8 — output schema (pydantic validation compiled to wasm)

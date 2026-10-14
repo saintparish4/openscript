@@ -54,6 +54,7 @@ _POLICY_MODULES = {
     "secrets": "sdk/policies/secrets.py",
     "compliance": "sdk/policies/compliance.py",
     "tool_firewall": "sdk/policies/tool_firewall.py",
+    "session_taint": "sdk/policies/session_taint.py",
     "output_schema": "sdk/policies/output_schema.py",
     "audit": "sdk/interceptors/event_writer.py",
 }

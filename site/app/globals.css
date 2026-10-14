@@ -1253,8 +1253,8 @@ kbd {
 
 .duo span { display: block; color: var(--muted); }
 
-/* Nine cards, so three across — an auto-filled grid would fit four and leave
-   one stranded. */
+/* Ten cards. Two across they pair up. Three across the tenth would be
+   stranded in a corner, so it takes the whole row instead. */
 .bento {
   display: grid;
   gap: 1rem;
@@ -1265,12 +1265,11 @@ kbd {
 
 @media (min-width: 40rem) {
   .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .bento > :last-child { grid-column: 1 / -1; }
 }
 
 @media (min-width: 64rem) {
   .bento { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .bento > :last-child { grid-column: auto; }
+  .bento > :last-child { grid-column: 1 / -1; }
 }
 
 .card {

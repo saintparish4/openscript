@@ -32,6 +32,7 @@ from sdk.policies.harmful_request import HarmfulRequestPolicy
 from sdk.policies.output_schema import HallucinationMode, OnInvalid, OutputSchemaPolicy
 from sdk.policies.secrets import InternalURLMode, SecretsPolicy, find_secrets
 from sdk.policies.semantic import SemanticHead, SemanticMode, SemanticPolicy
+from sdk.policies.session_taint import SessionTaintPolicy, TaintAction
 from sdk.policies.tool_firewall import ToolFirewallPolicy, ToolRules, validate_tool_call
 from sdk.policies.toxicity import ToxicityPolicy
 
@@ -76,8 +77,10 @@ __all__ = [
     "SemanticHead",
     "SemanticMode",
     "SemanticPolicy",
+    "SessionTaintPolicy",
     "StreamGuard",
     "StreamOutputMode",
+    "TaintAction",
     "ThreatInterceptor",  # deprecated alias
     "ToolFirewallPolicy",
     "ToolRules",
