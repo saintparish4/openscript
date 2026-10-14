@@ -205,11 +205,15 @@ def _spend(add: float) -> float:
         return float(_SPENT.value)
 
 
-def run_case(case: Case, model: str, client: Any = None) -> dict[str, Any]:
+def run_case(
+    case: Case, model: str, client: Any = None, ledger: Path | None = None
+) -> dict[str, Any]:
     """One task, with or without an attack, under one configuration and approver.
 
     Returns the row, the conversation, and the usage of every request made.
     A case stopped by the budget comes back with ``budget`` set and no row.
+    Each request's usage is also appended to *ledger* as soon as it is billed,
+    so a run killed part way through a case still counts what it spent.
     """
     suite = get_suites(BENCHMARK)[case.suite]
     user_task = suite.user_tasks[case.user_task]
@@ -233,7 +237,14 @@ def run_case(case: Case, model: str, client: Any = None) -> dict[str, Any]:
     else:
         profile = PROFILES[model]
         meter = Meter(profile, _BUDGET, spend=_spend)
-        llm = Claude(profile, meter, client=client, on_request=requests.append)
+
+        def billed(usage: dict[str, Any]) -> None:
+            requests.append(usage)
+            if ledger is not None:
+                with ledger.open("a") as handle:
+                    handle.write(_dump({"key": case.key, **usage}) + "\n")
+
+        llm = Claude(profile, meter, client=client, on_request=billed)
 
     approver = marker_approver(markers) if case.approver == "careful" else APPROVERS[case.approver]
     policies = policies_for(case.configuration, lists)
@@ -350,19 +361,17 @@ def run(
     shared = multiprocessing.Value("d", spent)
     stopped = ""
     finished = failures = 0
+    ledger = out / "requests.jsonl"  # written by run_case, request by request
     with (
         (out / "cases.jsonl").open("a") as rows,
         (out / "transcripts.jsonl").open("a") as transcripts,
-        (out / "requests.jsonl").open("a") as requests,
     ):
 
         def record(result: dict[str, Any]) -> None:
-            for usage in result["requests"]:
-                requests.write(_dump({"key": result["key"], **usage}) + "\n")
             if "row" in result:
                 rows.write(_dump({"key": result["key"], **result["row"]}) + "\n")
                 transcripts.write(_dump(result["transcript"]) + "\n")
-            for handle in (rows, transcripts, requests):
+            for handle in (rows, transcripts):
                 handle.flush()
 
         def failing(result: dict[str, Any]) -> str:
@@ -381,7 +390,7 @@ def run(
         if jobs <= 1:
             _init(shared, budget)
             for case in todo:
-                result = run_case(case, model, client)
+                result = run_case(case, model, client, ledger)
                 record(result)
                 stopped = failing(result)
                 if "row" in result:
@@ -392,7 +401,10 @@ def run(
         else:
             with ProcessPoolExecutor(jobs, initializer=_init, initargs=(shared, budget)) as pool:
                 queue = iter(todo)
-                running = {pool.submit(run_case, case, model) for case in _take(queue, jobs * 2)}
+                running = {
+                    pool.submit(run_case, case, model, None, ledger)
+                    for case in _take(queue, jobs * 2)
+                }
                 while running:
                     complete, running = wait(running, return_when=FIRST_COMPLETED)
                     for future in complete:
@@ -404,7 +416,7 @@ def run(
                             print(f"  {finished}/{len(todo)} {result['key']}", file=sys.stderr)
                     if not stopped:
                         running |= {
-                            pool.submit(run_case, case, model)
+                            pool.submit(run_case, case, model, None, ledger)
                             for case in _take(queue, len(complete))
                         }
     # A case that failed is not done: it is run again next time.
