@@ -28,6 +28,8 @@ FROZEN = {
     # The run with a model, frozen before any model was sent a request.
     "PROTOCOL-model.md": "5146bd42aae523d5aa966b5cea5f2b2a784e0e16cccac70341e76d0e68aa63b6",
     "markers.yaml": "275ba25d153a1e125f573b8c5f904249ef6407fe5cf4165657bd7ff7014cce51",
+    # A second attack, added after the Haiku run and frozen before any request under it.
+    "PROTOCOL-model-amendment-1.md": "81123973ed3c6a63c7cdce35aae3886057da9d3060990275c25e3ef3c7ac2e80",
 }
 
 

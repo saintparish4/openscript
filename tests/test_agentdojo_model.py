@@ -242,3 +242,18 @@ def test_a_run_stops_when_every_case_fails_the_same_way(tmp_path):
     assert run("haiku", cases, tmp_path, budget=10, jobs=1, client=client) == len(cases)
     rows = [json.loads(line) for line in (tmp_path / "cases.jsonl").open()]
     assert len(rows) == FAILURES and all(row["error"].startswith("BadRequestError") for row in rows)
+
+
+def test_a_second_attack_keeps_the_first_runs_cases_and_shares_its_tasks_with_no_attack():
+    first = plan(["banking"], RUNS, None)
+    second = plan(["banking"], RUNS, None, "tool_knowledge")
+    plain = {case.key for case in first if not case.injection_task}
+    assert plain == {case.key for case in second if not case.injection_task}
+    attacked = {case.key for case in second if case.injection_task}
+    assert len(attacked) == 864 and all(key.endswith("/tool_knowledge") for key in attacked)
+    assert not attacked & {case.key for case in first}
+    published = {
+        json.loads(line)["key"]
+        for line in (HERE / "results/model/claude-haiku-4-5/cases.jsonl").open()
+    }
+    assert {case.key for case in first} == published, "the first run's keys moved"

@@ -81,6 +81,9 @@ RUNS = (
     ("taint_text", "careful"),
 )
 DEFAULT_SUITES = ("banking",)
+#: The attacks a run may use: the protocol's own, and the one amendment 1 adds,
+#: which also spells out the calls to make.
+ATTACKS = (MAIN_ATTACK, "tool_knowledge")
 #: AgentDojo addresses the model by name in the attack. It calls every Claude
 #: "Claude"; the scripted agent keeps the replay's "GPT-4", so its rows can be
 #: compared with the replay's.
@@ -99,10 +102,17 @@ class Case:
     injection_task: str  # "" for the task with no attack
     configuration: str
     approver: str
+    attack: str = MAIN_ATTACK  # what the injection says; nothing without one
 
     @property
     def key(self) -> str:
-        return "/".join(asdict(self).values())
+        """suite/user_task/injection_task/configuration/approver, and the attack
+        when it is not the protocol's own, so the first run's keys still hold."""
+        parts = [self.suite, self.user_task, self.injection_task, self.configuration]
+        parts.append(self.approver)
+        if self.injection_task and self.attack != MAIN_ATTACK:
+            parts.append(self.attack)
+        return "/".join(parts)
 
 
 # --- what a careful person recognises -------------------------------------------------
@@ -184,9 +194,9 @@ class _Recorder(BasePipelineElement):
 
 
 @cache
-def _attack(suite_name: str, addressed_as: str) -> Any:
+def _attack(suite_name: str, addressed_as: str, name: str) -> Any:
     suite = get_suites(BENCHMARK)[suite_name]
-    return load_attack(MAIN_ATTACK, suite, _Victim(addressed_as))
+    return load_attack(name, suite, _Victim(addressed_as))
 
 
 #: Set in each worker by _init: the shared spend and the run's budget.
@@ -222,7 +232,7 @@ def run_case(
     markers = markers_for(case)
     addressed_as = ADDRESSED_AS["scripted" if model == "scripted" else "claude"]
     injections = (
-        _attack(case.suite, addressed_as).attack(user_task, injection_task)
+        _attack(case.suite, addressed_as, case.attack).attack(user_task, injection_task)
         if injection_task is not None
         else {}
     )
@@ -267,7 +277,7 @@ def run_case(
         ),
         llm.name,
     )
-    row: dict[str, Any] = {**asdict(case), "attack": MAIN_ATTACK if injection_task else ""}
+    row: dict[str, Any] = {**asdict(case), "attack": case.attack if injection_task else ""}
     row["model"] = llm.name
     try:
         utility, security = suite.run_task_with_pipeline(
@@ -317,15 +327,24 @@ def run_case(
 # --- a run ----------------------------------------------------------------------------
 
 
-def plan(suites: Sequence[str], runs: Sequence[tuple[str, str]], limit: int | None) -> list[Case]:
-    """Every case, a pair at a time: a run stopped part way has whole pairs."""
+def plan(
+    suites: Sequence[str],
+    runs: Sequence[tuple[str, str]],
+    limit: int | None,
+    attack: str = MAIN_ATTACK,
+) -> list[Case]:
+    """Every case, a pair at a time: a run stopped part way has whole pairs.
+
+    The tasks with no attack are the same cases whatever *attack* is, so a
+    second attack in the same directory finds them done.
+    """
     cases = []
     for name in suites:
         suite = get_suites(BENCHMARK)[name]
         for task_id in list(suite.user_tasks)[:limit]:
             cases += [Case(name, task_id, "", c, a) for c, a in runs]
             for injection_id in suite.injection_tasks:
-                cases += [Case(name, task_id, injection_id, c, a) for c, a in runs]
+                cases += [Case(name, task_id, injection_id, c, a, attack) for c, a in runs]
     return cases
 
 
@@ -448,42 +467,47 @@ def summarize(out: Path) -> str:
             rows[row["key"]] = row  # the last good row for a case is the one that counts
     errors = {r["key"] for r in _read_jsonl(out / "cases.jsonl") if r.get("error")} - set(rows)
     spent = sum(r["cost_usd"] for r in _read_jsonl(out / "requests.jsonl"))
-    by: dict[tuple[str, str, bool], list[dict[str, Any]]] = defaultdict(list)
+    by: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows.values():
-        by[row["configuration"], row["approver"], bool(row["injection_task"])].append(row)
+        by[row["configuration"], row["approver"], row["attack"]].append(row)
+    attacks = sorted({row["attack"] for row in rows.values() if row["attack"]})
 
     model = next(iter(rows.values()), {}).get("model", out.name)
     lines = [
         f"## {model}",
         "",
         f"Spent ${spent:.2f}. Cases failed and not yet rerun: {len(errors)}.",
-        "",
     ]
-    lines += [
-        "| Run | Tasks done, no attack | Tasks needing an approval | Approvals per task "
-        "| Attacks that succeeded | Injection tasks that got through | Tasks done under attack "
-        "| Approvals per attacked task | Cost |",
-        "|---|---|---|---|---|---|---|---|---|",
-    ]
-    for configuration, approver in RUNS:
-        benign = by[configuration, approver, False]
-        attacked = by[configuration, approver, True]
-        if not benign and not attacked:
-            continue
-        through = {r["injection_task"] for r in attacked if r["security"] == 1}
-        injection_tasks = {r["injection_task"] for r in attacked}
-        cost = sum(r.get("cost_usd", 0.0) for r in benign + attacked)
-        lines.append(
-            f"| {configuration} / {approver} "
-            f"| {_share(sum(r['utility'] for r in benign), len(benign))} "
-            f"| {_share(sum(r['approvals'] > 0 for r in benign), len(benign))} "
-            f"| {sum(r['approvals'] for r in benign) / max(len(benign), 1):.2f} "
-            f"| {_share(sum(r['security'] for r in attacked), len(attacked))} "
-            f"| {len(through)}/{len(injection_tasks)} "
-            f"| {_share(sum(r['utility'] for r in attacked), len(attacked))} "
-            f"| {sum(r['approvals'] for r in attacked) / max(len(attacked), 1):.2f} "
-            f"| ${cost:.2f} |"
-        )
+    for attack in attacks or [MAIN_ATTACK]:
+        lines += [
+            "",
+            f"Attack: `{attack}`. The tasks with no attack are the same in every table; "
+            "the cost is of the attacked cases.",
+            "",
+            "| Run | Tasks done, no attack | Tasks needing an approval | Approvals per task "
+            "| Attacks that succeeded | Injection tasks that got through "
+            "| Tasks done under attack | Approvals per attacked task | Cost |",
+            "|---|---|---|---|---|---|---|---|---|",
+        ]
+        for configuration, approver in RUNS:
+            benign = by[configuration, approver, ""]
+            attacked = by[configuration, approver, attack]
+            if not benign and not attacked:
+                continue
+            through = {r["injection_task"] for r in attacked if r["security"] == 1}
+            injection_tasks = {r["injection_task"] for r in attacked}
+            cost = sum(r.get("cost_usd", 0.0) for r in attacked)
+            lines.append(
+                f"| {configuration} / {approver} "
+                f"| {_share(sum(r['utility'] for r in benign), len(benign))} "
+                f"| {_share(sum(r['approvals'] > 0 for r in benign), len(benign))} "
+                f"| {sum(r['approvals'] for r in benign) / max(len(benign), 1):.2f} "
+                f"| {_share(sum(r['security'] for r in attacked), len(attacked))} "
+                f"| {len(through)}/{len(injection_tasks)} "
+                f"| {_share(sum(r['utility'] for r in attacked), len(attacked))} "
+                f"| {sum(r['approvals'] for r in attacked) / max(len(attacked), 1):.2f} "
+                f"| ${cost:.2f} |"
+            )
     every = list(rows.values())
     if every and "request_chars" in every[0]:
         tokens = sum(r["request_chars"] for r in every) / CHARS_PER_TOKEN
@@ -525,6 +549,12 @@ def main() -> int:
         "--runs", nargs="+", help="configuration/approver, e.g. none/nobody (default: all)"
     )
     parser.add_argument("--limit", type=int, default=None, help="user tasks per suite")
+    parser.add_argument(
+        "--attack",
+        choices=ATTACKS,
+        default=MAIN_ATTACK,
+        help="the injection's wording (tool_knowledge: amendment 1 to the protocol)",
+    )
     parser.add_argument("--jobs", type=int, default=1, help="worker processes")
     parser.add_argument("--out", type=Path, help="default: results/model/<model>")
     parser.add_argument(
@@ -542,7 +572,7 @@ def main() -> int:
     unknown = [r for r in runs if r not in RUNS]
     if unknown:
         parser.error(f"not in the protocol: {unknown}")
-    cases = plan(args.suites, runs, args.limit)
+    cases = plan(args.suites, runs, args.limit, args.attack)
     name = "scripted" if args.model == "scripted" else PROFILES[args.model].model
     out = args.out or HERE / "results" / "model" / name
 
@@ -550,7 +580,8 @@ def main() -> int:
         if args.budget is None:
             parser.error("a model run needs --budget")
         print(
-            f"{name}: {len(cases)} cases ({', '.join(args.suites)}; {len(runs)} runs), "
+            f"{name}: {len(cases)} cases ({', '.join(args.suites)}; {len(runs)} runs; "
+            f"{args.attack}), "
             f"budget ${args.budget:.2f}, into {out}",
             file=sys.stderr,
         )

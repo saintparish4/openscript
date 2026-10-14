@@ -58,6 +58,7 @@ uv pip install --python .venv/bin/python -r requirements.txt -e ../..
 | `summarize.py` | The tables, from those rows |
 | `PROTOCOL-model.md` | The run with a model: models, runs, approvers, budget. Frozen |
 | `markers.yaml` | The attacker's values, which the `careful` approver refuses in a model run. Frozen |
+| `PROTOCOL-model-amendment-1.md` | A second attack, `tool_knowledge`, added after the Haiku run. Frozen |
 | `model.py` | `Claude`, a metered model element, and `ScriptedAgent`, the replay's agent as one |
 | `run_model.py` | The run with a model, its budget, and its tables |
 | `results/benign.csv` | 97 tasks x 8 runs |
@@ -111,7 +112,9 @@ request, and `tests/test_agentdojo_results.py` fails if either is edited.
 .venv/bin/python run_model.py --summary results/model/claude-haiku-4-5
 ```
 
-Or `make agentdojo-model MODEL=haiku BUDGET=25`, with `YES=1` to spend.
+Or `make agentdojo-model MODEL=haiku BUDGET=25`, with `YES=1` to spend. `--attack tool_knowledge` runs the second attack
+([amendment 1](PROTOCOL-model-amendment-1.md)); its cases go in the same directory and the
+tasks with no attack are not run again.
 
 - `--model scripted` drives the replay's compromised agent through the model
   harness. On every banking case it agrees with the replay's rows on attack
