@@ -56,13 +56,18 @@ uv pip install --python .venv/bin/python -r requirements.txt -e ../..
 | `guard.py` | `GuardedRuntime`: AgentDojo's tool runtime with the policies in the call path |
 | `replay.py` | The replay. Writes one row per case |
 | `summarize.py` | The tables, from those rows |
+| `PROTOCOL-model.md` | The run with a model. Draft until frozen |
+| `markers.yaml` | The attacker's values, which the `careful` approver refuses in a model run |
+| `model.py` | `Claude`, a metered model element, and `ScriptedAgent`, the replay's agent as one |
+| `run_model.py` | The run with a model, its budget, and its tables |
 | `results/benign.csv` | 97 tasks x 8 runs |
 | `results/attack.csv` | 949 pairs x 9 runs, plus the detector against four more attack wordings |
 | `results/summary.json` | What `docs/metrics.md` quotes |
 
-`tests/test_agentdojo_guard.py` tests the runtime and is skipped where
-AgentDojo is not installed, which includes CI. Run it with
-`.venv/bin/python -m pytest ../../tests/test_agentdojo_guard.py`.
+`tests/test_agentdojo_guard.py` tests the runtime and
+`tests/test_agentdojo_model.py` the model harness; both are skipped where
+AgentDojo is not installed, which includes CI. Run them with
+`.venv/bin/python -m pytest ../../tests/test_agentdojo_guard.py ../../tests/test_agentdojo_model.py`.
 
 ## Found while running it
 
@@ -88,11 +93,32 @@ files.
   checked to write the same bytes as the plain loop, on the banking and slack
   suites.
 
-## What a run with a model would add
+## With a model
 
 This replay assumes the agent does everything an injection says, and makes
 only the calls in the minimal solution. A model does neither. So against a
 real model the attack numbers here are a ceiling and the approval counts are a
-floor. `GuardedRuntime` is a `FunctionsRuntime`, the class AgentDojo's own
-model pipelines take, so that run would use this code. It needs model
-credentials and a budget, which this run did not have.
+floor. `run_model.py` puts a model where the script was, in AgentDojo's own
+pipeline, with the same `GuardedRuntime` in the call path.
+[`PROTOCOL-model.md`](PROTOCOL-model.md) says what is run; it is a draft until
+it is frozen, and **no model has been run yet**.
+
+```bash
+.venv/bin/python run_model.py --model scripted                  # free: the harness against the replay
+.venv/bin/python run_model.py --model haiku --budget 25         # prints the plan, sends nothing
+.venv/bin/python run_model.py --model haiku --budget 25 --yes   # spends; needs ANTHROPIC_API_KEY
+.venv/bin/python run_model.py --summary results/model/claude-haiku-4-5
+```
+
+Or `make agentdojo-model MODEL=haiku BUDGET=25`, with `YES=1` to spend.
+
+- `--model scripted` drives the replay's compromised agent through the model
+  harness. On every banking case it agrees with the replay's rows on attack
+  outcome, approvals and compromise, and its request sizes give a floor on
+  what a model run sends (about 8.4M input tokens for banking's 960 cases).
+- `--budget` is in US dollars, for the output directory. No request is sent
+  once it is reached. A run can be stopped and started again: finished cases
+  are skipped and what was spent stays counted.
+- Each run writes `cases.jsonl` (a row per case), `transcripts.jsonl` (the
+  conversation) and `requests.jsonl` (the usage and cost of every request)
+  under `results/model/<model>/`.

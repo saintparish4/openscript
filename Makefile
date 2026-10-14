@@ -167,6 +167,13 @@ agentdojo-replay: $(AGENTDOJO)/.venv  ## Replay AgentDojo's own solutions and at
 	cd $(AGENTDOJO) && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python replay.py
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/summarize.py
 
+MODEL ?= scripted
+
+.PHONY: agentdojo-model
+agentdojo-model: $(AGENTDOJO)/.venv  ## AgentDojo with a model: MODEL=scripted|haiku|sonnet BUDGET=<usd>, YES=1 to spend
+	cd $(AGENTDOJO) && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python run_model.py --model $(MODEL) \
+		$(if $(BUDGET),--budget $(BUDGET)) $(if $(YES),--yes)
+
 .PHONY: agentdojo-summary
 agentdojo-summary:  ## Recompute the AgentDojo tables from the committed per-case rows
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/summarize.py
