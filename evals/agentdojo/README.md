@@ -123,3 +123,12 @@ Or `make agentdojo-model MODEL=haiku BUDGET=25`, with `YES=1` to spend.
 - Each run writes `cases.jsonl` (a row per case), `transcripts.jsonl` (the
   conversation) and `requests.jsonl` (the usage and cost of every request)
   under `results/model/<model>/`.
+
+**Claude Haiku 4.5, banking, 2026-10-14** (`results/model/claude-haiku-4-5/`,
+$6.21): it followed the injection in none of 144 pairs with no policy, and
+never made a call carrying the attacker's account in any of the six runs. So
+there was nothing to contain, and the policies only cost tasks. The session
+rule asked on 4 of 16 ordinary tasks, because Haiku changed something on only
+4: on most it stopped to ask the user instead. The tables are in
+[`docs/metrics.md`](../../docs/metrics.md#tool-policies-on-agentdojo-claude-haiku-45-in-the-loop),
+and `tests/test_agentdojo_results.py` holds them to the rows.
