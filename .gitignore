@@ -105,6 +105,8 @@ web/wheels/
 node_modules/
 # Extension runtime bundle — rebuilt by `make extension`
 extension/vendor/
+# AgentDojo replay: the undefended baseline written by `replay.py --check`
+evals/agentdojo/results/*-check.csv
 
 # Demo app build output
 site/.next/

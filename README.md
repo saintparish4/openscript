@@ -185,6 +185,7 @@ It reads none of the text, so it cannot be talked round by how an attack is word
 - **Sessions are what you say they are.** Calls made without a `session_id` share one, which errs towards holding. `reset(session_id)` is for when the model's context has been discarded, and `taint(session_id, source)` is for content that arrives some other way, such as an uploaded file.
 - **The memory is this process's.** Like the in-memory approval store, it is not shared between workers and does not survive a restart.
 - **Put the firewall before it,** so a call the rules refuse outright is refused, not sent to a person first.
+- **It asks often, and that is measured.** Replaying [AgentDojo](https://github.com/ethz-spylab/agentdojo)'s own solutions to its 97 tasks, with no model, 55 needed at least one approval. A rule that simply asks on every state-changing call needed 61. Those tasks are all built to read something an attacker can write, which is the worst case for a rule keyed on reading, but on read-then-act work it is nearly as noisy as asking every time, and an approval asked for on most tasks stops being read. With an approver who refuses the attacker's calls it stopped 570 of 617 replayed attacks; with one who approves everything, none. The 47 it missed, and why, are in [`docs/metrics.md`](docs/metrics.md#tool-policies-on-agentdojo-a-replay-with-no-model).
 
 ## Built-in Policies
 
