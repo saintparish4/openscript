@@ -4,7 +4,7 @@ Everything measurable about OpenScript, in one place, with the date it was
 measured and the command that produces it. Numbers with no command next to them
 were measured by hand and say so.
 
-Last updated **2026-10-14**.
+Last updated **2026-10-15**.
 
 ## Detection
 
@@ -408,9 +408,9 @@ section scrolls into view — which on the current layout is immediately.
 
 | What | Number |
 |---|---|
-| Tests | 669 |
+| Tests | 814 |
 | Labelled eval prompts | 1,799 across 8 corpora (348 written here, 1,451 public) |
-| Built-in policies | 9, all pure-local |
+| Built-in policies | 10, all pure-local |
 | Opt-in policies | 1 (`SemanticPolicy`), head not trained, no number claimed |
 | Policies that make a network call | 0, enforced by `tests/test_audit.py` |
 | CI jobs | lint, type-check, test, pyodide, demo, build |
