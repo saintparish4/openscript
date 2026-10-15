@@ -28,7 +28,7 @@ from policy_audit import (  # noqa: E402
 
 # Helper modules a policy imports. The audit table walks policy modules only,
 # so anything shared between them has to be named here or it is unchecked.
-SHARED_POLICY_HELPERS = ["sdk/policies/normalize.py"]
+SHARED_POLICY_HELPERS = ["sdk/policies/normalize.py", "sdk/policies/redaction.py"]
 
 # The exact set of policies the demo claims to run in the browser.
 EXPECTED_POLICIES = {

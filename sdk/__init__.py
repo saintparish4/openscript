@@ -30,6 +30,7 @@ from sdk.policies.compliance import CompliancePolicy, PHIMode, find_phi
 from sdk.policies.config import PolicyConfig, load_policies, register_policy
 from sdk.policies.harmful_request import HarmfulRequestPolicy
 from sdk.policies.output_schema import HallucinationMode, OnInvalid, OutputSchemaPolicy
+from sdk.policies.redaction import find_pii, redact_data, redact_pii, redact_secrets
 from sdk.policies.secrets import InternalURLMode, SecretsPolicy, find_secrets
 from sdk.policies.semantic import SemanticHead, SemanticMode, SemanticPolicy
 from sdk.policies.session_taint import SessionTaintPolicy, TaintAction
@@ -88,8 +89,12 @@ __all__ = [
     "aggregate_risk",
     "configure_logging",
     "find_phi",
+    "find_pii",
     "find_secrets",
     "load_policies",
+    "redact_data",
+    "redact_pii",
+    "redact_secrets",
     "register_policy",
     "validate_tool_call",
     "wrap_agent",

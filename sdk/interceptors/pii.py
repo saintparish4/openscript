@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import re
 import warnings
-from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -11,6 +9,9 @@ import structlog
 from contracts.interceptor import GuardScan, StreamGuard
 from contracts.server_types import Event, EventType
 from contracts.types import ActionContext, FailureMode, InterceptorDecision
+from sdk.policies.redaction import _find_pii as _find_pii
+from sdk.policies.redaction import _redact_pii_text as _redact_text
+from sdk.policies.redaction import _walk_redact_pii as _walk_redact
 
 if TYPE_CHECKING:
     from events.writer import EventWriter
@@ -23,32 +24,6 @@ class PIIMode(StrEnum):
     DENY = "deny"
 
 
-@dataclass(frozen=True)
-class _PIIPattern:
-    regex: re.Pattern[str]
-    label: str
-
-
-def _p(pattern: str, label: str) -> _PIIPattern:
-    return _PIIPattern(re.compile(pattern, re.IGNORECASE), label)
-
-
-_PII_PATTERNS: list[_PIIPattern] = [
-    _p(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b", "email"),
-    _p(r"\b(\+?1[\s\-.]?)?\(?\d{3}\)?[\s\-.]?\d{3}[\s\-.]?\d{4}\b", "phone"),
-    _p(r"\b\d{3}-\d{2}-\d{4}\b", "ssn"),
-    # API / bearer tokens — must appear before generic patterns
-    _p(r"\b(sk-|Bearer\s+|token[=:\s]+|api[_\-]?key[=:\s]+)[A-Za-z0-9\-_]{20,}\b", "api_key"),
-    # IPv4 addresses
-    _p(
-        r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b", "ip_address"
-    ),
-]
-
-# Credit card: 13-16 digits optionally separated by spaces or dashes.
-# Validated with Luhn check to reduce false positives.
-_CC_RE = re.compile(r"\b(?:\d[ \-]?){13,16}\b")
-
 # Labels whose exposure is directly exploitable (identity theft, account
 # takeover); the rest are contact/network identifiers.
 _HIGH_SEVERITY_LABELS = frozenset({"ssn", "credit_card", "api_key"})
@@ -58,92 +33,6 @@ def _pii_risk(found_labels: list[str]) -> float:
     if not found_labels:
         return 0.0
     return 0.8 if any(label in _HIGH_SEVERITY_LABELS for label in found_labels) else 0.4
-
-
-def _luhn(number: str) -> bool:
-    digits = [int(d) for d in number if d.isdigit()]
-    digits.reverse()
-    total = sum(
-        d if i % 2 == 0 else (d * 2 - 9 if d * 2 > 9 else d * 2) for i, d in enumerate(digits)
-    )
-    return total % 10 == 0
-
-
-def _find_pii(text: str) -> list[tuple[str, str]]:
-    """Return list of (matched_text, label) pairs found in text."""
-    found: list[tuple[str, str]] = []
-    for pat in _PII_PATTERNS:
-        for m in pat.regex.finditer(text):
-            found.append((m.group(), pat.label))
-    for m in _CC_RE.finditer(text):
-        raw = m.group()
-        digits_only = re.sub(r"[ \-]", "", raw)
-        if len(digits_only) >= 13 and _luhn(digits_only):
-            found.append((raw, "credit_card"))
-    return found
-
-
-def _redact_text(text: str, final: bool = True) -> tuple[str, list[str]]:
-    """Replace PII matches with [REDACTED:<label>] tokens.
-
-    final=False (guarded streaming) defers matches ending exactly at the end
-    of *text* — they may extend with the next chunk, and acting early would
-    leak the extension as plain text. Returns (redacted_text, found_labels).
-    """
-    found_labels: list[str] = []
-
-    # Credit cards first (before phone regex can partially match)
-    cc_len = len(text)
-
-    def _cc_replace(m: re.Match[str]) -> str:
-        raw = m.group()
-        if not final and m.end() == cc_len:
-            return raw  # tentative — could extend with the next chunk
-        digits_only = re.sub(r"[ \-]", "", raw)
-        if len(digits_only) >= 13 and _luhn(digits_only):
-            found_labels.append("credit_card")
-            return "[REDACTED:credit_card]"
-        return raw
-
-    text = _CC_RE.sub(_cc_replace, text)
-
-    for pat in _PII_PATTERNS:
-        current_len = len(text)
-
-        def _replace(
-            m: re.Match[str], label: str = pat.label, current_len: int = current_len
-        ) -> str:
-            if not final and m.end() == current_len:
-                return m.group()  # tentative — could extend with the next chunk
-            found_labels.append(label)
-            return f"[REDACTED:{label}]"
-
-        text = pat.regex.sub(_replace, text)
-
-    return text, list(dict.fromkeys(found_labels))  # deduplicate, preserve order
-
-
-def _walk_redact(obj: Any) -> tuple[Any, list[str]]:
-    """Recursively redact PII from strings inside dicts/lists."""
-    all_labels: list[str] = []
-    if isinstance(obj, str):
-        redacted, labels = _redact_text(obj)
-        all_labels.extend(labels)
-        return redacted, all_labels
-    if isinstance(obj, dict):
-        result = {}
-        for k, v in obj.items():
-            result[k], labels = _walk_redact(v)
-            all_labels.extend(labels)
-        return result, all_labels
-    if isinstance(obj, list):
-        result_list = []
-        for item in obj:
-            redacted_item, labels = _walk_redact(item)
-            all_labels.extend(labels)
-            result_list.append(redacted_item)
-        return result_list, all_labels
-    return obj, []
 
 
 class _PIIStreamGuard:
