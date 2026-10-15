@@ -31,7 +31,7 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
 - **Benchmarked against a public suite, with each protocol frozen before its results.**
   - In a replay of [AgentDojo](https://github.com/ethz-spylab/agentdojo) with no model, the session rule stopped 570 of 617 attacks with an approver who refused the attacker's calls.
   - Its cost is published alongside: it asked a person on 55 of 97 ordinary tasks. Every one of those tasks is built to read something an attacker can write, the worst case for this rule. With Sonnet doing the work, it asked on 11 of 16 banking tasks, as often as asking every time, and on 16 of 21 Slack tasks.
-  - Holding only calls to new destinations cut that to 42 of 97 and let no attacker call through. It helps only where there is a sending history to know, and over all four suites it is still over the one-third bar set beforehand. Run live with Sonnet on banking, where the user has a payment history, it asked on 4 of 16 tasks. It does not make approvals rare.
+  - Holding only calls to new destinations cut that to 44 of 97 and let no attacker call through. It helps only where there is a sending history to know, and over all four suites it is still over the one-third bar set beforehand. Run live with Sonnet on banking, where the user has a payment history, it asked on 4 of 16 tasks. It does not make approvals rare.
 - **Pure local, enforced in CI.** All ten built-in policies are regexes, heuristics, checksums or declarative rules, with no network or LLM call. `tests/test_audit.py` fails the build if one grows a network import, which is why the same code runs in a browser with nothing behind it.
 - **Fast enough to sit in the loop.**
   - The input policies take 0.07 to 1.6 ms per prompt (p50, native).
@@ -41,7 +41,7 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
   - Security policies block when they error.
   - Rule files reject misspelt keys, and a value a rule cannot evaluate is refused.
   - The Claude Code hook blocks the call if anything goes wrong while it is deciding.
-- **Tested like a security tool.** 837 tests, `mypy --strict` on the SDK, and six CI jobs. One job boots the package under Pyodide headless, and another runs every demo prompt through the exported site.
+- **Tested like a security tool.** 844 tests, `mypy --strict` on the SDK, and six CI jobs. One job boots the package under Pyodide headless, and another runs every demo prompt through the exported site.
 
 Every number above, with its date, command and caveats, is in [`docs/metrics.md`](docs/metrics.md).
 
@@ -275,7 +275,7 @@ await fetch.call({"number": 482}, session_id="s1")            # runs, and taints
 await send.call({"to": "ops@example.com"}, session_id="s1")   # ActionBlockedError, with an approval_id
 ```
 
-Share one instance between all of a session's tools, because the memory lives on the instance. It holds the benign follow-up exactly as it holds an attack, and it asks often: see [the measured cost](docs/guide.md#the-session-rule-what-it-buys-and-what-it-costs). `known={"send_email": {"to": [...], "cc": [...], "bcc": [...]}}` lets a held call through when every destination it names is one the user has already sent to.
+Share one instance between all of a session's tools, because the memory lives on the instance. It holds the benign follow-up exactly as it holds an attack, and it asks often: see [the measured cost](docs/guide.md#the-session-rule-what-it-buys-and-what-it-costs). `known={"send_email": {"to": [...], "cc": [...], "bcc": [...]}}` lets a held call through when every destination it names is one the user has already sent to. A call that names none is still held, unless its tool is listed in `updates` because it edits something that already exists.
 
 ### 5. Approve a Held Call
 

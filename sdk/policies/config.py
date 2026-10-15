@@ -94,7 +94,7 @@ def _build_tool_firewall(params: dict[str, Any], writer: EventWriter | None) -> 
 
 
 def _build_session_taint(params: dict[str, Any], writer: EventWriter | None) -> Policy:
-    _take(params, "session_taint", {"sources", "sinks", "on_taint", "known"})
+    _take(params, "session_taint", {"sources", "sinks", "on_taint", "known", "updates"})
     missing = sorted({"sources", "sinks"} - set(params))
     if missing:
         # No defaults: which tools read untrusted content and which change
@@ -105,6 +105,7 @@ def _build_session_taint(params: dict[str, Any], writer: EventWriter | None) -> 
         sinks=params["sinks"],
         on_taint=params.get("on_taint", "require_approval"),
         known=params.get("known"),
+        updates=params.get("updates"),
     )
 
 

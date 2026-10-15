@@ -70,6 +70,7 @@ class SessionSection(_Section):
     sinks: list[str]
     on_taint: TaintAction = TaintAction.REQUIRE_APPROVAL
     known: dict[str, dict[str, list[str]]] | None = None
+    updates: list[str] | None = None
 
 
 class RedactSection(_Section):

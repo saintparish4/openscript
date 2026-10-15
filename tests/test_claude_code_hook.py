@@ -507,6 +507,24 @@ def test_a_call_to_a_known_destination_runs_unasked_after_a_read(tmp_path):
     assert "review" in asked(hook.pre("mcp__github__merge_pull_request", number=2))
     reason = asked(hook.pre("mcp__github__create_issue", owner="stranger", title="x"))
     assert "mcp__github__get_issue" in reason
+    # No owner at all is not a known owner.
+    assert "names no destination" in asked(hook.pre("mcp__github__create_issue", title="x"))
+
+
+def test_a_tool_listed_in_updates_may_leave_its_destination_out(tmp_path):
+    config = {
+        **CONFIG,
+        "session": {
+            "sources": ["WebFetch"],
+            "sinks": ["mcp__github__update_issue"],
+            "known": {"mcp__github__update_issue": {"owner": ["acme"]}},
+            "updates": ["mcp__github__update_issue"],
+        },
+    }
+    hook = Hook(tmp_path, config)
+    silent(hook.pre("WebFetch", url="https://example.com"))
+    silent(hook.pre("mcp__github__update_issue", number=3, state="closed"))
+    assert asked(hook.pre("mcp__github__update_issue", owner="stranger", number=3))
 
 
 # -- payloads recorded from a real Claude Code session -----------------------------------

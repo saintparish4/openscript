@@ -211,7 +211,7 @@ class _ConfigMissing(Exception):
 
 #: The shape of a cached config. An entry of another shape, or another format
 #: version, is validated again rather than trusted.
-_CACHE_FORMAT = 2
+_CACHE_FORMAT = 3
 _SETTINGS_KEYS = frozenset({"role", "rules", "session", "redact", "audit"})
 
 
@@ -290,6 +290,7 @@ def _session_policy(config: dict[str, Any]) -> Any:
         on_taint=session["on_taint"],
         store=FileTaintStore(_state() / "sessions"),
         known=session.get("known"),
+        updates=session.get("updates"),
     )
 
 

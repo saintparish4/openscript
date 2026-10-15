@@ -107,6 +107,23 @@ def _known(
     return known
 
 
+def _updates(value: Collection[str] | None, known: Mapping[str, Any]) -> frozenset[str]:
+    """``updates`` checked: tools listed in ``known`` that change something
+    that already exists, so that leaving out the destination keeps its own."""
+    if value is None:
+        return frozenset()
+    if isinstance(value, str) or not isinstance(value, Collection) or not value:
+        # "update_scheduled_transaction" would become a set of its letters.
+        raise ValueError("updates takes a non-empty list of tool names")
+    if not all(isinstance(name, str) and name for name in value):
+        raise ValueError("updates has to be tool names")
+    missing = sorted(set(value) - set(known))
+    if missing:
+        # Only a tool in known can be let through by its destination at all.
+        raise ValueError(f"updates names {missing}, which are not in known")
+    return frozenset(value)
+
+
 class TaintStore(Protocol):
     """Where a SessionTaintPolicy keeps what each session has read.
 
@@ -181,8 +198,13 @@ class SessionTaintPolicy(BasePolicy):
     ``known`` lets a held call through when everywhere it sends is somewhere
     the user has already sent: ``known={"send_money": {"recipient": [...]}}``.
     For a listed sink, every destination argument that is present must have
-    all of its values known (each item of a list); an argument that is absent
-    leaves the destination as it was. Values compare exactly, ignoring case.
+    all of its values known (each item of a list). Values compare exactly,
+    ignoring case. A call with none of its destination arguments sends
+    nowhere new only if it changes something that already exists, such as an
+    existing payment's amount: list those tools in ``updates`` and such a call
+    keeps the destination it had and is let through. Any other call with no
+    destination, such as a calendar event created with no participants, is
+    held: having no destination is not the same as a known one.
     Arguments not listed are not looked at, so list every one that names a
     destination (``to``, ``cc`` and ``bcc``). Sinks not in ``known`` are held as
     before. The list is fixed when the policy is built: an approval does not
@@ -204,11 +226,13 @@ class SessionTaintPolicy(BasePolicy):
         on_taint: TaintAction | str = TaintAction.REQUIRE_APPROVAL,
         store: TaintStore | None = None,
         known: Mapping[str, Mapping[str, Collection[str]]] | None = None,
+        updates: Collection[str] | None = None,
     ) -> None:
         self._sources = _names(sources, "sources")
         self._sinks = _names(sinks, "sinks")
         self._on_taint = TaintAction(on_taint)
         self._known = _known(known, self._sinks)
+        self._updates = _updates(updates, self._known)
         # session_id -> the sources that have run in it, in the order they
         # first did. Names only: what they returned is not this policy's to keep.
         self._store: TaintStore = store if store is not None else InMemoryTaintStore()
@@ -286,7 +310,9 @@ class SessionTaintPolicy(BasePolicy):
         read = self.tainted_by(session_id)
         sink = self._is_sink(name)
         destinations = self._destinations(name, args) if sink else None
-        known = destinations is not None and self._all_known(name, destinations)
+        known = destinations is not None and (
+            self._all_known(name, destinations) if destinations else name in self._updates
+        )
         held = bool(read) and sink and not known
         refused = held and self._on_taint is TaintAction.DENY
         needs_person = held and not refused
@@ -295,6 +321,8 @@ class SessionTaintPolicy(BasePolicy):
         if not held:
             if not read:
                 reason = f"'{shown}' is not held: nothing untrusted has been read in this session"
+            elif known and not destinations:
+                reason = f"'{shown}' is not held: it changes something that exists and keeps its destination"
             elif known:
                 reason = f"'{shown}' is not held: it sends only to destinations already known" + (
                     f" ({_show(destinations)})" if destinations else ""
@@ -308,6 +336,8 @@ class SessionTaintPolicy(BasePolicy):
                 if refused
                 else f"'{shown}' changes state and {after}; it needs a person to approve it"
             )
+            if destinations == {}:
+                reason += " (it names no destination, and is not listed in updates)"
 
         entry: dict[str, Any] = {
             "risk": 0.8 if refused else 0.6 if needs_person else 0.0,

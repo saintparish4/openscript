@@ -534,9 +534,25 @@ def test_known_values_compare_ignoring_case():
     ]
 
 
-def test_an_update_that_does_not_change_the_destination_is_not_held():
-    entry = known_policy().check("s1", "update_scheduled_transaction", {"id": 7, "amount": 1100})
+def test_an_update_listed_as_one_keeps_its_destination_and_is_not_held():
+    policy = known_policy(updates=["update_scheduled_transaction"])
+    entry = policy.check("s1", "update_scheduled_transaction", {"id": 7, "amount": 1100})
     assert not entry["requires_approval"] and entry["destinations"] == {}
+    assert "keeps its destination" in entry["reason"]
+    # A new destination on the same tool is still a new destination.
+    moved = {"id": 7, "recipient": "US133000000121212121212"}
+    assert policy.check("s1", "update_scheduled_transaction", moved)["requires_approval"]
+
+
+def test_a_call_with_no_destination_is_held_unless_its_tool_is_an_update():
+    """Having no destination is not having a known one. A calendar event made
+    with no participants, injected after an untrusted read, sends nowhere and
+    still changes state: the replay found an attack that is exactly that."""
+    policy = known_policy()
+    entry = policy.check("s1", "update_scheduled_transaction", {"id": 7, "amount": 1100})
+    assert entry["requires_approval"] and entry["known_destination"] is False
+    assert "names no destination" in entry["reason"]
+    assert policy.check("s1", "send_email", {"subject": "Booking"})["requires_approval"]
 
 
 def test_every_destination_argument_present_must_be_known():
@@ -602,16 +618,32 @@ def test_known_that_could_never_release_anything_is_an_error(known: Any):
         SessionTaintPolicy(sources=["read_file"], sinks=KNOWN_SINKS, known=known)
 
 
+@pytest.mark.parametrize(
+    "updates",
+    [[], "update_scheduled_transaction", ["send_money", "update_password"], [""]],
+    ids=["empty", "bare-string", "not-in-known", "empty-name"],
+)
+def test_updates_that_could_never_apply_are_an_error(updates: Any):
+    with pytest.raises(ValueError, match="updates"):
+        known_policy(updates=updates)
+
+
 def test_load_policies_passes_known_through():
     (policy,) = load_policies(
         {
             "session_taint": {
                 "sources": ["read_file"],
-                "sinks": ["send_money"],
-                "known": {"send_money": {"recipient": PAID}},
+                "sinks": ["send_money", "update_scheduled_transaction"],
+                "known": {
+                    "send_money": {"recipient": PAID},
+                    "update_scheduled_transaction": {"recipient": PAID},
+                },
+                "updates": ["update_scheduled_transaction"],
             }
         }
     )
     assert isinstance(policy, SessionTaintPolicy)
     policy.record("s1", "read_file")
     assert not policy.check("s1", "send_money", {"recipient": PAID[1]})["requires_approval"]
+    assert not policy.check("s1", "update_scheduled_transaction", {"id": 7})["requires_approval"]
+    assert policy.check("s1", "send_money", {"amount": 5})["requires_approval"]
