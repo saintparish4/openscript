@@ -61,6 +61,10 @@ uv pip install --python .venv/bin/python -r requirements.txt -e ../..
 | `PROTOCOL-model-amendment-1.md` | A second attack, `tool_knowledge`, added after the Haiku run. Frozen |
 | `model.py` | `Claude`, a metered model element, and `ScriptedAgent`, the replay's agent as one |
 | `run_model.py` | The run with a model, its budget, and its tables |
+| `PROTOCOL-known.md` | Holding only new destinations: the rule, the runs, what is reported. Frozen |
+| `known.py`, `known.yaml` | The rule applied to each suite's environment; the lists it gives. Frozen |
+| `summarize_known.py`, `rescore_known.py` | Its tables from the rows, and the exact re-score of the banking model runs |
+| `results/known/` | Its rows, `summary.json` and `rescore.json` |
 | `results/benign.csv` | 97 tasks x 8 runs |
 | `results/attack.csv` | 949 pairs x 9 runs, plus the detector against four more attack wordings |
 | `results/summary.json` | What `docs/metrics.md` quotes |

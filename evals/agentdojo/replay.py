@@ -8,6 +8,7 @@ the numbers do and do not mean; it was committed before this file produced any.
 
     .venv/bin/python replay.py --check        # the undefended baseline only
     .venv/bin/python replay.py                # everything, into results/
+    .venv/bin/python replay.py --known        # PROTOCOL-known.md's runs, into results/known/
 
 Run from this directory, in the environment README.md describes.
 """
@@ -43,6 +44,7 @@ from agentdojo.types import text_content_block_from_string  # noqa: E402
 from guard import (  # noqa: E402
     APPROVERS,
     GuardedRuntime,
+    known_for,
     load_classification,
     policies_for,
 )
@@ -66,6 +68,10 @@ RUNS = (
     ("taint_all", "nobody"),
     ("taint_all", "careful"),
 )
+#: PROTOCOL-known.md's runs, with the main attack only. The directory variant
+#: is Slack's alone.
+KNOWN_RUNS = (("taint_known", "nobody"), ("taint_known", "careful"))
+DIRECTORY_RUNS = (("taint_directory", "nobody"), ("taint_directory", "careful"))
 
 BENIGN_FIELDS = [
     "suite",
@@ -156,6 +162,7 @@ def replay(
     configuration: str,
     approver: str,
     lists: Mapping[str, list[str]],
+    known: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """One task, with or without an attack, under one configuration."""
     env = user_task.init_environment(environment(suite, injections))
@@ -164,7 +171,7 @@ def replay(
     attacker_calls = injection_task.ground_truth(before) if injection_task else []
     exposed = set(exposures(suite, user_task)) if injection_task else set()
 
-    policies = policies_for(configuration, lists)
+    policies = policies_for(configuration, lists, known)
     runtime = GuardedRuntime(suite.tools, policies=policies, approver=APPROVERS[approver])
     taint = next((p for p in policies if isinstance(p, SessionTaintPolicy)), None)
 
@@ -245,20 +252,34 @@ def _attacks(suite_name: str) -> dict[str, Any]:
     return {name: load_attack(name, suite, _Victim()) for name in ATTACKS}
 
 
-def task_rows(job: tuple[str, str, bool]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def task_rows(job: tuple[str, str, str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Every row for one user task: its own runs, then every attack on it.
 
     The unit of work handed to a worker process. It takes names and not
     objects, and looks the suite up again on the other side.
     """
-    suite_name, task_id, check = job
+    suite_name, task_id, mode = job
     suite = get_suites(BENCHMARK)[suite_name]
     lists = _classification()[suite_name]
     user_task = suite.user_tasks[task_id]
-    runs = (("none", "nobody"),) if check else RUNS
+    if mode == "check":
+        runs: tuple[tuple[str, str], ...] = (("none", "nobody"),)
+    elif mode == "known":
+        runs = KNOWN_RUNS + (DIRECTORY_RUNS if suite_name == "slack" else ())
+    else:
+        runs = RUNS
 
     benign = [
-        replay(suite, user_task, None, {}, configuration, approver, lists)
+        replay(
+            suite,
+            user_task,
+            None,
+            {},
+            configuration,
+            approver,
+            lists,
+            known_for(configuration, suite_name),
+        )
         for configuration, approver in runs
         # An approval nobody reads changes nothing when there is no attack.
         if approver != "rubber_stamp"
@@ -271,13 +292,20 @@ def task_rows(job: tuple[str, str, bool]) -> tuple[list[dict[str, Any]], list[di
                 if attack_name != MAIN_ATTACK and configuration != "detector":
                     continue  # no other configuration reads the text
                 row = replay(
-                    suite, user_task, injection_task, injections, configuration, approver, lists
+                    suite,
+                    user_task,
+                    injection_task,
+                    injections,
+                    configuration,
+                    approver,
+                    lists,
+                    known_for(configuration, suite_name),
                 )
                 attack.append({**row, "attack": attack_name})
     return benign, attack
 
 
-def run(suites: list[str], out: Path, check: bool, limit: int | None, jobs: int) -> None:
+def run(suites: list[str], out: Path, mode: str, limit: int | None, jobs: int) -> None:
     work = []
     for name in suites:
         suite = get_suites(BENCHMARK)[name]
@@ -285,10 +313,10 @@ def run(suites: list[str], out: Path, check: bool, limit: int | None, jobs: int)
         unknown = (set(lists["sources"]) | set(lists["sinks"])) - {t.name for t in suite.tools}
         if unknown:
             raise SystemExit(f"classification.yaml names tools {name} does not have: {unknown}")
-        work += [(name, task_id, check) for task_id in list(suite.user_tasks)[:limit]]
+        work += [(name, task_id, mode) for task_id in list(suite.user_tasks)[:limit]]
 
     out.mkdir(parents=True, exist_ok=True)
-    suffix = "-check" if check else ""
+    suffix = "-check" if mode == "check" else ""
     with (
         (out / f"benign{suffix}.csv").open("w", newline="") as benign_file,
         (out / f"attack{suffix}.csv").open("w", newline="") as attack_file,
@@ -311,10 +339,13 @@ def main() -> int:
     parser.add_argument("--suites", nargs="+", default=list(get_suites(BENCHMARK)))
     parser.add_argument("--out", type=Path, default=HERE / "results")
     parser.add_argument("--check", action="store_true", help="the undefended baseline only")
+    parser.add_argument("--known", action="store_true", help="PROTOCOL-known.md's runs")
     parser.add_argument("--limit", type=int, default=None, help="user tasks per suite (debugging)")
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1, help="worker processes")
     args = parser.parse_args()
-    run(args.suites, args.out, args.check, args.limit, args.jobs)
+    mode = "check" if args.check else "known" if args.known else "all"
+    out = args.out if args.out != HERE / "results" or not args.known else HERE / "results" / "known"
+    run(args.suites, out, mode, args.limit, args.jobs)
     return 0
 
 

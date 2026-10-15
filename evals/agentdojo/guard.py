@@ -41,6 +41,9 @@ HERE = Path(__file__).parent
 
 #: The configurations PROTOCOL.md names, in the order it names them.
 CONFIGURATIONS = ("none", "detector", "approve_all", "taint_text", "taint_all")
+#: The configurations PROTOCOL-known.md adds: the session rule with known
+#: destinations (the rule), and with every Slack member and channel (a variant).
+KNOWN_CONFIGURATIONS = ("taint_known", "taint_directory")
 
 #: (tool, arguments, who made the call) -> whether a person approves it.
 Approver = Callable[[str, Mapping[str, Any], str], bool]
@@ -61,7 +64,27 @@ def load_classification() -> dict[str, dict[str, list[str]]]:
     return suites
 
 
-def policies_for(configuration: str, lists: Mapping[str, Sequence[str]]) -> list[Policy]:
+def load_known() -> dict[str, Any]:
+    """The frozen known destinations (known.yaml, written by known.py)."""
+    known: dict[str, Any] = yaml.safe_load((HERE / "known.yaml").read_text())
+    return known
+
+
+def known_for(configuration: str, suite: str) -> dict[str, Any] | None:
+    """The known destinations a configuration uses on *suite*: None when it
+    knows none, which leaves the session rule as taint_text."""
+    if configuration == "taint_known":
+        return load_known()["suites"].get(suite) or None
+    if configuration == "taint_directory":
+        return load_known()["directory"][suite]  # Slack only: anything else is a mistake
+    return None
+
+
+def policies_for(
+    configuration: str,
+    lists: Mapping[str, Sequence[str]],
+    known: Mapping[str, Any] | None = None,
+) -> list[Policy]:
     """A fresh list of policies for one session. Fresh, because the session
     rule keeps what a session has read on the instance."""
     sinks = list(lists["sinks"])
@@ -78,6 +101,8 @@ def policies_for(configuration: str, lists: Mapping[str, Sequence[str]]) -> list
         return [SessionTaintPolicy(sources=list(lists["sources"]), sinks=sinks)]
     if configuration == "taint_all":
         return [SessionTaintPolicy(sources="*", sinks=sinks)]
+    if configuration in KNOWN_CONFIGURATIONS:
+        return [SessionTaintPolicy(sources=list(lists["sources"]), sinks=sinks, known=known)]
     raise ValueError(f"no such configuration: {configuration!r}")
 
 
