@@ -43,6 +43,9 @@ session:
     - "mcp__slack__slack_post_*"
     - mcp__slack__slack_reply_to_thread
   on_taint: require_approval                 # or deny
+  # known:                                   # let a held call through when it only sends
+  #   mcp__slack__slack_post_message:        # somewhere you have already sent
+  #     channel_id: [C0123456789]
 
 # Mask secrets in what these tools return, before the model reads it. PII is
 # off by default: its email, phone and IP patterns fire on ordinary git logs.

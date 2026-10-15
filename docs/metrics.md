@@ -323,6 +323,29 @@ Normalization itself is not the cost: plain prose produces exactly one view,
 which is what it produced before. Only text that has been obfuscated pays for
 a second pass.
 
+### The Claude Code hook, per call
+
+`.venv/bin/python tools/hook_latency.py --runs 100`. Claude Code waits for a
+PreToolUse hook before every call it matches, so this is time added to the
+agent's turn. Each run is a fresh process, as Claude Code starts it, so the
+interpreter's start is included. The budget, median 200 ms and p95 300 ms,
+was written down before the first measurement. Measured 2026-10-14 on the
+local WSL box with a load average under 2.
+
+| Event | Median | p95 | Budget |
+|---|---|---|---|
+| `pre-tool-use` (a held write in a tainted session) | 149 ms | 168 ms | 200 / 300 ms |
+| `post-tool-use` (a Bash output with secrets to mask) | 70 ms | 75 ms | 200 / 300 ms |
+
+The first measurement missed: 190 to 205 ms median, with a p95 of 321 ms for
+`post-tool-use`. Validating the YAML config with pydantic cost more than the
+rest of a call. The hook now validates a config once and keeps the result,
+keyed by the file's bytes, so `post-tool-use` imports no pydantic at all, and
+`pre-tool-use` rebuilds its already-validated rules without building their
+schemas. On the same box under a load average of 10 to 20, from processes not
+part of this measurement, the p95 of `pre-tool-use` reached 366 ms: quote the
+quiet figure with that caveat, not without it.
+
 ## The demo, on real devices
 
 | What | Number | How |

@@ -460,7 +460,7 @@ def test_a_cache_entry_it_cannot_read_is_validated_again(tmp_path):
     (entry,) = _cache(hook)
     entry.write_text("{not json")
     asked(hook.pre("mcp__github__create_issue", owner="acme"))
-    entry.write_text(json.dumps({"format": 1, "settings": {"role": None}, "depends_on": {}}))
+    entry.write_text(json.dumps({"format": 2, "settings": {"role": None}, "depends_on": {}}))
     asked(hook.pre("mcp__github__create_issue", owner="acme"))
 
 
@@ -490,3 +490,20 @@ def test_with_the_config_cached_a_post_call_imports_no_pydantic(tmp_path):
     )
     assert proc.returncode == 0 and AWS not in proc.stdout, proc.stderr
     assert "PYDANTIC=False" in proc.stderr
+
+
+def test_a_call_to_a_known_destination_runs_unasked_after_a_read(tmp_path):
+    config = {
+        **CONFIG,
+        "session": {
+            **CONFIG["session"],
+            "known": {"mcp__github__create_issue": {"owner": ["acme"]}},
+        },
+        "firewall": {"rules": {"mcp__github__merge_pull_request": {"requires_approval": True}}},
+    }
+    hook = Hook(tmp_path, config)
+    silent(hook.pre("mcp__github__get_issue", number=1))
+    silent(hook.pre("mcp__github__create_issue", owner="acme", title="x"))
+    assert "review" in asked(hook.pre("mcp__github__merge_pull_request", number=2))
+    reason = asked(hook.pre("mcp__github__create_issue", owner="stranger", title="x"))
+    assert "mcp__github__get_issue" in reason

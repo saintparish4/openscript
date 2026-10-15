@@ -102,7 +102,7 @@ def _pre_tool_use(payload: dict[str, Any], config_path: Path | None, out: IO[str
     if config["rules"] is not None:
         from sdk.policies.tool_firewall import ToolRules, validate_tool_call
 
-        rules = ToolRules.model_validate(config["rules"])
+        rules = ToolRules.from_validated(config["rules"])  # validated when cached
         verdict = validate_tool_call({"name": name, "args": args}, role=config["role"], rules=rules)
         if not verdict["allowed"]:
             _audit(config, payload, "deny", "tool_firewall", verdict["reason"])
@@ -113,7 +113,7 @@ def _pre_tool_use(payload: dict[str, Any], config_path: Path | None, out: IO[str
     tainted_by: list[str] = []
     if config["session"] is not None:
         session = _session_policy(config)
-        entry = session.check(session_id, name)
+        entry = session.check(session_id, name, args)
         tainted_by = entry["tainted_by"]
         if not entry["allowed"]:
             _audit(config, payload, "deny", "session_taint", entry["reason"], tainted_by)
@@ -204,7 +204,7 @@ class _ConfigMissing(Exception):
 
 #: The shape of a cached config. An entry of another shape, or another format
 #: version, is validated again rather than trusted.
-_CACHE_FORMAT = 1
+_CACHE_FORMAT = 2
 _SETTINGS_KEYS = frozenset({"role", "rules", "session", "redact", "audit"})
 
 
@@ -282,6 +282,7 @@ def _session_policy(config: dict[str, Any]) -> Any:
         sinks=session["sinks"],
         on_taint=session["on_taint"],
         store=FileTaintStore(_state() / "sessions"),
+        known=session.get("known"),
     )
 
 

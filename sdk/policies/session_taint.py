@@ -19,7 +19,7 @@ round.
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol
@@ -76,6 +76,35 @@ def _names(value: Collection[str] | str, what: str) -> _Tools | None:
             raise ValueError(f'{what}: "*" may only end a name, as a prefix; got {name!r}')
     prefixes = tuple(sorted(name[:-1] for name in names if name.endswith("*")))
     return _Tools(frozenset(name for name in names if not name.endswith("*")), prefixes)
+
+
+def _known(
+    value: Mapping[str, Mapping[str, Collection[str]]] | None, sinks: _Tools | None
+) -> dict[str, dict[str, frozenset[str]]]:
+    """``known`` checked and normalised: tool -> argument -> casefolded values."""
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping) or not value:
+        raise ValueError("known maps sink names to their destination arguments, and is not empty")
+    known: dict[str, dict[str, frozenset[str]]] = {}
+    for tool, args in value.items():
+        if not isinstance(tool, str) or not tool:
+            raise ValueError(f"known has to be keyed by tool names, got {tool!r}")
+        if sinks is not None and tool not in sinks:
+            # A destination can only release a held call, and only sinks are held.
+            raise ValueError(f"known names {tool!r}, which is not one of the sinks")
+        if not isinstance(args, Mapping) or not args:
+            raise ValueError(f"known[{tool!r}] maps destination arguments to values")
+        known[tool] = {}
+        for arg, values in args.items():
+            if isinstance(values, str) or not isinstance(values, Collection) or not values:
+                # A string is a collection of its characters: "alice@x.com"
+                # would become a set of letters and release nothing, silently.
+                raise ValueError(f"known[{tool!r}][{arg!r}] takes a list of values")
+            if not all(isinstance(v, str) and v for v in values):
+                raise ValueError(f"known[{tool!r}][{arg!r}] has to be non-empty strings")
+            known[tool][arg] = frozenset(v.casefold() for v in values)
+    return known
 
 
 class TaintStore(Protocol):
@@ -149,6 +178,16 @@ class SessionTaintPolicy(BasePolicy):
     A name in ``sources`` or ``sinks`` that ends in ``*`` is a prefix:
     ``"mcp__github__*"`` is every tool from that MCP server.
 
+    ``known`` lets a held call through when everywhere it sends is somewhere
+    the user has already sent: ``known={"send_money": {"recipient": [...]}}``.
+    For a listed sink, every destination argument that is present must have
+    all of its values known (each item of a list); an argument that is absent
+    leaves the destination as it was. Values compare exactly, ignoring case.
+    Arguments not listed are not looked at, so list every one that names a
+    destination (``to``, ``cc`` and ``bcc``). Sinks not in ``known`` are held as
+    before. The list is fixed when the policy is built: an approval does not
+    add to it.
+
     Results are written to context.metadata["session_taint"] in the standard
     shape: "risk" (held 0.6, refused 0.8, otherwise 0.0), "category", plus
     "tainted", "tainted_by" (the sources that ran), "source", "sink",
@@ -164,10 +203,12 @@ class SessionTaintPolicy(BasePolicy):
         sinks: Collection[str] | str,
         on_taint: TaintAction | str = TaintAction.REQUIRE_APPROVAL,
         store: TaintStore | None = None,
+        known: Mapping[str, Mapping[str, Collection[str]]] | None = None,
     ) -> None:
         self._sources = _names(sources, "sources")
         self._sinks = _names(sinks, "sinks")
         self._on_taint = TaintAction(on_taint)
+        self._known = _known(known, self._sinks)
         # session_id -> the sources that have run in it, in the order they
         # first did. Names only: what they returned is not this policy's to keep.
         self._store: TaintStore = store if store is not None else InMemoryTaintStore()
@@ -214,26 +255,52 @@ class SessionTaintPolicy(BasePolicy):
         name = context.input_data.get("name", "")
         return name if isinstance(name, str) else ""
 
-    def check(self, session_id: str, name: str) -> dict[str, Any]:
+    def _destinations(self, name: str, args: Mapping[str, Any] | None) -> dict[str, Any] | None:
+        """The destination arguments of a call to a sink listed in ``known``,
+        or None when the sink is not listed."""
+        if name not in self._known:
+            return None
+        args = args if isinstance(args, Mapping) else {}
+        return {arg: args[arg] for arg in self._known[name] if args.get(arg) is not None}
+
+    def _all_known(self, name: str, destinations: dict[str, Any]) -> bool:
+        for arg, value in destinations.items():
+            items = value if isinstance(value, list | tuple) else [value]
+            if not items or not all(
+                isinstance(item, str) and item.casefold() in self._known[name][arg]
+                for item in items
+            ):
+                return False
+        return True
+
+    def check(
+        self, session_id: str, name: str, args: Mapping[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Whether a call to *name* in *session_id* is held, without making it.
 
         Returns the metadata entry before_action writes: "allowed" False means
         refused, "requires_approval" True means it waits for a person. The
         same answer before_action gives, for a host that only wants the verdict.
+        *args* matter only for a sink listed in ``known``.
         """
         read = self.tainted_by(session_id)
         sink = self._is_sink(name)
-        held = bool(read) and sink
+        destinations = self._destinations(name, args) if sink else None
+        known = destinations is not None and self._all_known(name, destinations)
+        held = bool(read) and sink and not known
         refused = held and self._on_taint is TaintAction.DENY
         needs_person = held and not refused
 
         shown = name or "a call with no name"
         if not held:
-            reason = (
-                f"'{shown}' is not held: nothing untrusted has been read in this session"
-                if not read
-                else f"'{shown}' is not one of the calls held after an untrusted read"
-            )
+            if not read:
+                reason = f"'{shown}' is not held: nothing untrusted has been read in this session"
+            elif known:
+                reason = f"'{shown}' is not held: it sends only to destinations already known" + (
+                    f" ({_show(destinations)})" if destinations else ""
+                )
+            else:
+                reason = f"'{shown}' is not one of the calls held after an untrusted read"
         else:
             after = f"this session has read untrusted content (from {', '.join(read)})"
             reason = (
@@ -253,6 +320,9 @@ class SessionTaintPolicy(BasePolicy):
             "requires_approval": needs_person,
             "reason": reason,
         }
+        if destinations is not None:
+            entry["destinations"] = destinations
+            entry["known_destination"] = known
         return entry
 
     def record(self, session_id: str, name: str) -> bool:
@@ -266,7 +336,10 @@ class SessionTaintPolicy(BasePolicy):
     async def before_action(self, context: ActionContext) -> ActionContext:
         if context.action != "tool_call":
             return context
-        entry = self.check(context.session_id, self._name(context))
+        args = context.input_data.get("args")
+        entry = self.check(
+            context.session_id, self._name(context), args if isinstance(args, Mapping) else None
+        )
         context.metadata["session_taint"] = entry
         if not entry["allowed"]:
             context.decision = InterceptorDecision.DENY
@@ -290,3 +363,7 @@ class SessionTaintPolicy(BasePolicy):
             entry["tainted"] = True
             entry["tainted_by"] = list(self.tainted_by(context.session_id))
         return context
+
+
+def _show(destinations: Mapping[str, Any]) -> str:
+    return ", ".join(f"{arg}={value!r}" for arg, value in destinations.items())
