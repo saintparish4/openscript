@@ -152,6 +152,13 @@ def _post_tool_use(payload: dict[str, Any], config_path: Path | None, out: IO[st
                 "hookSpecificOutput": {
                     "hookEventName": "PostToolUse",
                     "updatedToolOutput": redacted,
+                    # Without this the model takes the stars for the real
+                    # content, and tells the user the file holds asterisks.
+                    "additionalContext": (
+                        f"{PREFIX}secrets in this tool output ({', '.join(labels)}) were masked "
+                        "before you saw it. The original is unchanged; do not suggest that the "
+                        "masked text is what the source contains."
+                    ),
                 }
             }
         )

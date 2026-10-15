@@ -507,3 +507,50 @@ def test_a_call_to_a_known_destination_runs_unasked_after_a_read(tmp_path):
     assert "review" in asked(hook.pre("mcp__github__merge_pull_request", number=2))
     reason = asked(hook.pre("mcp__github__create_issue", owner="stranger", title="x"))
     assert "mcp__github__get_issue" in reason
+
+
+# -- payloads recorded from a real Claude Code session -----------------------------------
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "claude_code"
+DOGFOOD = {
+    "version": 1,
+    "firewall": {"rules": {"mcp__issues__post_comment": {"args": {"issue": {"one_of": [1, 2]}}}}},
+    "session": {
+        "sources": ["WebFetch", "WebSearch", "mcp__issues__read_issue"],
+        "sinks": ["mcp__issues__post_comment"],
+    },
+    "redact": {"secrets": True, "tools": ["Bash", "Read", "mcp__*"]},
+}
+
+
+def test_a_recorded_claude_code_session_replays_as_it_happened(tmp_path):
+    """The payloads Claude Code 2.1.292 sent during the dogfood session, scrubbed,
+    replayed in order with the config that session used."""
+    hook = Hook(tmp_path, DOGFOOD)
+    outcomes = {}
+    for path in sorted(FIXTURES.glob("*.json")):
+        event = json.loads(path.read_text())
+        command = "pre-tool-use" if event["hook_event_name"] == "PreToolUse" else "post-tool-use"
+        outcomes[path.stem] = hook.run(command, path.read_text())
+
+    silent(outcomes["01_PreToolUse_mcp_post_comment"])  # nothing read yet
+    silent(outcomes["03_PreToolUse_mcp_read_issue"])
+    assert "mcp__issues__read_issue" in asked(outcomes["05_PreToolUse_mcp_post_comment"])
+    assert "not one of the permitted" in blocked(outcomes["07_PreToolUse_mcp_post_comment"])
+
+    bash = json.loads(outcomes["09_PostToolUse_Bash"].stdout)["hookSpecificOutput"]
+    original = json.loads((FIXTURES / "09_PostToolUse_Bash.json").read_text())["tool_response"]
+    assert set(bash["updatedToolOutput"]) == set(original), "every field kept, noOutputExpected too"
+    assert "AKIA**********" in bash["updatedToolOutput"]["stdout"] and AWS not in json.dumps(bash)
+    assert "masked" in bash["additionalContext"]
+
+    read = json.loads(outcomes["11_PostToolUse_Read"].stdout)["hookSpecificOutput"]
+    assert AWS not in read["updatedToolOutput"]["file"]["content"]
+    assert read["updatedToolOutput"]["file"]["numLines"] == original_lines(11)
+    for quiet in ("02_PostToolUse_mcp_post_comment", "04_PostToolUse_mcp_read_issue"):
+        silent(outcomes[quiet])
+
+
+def original_lines(n: int) -> int:
+    path = next(FIXTURES.glob(f"{n:02d}_*.json"))
+    return int(json.loads(path.read_text())["tool_response"]["file"]["numLines"])

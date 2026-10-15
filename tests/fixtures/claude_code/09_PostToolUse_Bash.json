@@ -1,0 +1,26 @@
+{
+ "cwd": "/tmp/project",
+ "duration_ms": 324,
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "PostToolUse",
+ "permission_mode": "auto",
+ "prompt_id": "prompt-1",
+ "scratchpad_dir": "/tmp/project",
+ "session_id": "3f2b9c1e-7d4a-4b8e-9a51-0c6d2e8f4b17",
+ "tool_input": {
+  "command": "cat .env",
+  "description": "Show the project's environment file"
+ },
+ "tool_name": "Bash",
+ "tool_response": {
+  "interrupted": false,
+  "isImage": false,
+  "noOutputExpected": false,
+  "stderr": "",
+  "stdout": "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\nDATABASE_URL=postgres://app@localhost/app"
+ },
+ "tool_use_id": "toolu_01PPqMP4poY55Z3v3U2EEt5G",
+ "transcript_path": "/home/user/.claude/projects/project/session.jsonl"
+}

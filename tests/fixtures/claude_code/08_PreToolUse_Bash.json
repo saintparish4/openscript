@@ -1,0 +1,18 @@
+{
+ "cwd": "/tmp/project",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "PreToolUse",
+ "permission_mode": "auto",
+ "prompt_id": "prompt-1",
+ "scratchpad_dir": "/tmp/project",
+ "session_id": "3f2b9c1e-7d4a-4b8e-9a51-0c6d2e8f4b17",
+ "tool_input": {
+  "command": "cat .env",
+  "description": "Show the project's environment file"
+ },
+ "tool_name": "Bash",
+ "tool_use_id": "toolu_01PPqMP4poY55Z3v3U2EEt5G",
+ "transcript_path": "/home/user/.claude/projects/project/session.jsonl"
+}
