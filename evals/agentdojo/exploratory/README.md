@@ -1,5 +1,10 @@
 # Exploratory: ask only about new destinations
 
+> **Since measured under a frozen protocol** (`PROTOCOL-known.md`), on all
+> four suites: [`docs/metrics.md`](../../../docs/metrics.md#tool-policies-on-agentdojo-holding-only-new-destinations).
+> The measured banking numbers agree with this count. This note stays as the
+> record of how the idea started.
+
 **Not a protocol result.** This was tried on 2026-10-14, after the model runs
 had been seen, to decide whether one idea is worth building and measuring
 properly. Nothing here was frozen beforehand, the rule was written knowing the

@@ -167,6 +167,13 @@ agentdojo-replay: $(AGENTDOJO)/.venv  ## Replay AgentDojo's own solutions and at
 	cd $(AGENTDOJO) && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python replay.py
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/summarize.py
 
+.PHONY: agentdojo-known
+agentdojo-known: $(AGENTDOJO)/.venv  ## PROTOCOL-known.md: the replay with known destinations, then its tables and the model re-score
+	cd $(AGENTDOJO) && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python known.py --check
+	cd $(AGENTDOJO) && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python replay.py --known
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/summarize_known.py
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/rescore_known.py
+
 MODEL ?= scripted
 
 .PHONY: agentdojo-model

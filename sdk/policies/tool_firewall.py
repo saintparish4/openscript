@@ -7,7 +7,6 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import Any, Literal
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from contracts.interceptor import BasePolicy
@@ -26,7 +25,9 @@ class ArgRule(BaseModel):
 
     # A misspelt constraint must fail the load. Ignored, it would be a rule
     # that reads as enforced and enforces nothing.
-    model_config = ConfigDict(extra="forbid")
+    # Built on first validation, not at import: a caller holding rules that were
+    # validated already (ToolRules.from_validated) never pays for the schema.
+    model_config = ConfigDict(extra="forbid", defer_build=True)
 
     required: bool = False
     #: Exact values, compared with ==. True never matches 1.
@@ -73,7 +74,9 @@ class ArgRule(BaseModel):
 class ToolRule(BaseModel):
     """Firewall rule for a single named tool."""
 
-    model_config = ConfigDict(extra="forbid")
+    # Built on first validation, not at import: a caller holding rules that were
+    # validated already (ToolRules.from_validated) never pays for the schema.
+    model_config = ConfigDict(extra="forbid", defer_build=True)
 
     deny: bool = False
     allowed_roles: list[str] = Field(default_factory=lambda: ["*"])
@@ -132,14 +135,43 @@ class ToolRules(BaseModel):
     Loaded from tools.yaml via load_rules(), or constructed directly.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    # Built on first validation, not at import: a caller holding rules that were
+    # validated already (ToolRules.from_validated) never pays for the schema.
+    model_config = ConfigDict(extra="forbid", defer_build=True)
 
     rules: dict[str, ToolRule] = Field(default_factory=dict)
     default_deny: bool = False
 
+    @classmethod
+    def from_validated(cls, data: dict[str, Any]) -> ToolRules:
+        """Rules rebuilt from ``model_dump()`` of rules that were validated before,
+        without validating them again.
+
+        Only for data this package produced by validating: a hook that keeps
+        its checked config between calls, for one. Anything else goes through
+        model_validate.
+        """
+        return cls.model_construct(
+            rules={
+                name: ToolRule.model_construct(
+                    **{
+                        **rule,
+                        "args": {
+                            arg: ArgRule.model_construct(**arg_rule)
+                            for arg, arg_rule in rule.get("args", {}).items()
+                        },
+                    }
+                )
+                for name, rule in data["rules"].items()
+            },
+            default_deny=data["default_deny"],
+        )
+
 
 def load_rules(path: str | Path) -> ToolRules:
     """Load ToolRules from a YAML file at *path*."""
+    import yaml  # only here: a caller with rules in hand never pays for it
+
     with open(path) as fh:
         data = yaml.safe_load(fh)
     if data is None:

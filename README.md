@@ -187,7 +187,38 @@ It reads none of the text, so it cannot be talked round by how an attack is word
 - **Sessions are what you say they are.** Calls made without a `session_id` share one, which errs towards holding. `reset(session_id)` is for when the model's context has been discarded, and `taint(session_id, source)` is for content that arrives some other way, such as an uploaded file.
 - **The memory is this process's.** Like the in-memory approval store, it is not shared between workers and does not survive a restart.
 - **Put the firewall before it,** so a call the rules refuse outright is refused, not sent to a person first.
+- **`known` lets a held call through when everywhere it sends is somewhere the user has already sent:** `known={"send_money": {"recipient": [...]}}`. Every destination argument that is present must have all its values known (each item of a list); an absent one leaves the destination unchanged; values compare ignoring case. List every argument that names a destination (`to`, `cc`, `bcc`): one that is not listed is not looked at. Measured on AgentDojo's no-model replay under a protocol frozen first, it cut the ordinary tasks needing a person from 55 of 97 to 42 and let no attacker call through: banking 12 to 5, and Claude Sonnet 5.5's recorded banking calls 11 to 4. It helps only where there is a sending history to know, travel and Slack have none, and a directory is not a history: a variant that knew every Slack member let 12 more attacks through ([numbers](docs/metrics.md#tool-policies-on-agentdojo-holding-only-new-destinations)).
 - **It asks often, and that is measured.** Replaying [AgentDojo](https://github.com/ethz-spylab/agentdojo)'s own solutions to its 97 tasks, with no model, 55 needed at least one approval. A rule that simply asks on every state-changing call needed 61. Those tasks are all built to read something an attacker can write, which is the worst case for a rule keyed on reading, but on read-then-act work it is nearly as noisy as asking every time, and an approval asked for on most tasks stops being read. With an approver who refuses the attacker's calls it stopped 570 of 617 replayed attacks; with one who approves everything, none. The 47 it missed, and why, are in [`docs/metrics.md`](docs/metrics.md#tool-policies-on-agentdojo-a-replay-with-no-model). With a model in the loop (Claude Haiku 4.5 and Claude Sonnet 5.5, AgentDojo's banking suite, two attacks), neither model followed the injection once in 3,456 attacked conversations, so there was nothing for the rule to stop and it only cost tasks; with Sonnet, which did the work, it asked on 11 of 16 ordinary tasks, as often as asking every time ([details](docs/metrics.md#tool-policies-on-agentdojo-with-a-model-in-the-loop)).
+
+## Guard Claude Code with a Hook
+
+Claude Code's permissions decide which tools may run. `openscript-hook` runs the same tool policies as a [Claude Code hook](https://code.claude.com/docs/en/hooks) and adds what those permissions cannot say:
+
+- **Rules on a call's arguments** (`ToolFirewallPolicy`): issues filed only in your organisation, messages posted only to one channel, a merge that always asks first.
+- **A memory of what the session has read** (`SessionTaintPolicy`): after a web page or an MCP read, the MCP calls you list wait for you.
+- **Secrets masked in a tool's output** before the model reads it: a `cat .env` is handed back as `AWS_KEY=AKIA**********`.
+- **A record of every decision**, one JSON line each, never with the tool's output.
+
+```bash
+pip install -e .                                                     # from this repo: puts openscript-hook in your venv
+cp sdk/hooks/claude_code_example.yaml your-project/.claude/openscript.yaml   # then name your MCP servers' tools
+openscript-hook check --config your-project/.claude/openscript.yaml          # what it will do, and any name that looks like a typo
+```
+
+Then merge [`sdk/hooks/settings_example.json`](sdk/hooks/settings_example.json) into `your-project/.claude/settings.json`, with the absolute path to `openscript-hook`. On each call it answers **deny** (the call does not run, and Claude is told why), **ask** (Claude Code's own prompt, with OpenScript's reason), or nothing, and Claude Code decides as it always would.
+
+Tried in a real Claude Code session (2.1.292, auto permission mode), with a small MCP issue tracker: a comment posted before any read went through; after the agent read an issue, the next comment brought up Claude Code's prompt with OpenScript's reason, and two comments asked for in one message were held one by one; a comment on an issue the rules did not allow was refused and Claude said why; and a `.env` reached the model masked through both Bash and Read. The payloads from that session are replayed in [`tests/test_claude_code_hook.py`](tests/test_claude_code_hook.py).
+
+What it does not do, stated plainly:
+
+- **It only tightens.** It never approves a call, so your own permission rules and modes still apply on top of it.
+- **Bash, Write and Edit are not held after a read by default.** In a coding session that would ask on nearly every command after any web read. Argument rules and redaction still apply to them if you configure them.
+- **Redaction changes what the model is sent, not what Claude Code records.** The transcript and your terminal still hold the original output. For built-in tools the masked output has to match the tool's own output shape, or Claude Code ignores it: it does for Bash and Read, checked in a real session; for other built-in tools it has not been checked. The hook tells the model that something was masked, because without that it took the stars for the file's real content.
+- **A new conversation is a new session.** `/clear` gives Claude Code a new session id, so what was read before it no longer holds anything, which is right: the model no longer has that text either.
+- **It fails closed while deciding.** A missing or invalid config, or any error, blocks the call. A hook that times out does not block: that is Claude Code's rule. The example settings run it as `openscript-hook pre-tool-use || exit 2`, so a hook that cannot start blocks too; Claude Code 2.1.295 and later also take `"onFailure": "block"`.
+- **Install it per project.** With no config, every call it is asked about is refused, so put it in the project's `.claude/settings.json`, or set `OPENSCRIPT_HOOK_CONFIG` if you use it everywhere.
+- **Its memory and audit log are files** in `~/.local/state/openscript/claude-code` (or `$OPENSCRIPT_STATE_DIR`), kept on a local disk: appends from parallel hooks are safe there and not on a network share.
+- **It costs time on every call it matches:** about 150 ms before and 70 ms after, measured against a budget set beforehand ([numbers](docs/metrics.md#the-claude-code-hook-per-call)).
 
 ## Built-in Policies
 
@@ -403,7 +434,7 @@ secure = wrap_agent(langchain_agent, policies=load_policies("policies.yaml"))
 result = await secure.invoke({"input": "What is prompt injection?"})
 ```
 
-This means any framework whose runnables expose that same shape — CrewAI, PydanticAI, AutoGen, the OpenAI Agents SDK — already works with `SecureAgent(agent, policies=...)` directly today; named wrappers for them are on the roadmap for ergonomics, not because the underlying capability is missing. What none of the current wrappers do yet is hook a framework's own per-step primitives (LangGraph node execution, LangChain callbacks) — policies see the whole call, not individual steps inside it. The step that matters most, the tool call, does not need a framework hook: wrap the tools themselves in [`SecureTool`](#4-guard-the-tools-the-agent-calls).
+This means any framework whose runnables expose that same shape — CrewAI, PydanticAI, AutoGen, the OpenAI Agents SDK — already works with `SecureAgent(agent, policies=...)` directly today; named wrappers for them are on the roadmap for ergonomics, not because the underlying capability is missing. What none of the current wrappers do yet is hook a framework's own per-step primitives (LangGraph node execution, LangChain callbacks) — policies see the whole call, not individual steps inside it. The step that matters most, the tool call, does not need a framework hook: wrap the tools themselves in [`SecureTool`](#4-guard-the-tools-the-agent-calls). Claude Code is the exception that has one, and OpenScript uses it: see [Guard Claude Code with a Hook](#guard-claude-code-with-a-hook).
 
 ## Compliance Positioning
 

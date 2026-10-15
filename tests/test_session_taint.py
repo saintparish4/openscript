@@ -410,3 +410,208 @@ def test_a_sink_runs_unasked_exactly_when_its_session_has_read_nothing(
         assert d.ran == expected
 
     asyncio.run(scenario())
+
+
+# -- a store of its own, a verdict without a call, and prefixes -----------------
+
+
+class ListStore:
+    """A TaintStore that records what it was asked, standing for one on disk."""
+
+    def __init__(self) -> None:
+        self.read: dict[str, list[str]] = {}
+        self.calls: list[str] = []
+
+    def sources(self, session_id: str) -> list[str]:
+        self.calls.append(f"sources {session_id}")
+        return list(self.read.get(session_id, []))
+
+    def add(self, session_id: str, source: str) -> None:
+        self.calls.append(f"add {session_id} {source}")
+        self.read.setdefault(session_id, []).append(source)
+
+    def clear(self, session_id: str) -> None:
+        self.calls.append(f"clear {session_id}")
+        self.read.pop(session_id, None)
+
+
+async def test_a_store_of_its_own_holds_the_memory_and_two_instances_can_share_it():
+    store = ListStore()
+    reader = Desk(SessionTaintPolicy(sources=SOURCES, sinks=SINKS, store=store))
+    await reader.call("fetch_issue")
+    assert store.read == {"s1": ["fetch_issue"]}
+
+    # A second instance, as a second process would be, sees the same memory.
+    writer = Desk(SessionTaintPolicy(sources=SOURCES, sinks=SINKS, store=store))
+    with pytest.raises(ActionBlockedError):
+        await writer.call("send_email")
+    assert writer.ran == []
+
+    writer.policy.reset("s1")
+    assert store.read == {} and "clear s1" in store.calls
+
+
+def test_check_gives_before_actions_verdict_without_making_the_call():
+    policy = SessionTaintPolicy(sources=SOURCES, sinks=SINKS)
+    assert policy.check("s1", "send_email")["requires_approval"] is False
+    assert policy.record("s1", "send_email") is False, "a sink that is not a source taints nothing"
+    assert policy.record("s1", "fetch_issue") is True
+    entry = policy.check("s1", "send_email")
+    assert (
+        entry["requires_approval"] and entry["allowed"] and entry["tainted_by"] == ["fetch_issue"]
+    )
+    assert "fetch_issue" in entry["reason"]
+
+    deny = SessionTaintPolicy(sources=SOURCES, sinks=SINKS, on_taint="deny")
+    deny.record("s1", "read_page")
+    assert deny.check("s1", "run_shell")["allowed"] is False
+
+
+async def test_check_and_before_action_agree():
+    policy = SessionTaintPolicy(sources=SOURCES, sinks=SINKS)
+    policy.record("s1", "read_page")
+    for name in ["send_email", "fetch_issue", "list_files", ""]:
+        ctx = ActionContext(
+            action="tool_call", agent_id="a", session_id="s1", input_data={"name": name}
+        )
+        await policy.before_action(ctx)
+        assert ctx.metadata["session_taint"] == policy.check("s1", name)
+
+
+def test_a_name_ending_in_a_star_is_a_prefix():
+    policy = SessionTaintPolicy(
+        sources=["WebFetch", "mcp__github__get_*"], sinks=["mcp__github__create_*", "Bash"]
+    )
+    assert policy.record("s1", "mcp__github__get_issue") is True
+    assert policy.record("s1", "mcp__github__list_issues") is False
+    assert policy.check("s1", "mcp__github__create_pull_request")["requires_approval"]
+    assert not policy.check("s1", "mcp__github__get_file")["requires_approval"]
+    assert not policy.check("s1", "mcp__slack__create_post")["requires_approval"]
+
+
+@pytest.mark.parametrize("name", ["mcp__*__get", "*issue", "a*b*"])
+def test_a_star_anywhere_but_the_end_is_an_error(name: str):
+    with pytest.raises(ValueError, match="only end a name"):
+        SessionTaintPolicy(sources=[name], sinks=SINKS)
+
+
+# -- known destinations ---------------------------------------------------------------
+
+PAID = ["GB29NWBK60161331926819", "SE3550000000054910000003"]
+KNOWN_SINKS = ["send_money", "update_scheduled_transaction", "send_email", "update_password"]
+
+
+def known_policy(**extra: Any) -> SessionTaintPolicy:
+    policy = SessionTaintPolicy(
+        sources=["read_file"],
+        sinks=KNOWN_SINKS,
+        known={
+            "send_money": {"recipient": PAID},
+            "update_scheduled_transaction": {"recipient": PAID},
+            "send_email": {"recipients": ["bob@acme.com"], "cc": ["bob@acme.com"]},
+        },
+        **extra,
+    )
+    policy.record("s1", "read_file")
+    return policy
+
+
+def test_a_payment_to_an_account_already_paid_is_not_held():
+    entry = known_policy().check("s1", "send_money", {"recipient": PAID[0], "amount": 50})
+    assert not entry["requires_approval"] and entry["known_destination"] is True
+    assert entry["destinations"] == {"recipient": PAID[0]}
+    assert "already known" in entry["reason"]
+
+
+def test_a_payment_to_a_new_account_is_held():
+    entry = known_policy().check("s1", "send_money", {"recipient": "US133000000121212121212"})
+    assert entry["requires_approval"] and entry["known_destination"] is False
+
+
+def test_known_values_compare_ignoring_case():
+    assert not known_policy().check("s1", "send_money", {"recipient": PAID[0].lower()})[
+        "requires_approval"
+    ]
+
+
+def test_an_update_that_does_not_change_the_destination_is_not_held():
+    entry = known_policy().check("s1", "update_scheduled_transaction", {"id": 7, "amount": 1100})
+    assert not entry["requires_approval"] and entry["destinations"] == {}
+
+
+def test_every_destination_argument_present_must_be_known():
+    policy = known_policy()
+    ok = {"recipients": ["bob@acme.com"], "subject": "hi"}
+    assert not policy.check("s1", "send_email", ok)["requires_approval"]
+    mixed = {"recipients": ["bob@acme.com", "eve@evil.com"]}
+    assert policy.check("s1", "send_email", mixed)["requires_approval"]
+    leaky_cc = {"recipients": ["bob@acme.com"], "cc": ["eve@evil.com"]}
+    assert policy.check("s1", "send_email", leaky_cc)["requires_approval"]
+    assert policy.check("s1", "send_email", {"recipients": []})["requires_approval"]
+    assert policy.check("s1", "send_email", {"recipients": [42]})["requires_approval"]
+
+
+def test_a_sink_with_no_known_destinations_is_held_as_before():
+    assert known_policy().check("s1", "update_password", {"password": "x"})["requires_approval"]
+
+
+def test_known_destinations_change_nothing_before_an_untrusted_read():
+    policy = known_policy()
+    entry = policy.check("s2", "send_money", {"recipient": "US133000000121212121212"})
+    assert not entry["requires_approval"] and "nothing untrusted" in entry["reason"]
+
+
+def test_deny_mode_refuses_only_the_new_destination():
+    policy = known_policy(on_taint="deny")
+    assert policy.check("s1", "send_money", {"recipient": PAID[1]})["allowed"]
+    assert not policy.check("s1", "send_money", {"recipient": "US13300"})["allowed"]
+
+
+async def test_through_a_secure_tool_the_arguments_decide():
+    desk = Desk(known_policy())
+    desk.policy.record("s1", "read_file")
+    assert await desk.call("send_money", recipient=PAID[0], amount=10)
+    with pytest.raises(ActionBlockedError):
+        await desk.call("send_money", recipient="US133000000121212121212", amount=10)
+    assert desk.ran == ["send_money"]
+
+
+@pytest.mark.parametrize(
+    "known",
+    [
+        {},
+        "send_money",
+        {"send_money": {}},
+        {"send_money": {"recipient": "GB29"}},
+        {"send_money": {"recipient": []}},
+        {"send_money": {"recipient": [""]}},
+        {"read_file": {"path": ["/a"]}},
+    ],
+    ids=[
+        "empty",
+        "bare-string",
+        "no-args",
+        "string-values",
+        "no-values",
+        "empty-value",
+        "not-a-sink",
+    ],
+)
+def test_known_that_could_never_release_anything_is_an_error(known: Any):
+    with pytest.raises(ValueError):
+        SessionTaintPolicy(sources=["read_file"], sinks=KNOWN_SINKS, known=known)
+
+
+def test_load_policies_passes_known_through():
+    (policy,) = load_policies(
+        {
+            "session_taint": {
+                "sources": ["read_file"],
+                "sinks": ["send_money"],
+                "known": {"send_money": {"recipient": PAID}},
+            }
+        }
+    )
+    assert isinstance(policy, SessionTaintPolicy)
+    policy.record("s1", "read_file")
+    assert not policy.check("s1", "send_money", {"recipient": PAID[1]})["requires_approval"]

@@ -1,0 +1,28 @@
+{
+ "cwd": "/tmp/project",
+ "duration_ms": 21,
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "PostToolUse",
+ "permission_mode": "auto",
+ "prompt_id": "prompt-1",
+ "scratchpad_dir": "/tmp/project",
+ "session_id": "3f2b9c1e-7d4a-4b8e-9a51-0c6d2e8f4b17",
+ "tool_input": {
+  "file_path": "/tmp/project/.env"
+ },
+ "tool_name": "Read",
+ "tool_response": {
+  "file": {
+   "content": "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\nDATABASE_URL=postgres://app@localhost/app\n",
+   "filePath": "/tmp/project/.env",
+   "numLines": 3,
+   "startLine": 1,
+   "totalLines": 3
+  },
+  "type": "text"
+ },
+ "tool_use_id": "toolu_012pi5WPTae7au8SMax5aAKp",
+ "transcript_path": "/home/user/.claude/projects/project/session.jsonl"
+}

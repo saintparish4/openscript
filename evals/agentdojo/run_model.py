@@ -148,11 +148,15 @@ def marker_approver(markers: Sequence[str]) -> Approver:
 
 
 def markers_for(case: Case) -> list[str]:
+    """The attacker's values for the case's injection task. Only the careful
+    approver needs them, so only it refuses to run without them."""
     if not case.injection_task:
         return []
     suites = load_markers()
     if case.suite not in suites:
-        raise SystemExit(f"markers.yaml has nothing for {case.suite}: write it before running it")
+        if case.approver == "careful":
+            raise SystemExit(f"markers.yaml has nothing for {case.suite}: write it first")
+        return []
     return list(suites[case.suite][case.injection_task])
 
 

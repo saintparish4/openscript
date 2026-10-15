@@ -293,6 +293,51 @@ Two models, one suite, two attack wordings, one sample per case. Models that
 resist fixed attacks this completely say nothing about attacks written
 against them, or about other models. The replay remains the worst case.
 
+## Tool policies on AgentDojo: holding only new destinations
+
+`make agentdojo-known` — [`evals/agentdojo/`](../evals/agentdojo/README.md).
+The no-model replay again, with one new configuration: the session rule with
+`known=` set, so that after an untrusted read a state-changing call waits for
+a person only if it sends somewhere the user has not sent before. The rule
+for "known", one sentence applied mechanically to each suite's environment
+before any task runs, was frozen with
+[`PROTOCOL-known.md`](../evals/agentdojo/PROTOCOL-known.md) before any run.
+That protocol was written after an exploratory count on banking and says it
+is not blind. Measured 2026-10-14, at no cost.
+
+Ordinary tasks needing a person:
+
+| Suite | Ask on every state-changing call | Session rule | **Session rule, new destinations only** |
+|---|---|---|---|
+| Banking | 12/16 | 12/16 | **5/16** (31%) |
+| Workspace | 22/40 | 22/40 | **16/40** (40%) |
+| Travel | 6/20 | 6/20 | 6/20 |
+| Slack | 21/21 | 15/21 | 15/21 |
+| **All** | 61/97 | 55/97 | **42/97 (43%, 34% to 53%)** |
+
+- **It holds what the session rule holds.** Not one attacker call ran because
+  its destination was known: with a careful approver, 47 of 617 attacks
+  succeed either way, the same 47 the replay explains (20 need no tool call,
+  27 come through Slack's channel listing).
+- **It asks less only where there is a history to know.** Banking's user has
+  paid 4 accounts, and banking drops from 12 to 5, under the bar of a third.
+  Workspace's user has emailed or shared files with 15 addresses: 22 to 16.
+  Travel's user has sent nothing and Slack's agent has never posted, so
+  nothing is known there and nothing changes.
+- **Over all four suites it still misses the bar:** 42 of 97, against a third.
+- **With models, the same direction.** The committed banking runs, re-scored
+  exactly (their careful approver approved every ordinary call, so holding a
+  call changed nothing that followed): Claude Sonnet 5.5 from 11 of 16 tasks
+  to 4, Claude Haiku 4.5 from 4 to 2.
+- **A directory is not a history.** A labelled variant that treated every
+  existing Slack member and channel as known cut Slack's asks from 15 to 10,
+  and let **12 more attacks** through: the injection that asks the agent to
+  send a link to Alice, who is a member. With it, 39 of 105 Slack attacks
+  succeed, against 27.
+
+The replay's caveats hold: no model, and only the calls in each task's
+minimal solution.
+
 ## Speed
 
 Measured inside Python, around the pipeline call only. This table is from
@@ -323,6 +368,29 @@ Normalization itself is not the cost: plain prose produces exactly one view,
 which is what it produced before. Only text that has been obfuscated pays for
 a second pass.
 
+### The Claude Code hook, per call
+
+`.venv/bin/python tools/hook_latency.py --runs 100`. Claude Code waits for a
+PreToolUse hook before every call it matches, so this is time added to the
+agent's turn. Each run is a fresh process, as Claude Code starts it, so the
+interpreter's start is included. The budget, median 200 ms and p95 300 ms,
+was written down before the first measurement. Measured 2026-10-14 on the
+local WSL box with a load average under 2.
+
+| Event | Median | p95 | Budget |
+|---|---|---|---|
+| `pre-tool-use` (a held write in a tainted session) | 149 ms | 168 ms | 200 / 300 ms |
+| `post-tool-use` (a Bash output with secrets to mask) | 70 ms | 75 ms | 200 / 300 ms |
+
+The first measurement missed: 190 to 205 ms median, with a p95 of 321 ms for
+`post-tool-use`. Validating the YAML config with pydantic cost more than the
+rest of a call. The hook now validates a config once and keeps the result,
+keyed by the file's bytes, so `post-tool-use` imports no pydantic at all, and
+`pre-tool-use` rebuilds its already-validated rules without building their
+schemas. On the same box under a load average of 10 to 20, from processes not
+part of this measurement, the p95 of `pre-tool-use` reached 366 ms: quote the
+quiet figure with that caveat, not without it.
+
 ## The demo, on real devices
 
 | What | Number | How |
@@ -351,6 +419,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-14 | Holding only new destinations, measured on the no-model replay under a protocol frozen first: the session rule asks on 42 of 97 ordinary tasks instead of 55, with no attacker call let through; banking 12 to 5, Sonnet's recorded banking calls 11 to 4. Still over the bar of a third overall, and nothing changes where the user has no sending history |
 | 2026-10-14 | AgentDojo's banking suite with a model in the loop, Claude Haiku 4.5 and Claude Sonnet 5.5, under two attacks: neither model followed either attack in any of 3,456 attacked conversations, so there was nothing for the policies to stop and they only cost tasks. With Sonnet, which did the work, the session rule asked on 11 of 16 ordinary tasks, as often as asking on every state-changing call |
 | 2026-10-13 | AgentDojo replayed through the tool policies, with no model: the session rule stops 570 of 617 attacks with a careful approver and asks on 55 of 97 ordinary tasks, against a bar of a third set beforehand. A stateless rule that asks on every state-changing call stops 597 and asks on 61 |
 | 2026-10-13 | A tenth built-in policy, `SessionTaintPolicy`: once a session has read untrusted content, a state-changing tool call waits for a person. It reads no text, so it has no detection rate to report; what it costs in approvals is measured separately |

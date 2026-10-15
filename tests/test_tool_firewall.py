@@ -489,3 +489,48 @@ def test_example_rules_file_loads():
     example = Path(__file__).resolve().parent.parent / "sdk" / "policies" / "tools_example.yaml"
     rules = load_rules(example)
     assert rules.rules["delete_record"].deny is True
+
+
+def test_rules_rebuilt_from_their_validated_dump_decide_exactly_as_the_originals():
+    """ToolRules.from_validated skips validation, for a hook that validated the
+    rules once and kept them. It has to give the same verdict on every call."""
+    from sdk.policies.tool_firewall import ToolRules, validate_tool_call
+
+    rules = ToolRules.model_validate(
+        {
+            "default_deny": False,
+            "rules": {
+                "send": {
+                    "allowed_roles": ["ops"],
+                    "unlisted_args": "deny",
+                    "args": {
+                        "to": {"required": True, "pattern": r"[a-z]+@acme\.com"},
+                        "amount": {"min": 0, "max": 100},
+                        "path": {"path_prefix": "/srv/out"},
+                        "kind": {"one_of": ["a", "b"]},
+                    },
+                },
+                "merge": {"requires_approval": True},
+                "drop": {"deny": True},
+                "legacy": {"arg_constraints": {"max_n": 5}},
+            },
+        }
+    )
+    rebuilt = ToolRules.from_validated(rules.model_dump(mode="json"))
+    calls = [
+        ({"name": "send", "args": {"to": "bob@acme.com", "amount": 5}}, "ops"),
+        ({"name": "send", "args": {"to": "bob@acme.com", "amount": 500}}, "ops"),
+        ({"name": "send", "args": {"to": "eve@evil.com"}}, "ops"),
+        ({"name": "send", "args": {"to": "bob@acme.com"}}, None),
+        ({"name": "send", "args": {"to": "bob@acme.com", "extra": 1}}, "ops"),
+        ({"name": "send", "args": {"to": "bob@acme.com", "path": "/srv/out/../etc"}}, "ops"),
+        ({"name": "send", "args": {"to": "bob@acme.com", "kind": "c"}}, "ops"),
+        ({"name": "merge", "args": {}}, None),
+        ({"name": "drop", "args": {}}, None),
+        ({"name": "legacy", "args": {"n": 9}}, None),
+        ({"name": "unknown", "args": {}}, None),
+    ]
+    for call, role in calls:
+        assert validate_tool_call(call, role=role, rules=rebuilt) == validate_tool_call(
+            call, role=role, rules=rules
+        ), call

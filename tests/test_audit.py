@@ -28,7 +28,11 @@ from policy_audit import (  # noqa: E402
 
 # Helper modules a policy imports. The audit table walks policy modules only,
 # so anything shared between them has to be named here or it is unchecked.
-SHARED_POLICY_HELPERS = ["sdk/policies/normalize.py"]
+SHARED_POLICY_HELPERS = [
+    "sdk/policies/normalize.py",
+    "sdk/policies/redaction.py",
+    "sdk/policies/taint_store.py",
+]
 
 # The exact set of policies the demo claims to run in the browser.
 EXPECTED_POLICIES = {
@@ -129,13 +133,9 @@ def guard(name, *a, **k):
 builtins.__import__ = guard
 
 import sdk
-required = [
-    "PIIPolicy", "SecretsPolicy", "PromptInjectionPolicy", "ToxicityPolicy",
-    "HarmfulRequestPolicy", "CompliancePolicy", "ToolFirewallPolicy",
-    "OutputSchemaPolicy", "AuditPolicy", "SecureAgent", "RiskScorer", "load_policies",
-    "SemanticPolicy",
-]
-missing = [n for n in required if not hasattr(sdk, n)]
+# sdk exports lazily, so importing it alone proves nothing: resolve every
+# exported name, which imports every module behind them.
+missing = [n for n in sdk.__all__ if not hasattr(sdk, n)]
 assert not missing, missing
 print("OK")
 """
