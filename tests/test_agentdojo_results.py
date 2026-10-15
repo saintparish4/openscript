@@ -30,6 +30,9 @@ FROZEN = {
     "markers.yaml": "275ba25d153a1e125f573b8c5f904249ef6407fe5cf4165657bd7ff7014cce51",
     # A second attack, added after the Haiku run and frozen before any request under it.
     "PROTOCOL-model-amendment-1.md": "81123973ed3c6a63c7cdce35aae3886057da9d3060990275c25e3ef3c7ac2e80",
+    # Holding only new destinations, frozen before any run of it.
+    "PROTOCOL-known.md": "08522e24e2be9d1aa30a37b07596577a2450855ded3b4f8a9d0be3eb0ef6dd99",
+    "known.yaml": "4d8d8f7a38b7808d2c9da6b1bf7d57785391e4cdfb185c6856921ed0969ed007",
 }
 
 
