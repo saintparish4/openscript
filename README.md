@@ -41,7 +41,7 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
   - Security policies block when they error.
   - Rule files reject misspelt keys, and a value a rule cannot evaluate is refused.
   - The Claude Code hook blocks the call if anything goes wrong while it is deciding.
-- **Tested like a security tool.** 817 tests, `mypy --strict` on the SDK, and six CI jobs. One job boots the package under Pyodide headless, and another runs every demo prompt through the exported site.
+- **Tested like a security tool.** 837 tests, `mypy --strict` on the SDK, and six CI jobs. One job boots the package under Pyodide headless, and another runs every demo prompt through the exported site.
 
 Every number above, with its date, command and caveats, is in [`docs/metrics.md`](docs/metrics.md).
 

@@ -172,6 +172,8 @@ rule asked on 4 of 16 ordinary tasks, the 4 the re-score named; with nobody to
 approve, 12 of 16 were done instead of 7. No attack was followed, so it
 contained nothing here.
 
+**Destinations the user named, 2026-10-15** (`PROTOCOL-named.md`, `results/named/`, free): a candidate rule, kept in the harness. It reached 30 of 97 ordinary tasks needing a person, under a third, but Slack stayed at 14 of 21 and 21 travel attacks got through, so it was not adopted, as decided before the run.
+
 **Exploratory, not a result:** [`exploratory/`](exploratory/README.md) counts
 what the session rule would have asked if it held only payments to accounts
 the user has not paid before. On banking, Sonnet's recorded calls would have
