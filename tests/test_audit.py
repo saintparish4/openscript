@@ -133,13 +133,9 @@ def guard(name, *a, **k):
 builtins.__import__ = guard
 
 import sdk
-required = [
-    "PIIPolicy", "SecretsPolicy", "PromptInjectionPolicy", "ToxicityPolicy",
-    "HarmfulRequestPolicy", "CompliancePolicy", "ToolFirewallPolicy",
-    "OutputSchemaPolicy", "AuditPolicy", "SecureAgent", "RiskScorer", "load_policies",
-    "SemanticPolicy",
-]
-missing = [n for n in required if not hasattr(sdk, n)]
+# sdk exports lazily, so importing it alone proves nothing: resolve every
+# exported name, which imports every module behind them.
+missing = [n for n in sdk.__all__ if not hasattr(sdk, n)]
 assert not missing, missing
 print("OK")
 """
