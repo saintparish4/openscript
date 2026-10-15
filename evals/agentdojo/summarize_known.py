@@ -2,8 +2,9 @@
 
     python evals/agentdojo/summarize_known.py     # markdown to stdout, results/known/summary.json
 
-Reads results/known/*.csv (taint_known, and taint_directory on Slack) and the
-committed results/*.csv (approve_all, taint_text). Nothing here runs a policy:
+Reads results/known/*.csv (taint_known, and taint_directory on Slack), the
+committed results/*.csv (approve_all, taint_text), and results/known-shipped/
+(taint_known_shipped: the rule as the package ships it, a labelled re-run). Nothing here runs a policy:
 every number is a count over rows replay.py wrote. As in summarize.py, attacks
 are counted over the pairs where the undefended attack works.
 """
@@ -30,6 +31,7 @@ COLUMNS = (
     ("taint_text", "committed"),
     ("taint_known", "known"),
     ("taint_directory", "known"),
+    ("taint_known_shipped", "shipped"),
 )
 
 
@@ -49,12 +51,15 @@ def _share(n: int, of: int) -> dict[str, Any]:
 
 
 def tables(
-    committed: tuple[list[Row], list[Row]], known: tuple[list[Row], list[Row]]
+    committed: tuple[list[Row], list[Row]],
+    known: tuple[list[Row], list[Row]],
+    shipped: tuple[list[Row], list[Row]] = ([], []),
 ) -> dict[str, Any]:
-    benign = {"committed": committed[0], "known": known[0]}
+    benign = {"committed": committed[0], "known": known[0], "shipped": shipped[0]}
     attack = {
         "committed": [r for r in committed[1] if r["attack"] == MAIN_ATTACK],
         "known": known[1],
+        "shipped": shipped[1],
     }
     working = {
         (r["suite"], r["user_task"], r["injection_task"])
@@ -99,9 +104,9 @@ def tables(
         (r["suite"], r["user_task"], r["injection_task"]): int(r["inj_ran"])
         for r in rows("attack", "committed", "taint_text", "careful", "all")
     }
-    for configuration in ("taint_known", "taint_directory"):
+    for configuration, where in COLUMNS[2:]:
         released = []
-        for r in rows("attack", "known", configuration, "careful", "all"):
+        for r in rows("attack", where, configuration, "careful", "all"):
             pair = (r["suite"], r["user_task"], r["injection_task"])
             extra = int(r["inj_ran"]) - baseline[pair]
             if extra > 0:
@@ -122,8 +127,8 @@ def markdown(summary: dict[str, Any]) -> str:
     lines = [
         "Ordinary tasks needing a person (nobody approving):",
         "",
-        "| Suite | approve_all | taint_text | taint_known | taint_directory |",
-        "|---|---|---|---|---|",
+        "| Suite | approve_all | taint_text | taint_known | taint_directory | taint_known_shipped |",
+        "|---|---|---|---|---|---|",
     ]
     for suite, by in summary["benign"].items():
         cells = [_fmt(by[c]["needed_a_person"]) if c in by else "—" for c, _ in COLUMNS]
@@ -132,8 +137,8 @@ def markdown(summary: dict[str, Any]) -> str:
         "",
         "Attacks that succeeded, careful approver, over pairs where the undefended attack works:",
         "",
-        "| Suite | approve_all | taint_text | taint_known | taint_directory |",
-        "|---|---|---|---|---|",
+        "| Suite | approve_all | taint_text | taint_known | taint_directory | taint_known_shipped |",
+        "|---|---|---|---|---|---|",
     ]
     for suite, by in summary["attack"].items():
         cells = [_fmt(by[c]["succeeded"]) if c in by else "—" for c, _ in COLUMNS]
@@ -157,6 +162,10 @@ def main() -> int:
         (
             _read(HERE / "results" / "known" / "benign.csv"),
             _read(HERE / "results" / "known" / "attack.csv"),
+        ),
+        (
+            _read(HERE / "results" / "known-shipped" / "benign.csv"),
+            _read(HERE / "results" / "known-shipped" / "attack.csv"),
         ),
     )
     (HERE / "results" / "known" / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")

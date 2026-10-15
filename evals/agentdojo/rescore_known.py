@@ -70,8 +70,12 @@ def rescore() -> dict[str, Any]:
                     f"{model} {row['user_task']}: re-scored {old} held calls, the run recorded "
                     f"{row['approvals']}; the re-score is not exact, so nothing is written"
                 )
+            # As PROTOCOL-known.md froze it: leaving the payee out of an update keeps
+            # it, for every listed tool (banking's only such call is an update).
             new = held(
-                SessionTaintPolicy(sources=lists["sources"], sinks=lists["sinks"], known=known),
+                SessionTaintPolicy(
+                    sources=lists["sources"], sinks=lists["sinks"], known=known, updates=list(known)
+                ),
                 transcript["messages"],
             )
             tasks[row["user_task"]] = (old, new)

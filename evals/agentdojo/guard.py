@@ -44,6 +44,17 @@ CONFIGURATIONS = ("none", "detector", "approve_all", "taint_text", "taint_all")
 #: The configurations PROTOCOL-known.md adds: the session rule with known
 #: destinations (the rule), and with every Slack member and channel (a variant).
 KNOWN_CONFIGURATIONS = ("taint_known", "taint_directory")
+#: The same rule as the package ships it since 2026-10-15: a listed tool called
+#: with none of its destination arguments is held unless it changes something
+#: that already exists (``updates``). PROTOCOL-known.md froze the older rule, in
+#: which leaving the destination out always counted as keeping it, so
+#: taint_known and taint_directory pass every listed tool as an update and stay
+#: that rule; this configuration is the shipped one, a labelled re-run.
+SHIPPED_CONFIGURATION = "taint_known_shipped"
+#: The tools, by suite, whose destination stays what it was when it is left
+#: out: a scheduled payment keeps its payee. Nothing else in known.yaml edits
+#: something that exists: an email, an event, a share are each new.
+SHIPPED_UPDATES = {"banking": ["update_scheduled_transaction"]}
 #: The configuration PROTOCOL-named.md adds: destinations the user named count
 #: as known too, with a check on links (named.py, a candidate not in sdk/).
 NAMED_CONFIGURATIONS = ("taint_named",)
@@ -76,7 +87,7 @@ def load_known() -> dict[str, Any]:
 def known_for(configuration: str, suite: str) -> dict[str, Any] | None:
     """The known destinations a configuration uses on *suite*: None when it
     knows none, which leaves the session rule as taint_text."""
-    if configuration in ("taint_known", "taint_named"):
+    if configuration in ("taint_known", "taint_named", SHIPPED_CONFIGURATION):
         return load_known()["suites"].get(suite) or None
     if configuration == "taint_directory":
         return load_known()["directory"][suite]  # Slack only: anything else is a mistake
@@ -109,7 +120,20 @@ def policies_for(
     if configuration == "taint_all":
         return [SessionTaintPolicy(sources="*", sinks=sinks)]
     if configuration in KNOWN_CONFIGURATIONS:
-        return [SessionTaintPolicy(sources=list(lists["sources"]), sinks=sinks, known=known)]
+        # As frozen: leaving the destination out keeps it, for every listed tool.
+        updates = list(known) if known else None
+        return [
+            SessionTaintPolicy(
+                sources=list(lists["sources"]), sinks=sinks, known=known, updates=updates
+            )
+        ]
+    if configuration == SHIPPED_CONFIGURATION:
+        updates = [tool for tool in SHIPPED_UPDATES.get(suite, []) if known and tool in known]
+        return [
+            SessionTaintPolicy(
+                sources=list(lists["sources"]), sinks=sinks, known=known, updates=updates or None
+            )
+        ]
     if configuration in NAMED_CONFIGURATIONS:
         from named import NamedTaintPolicy, load_named
 

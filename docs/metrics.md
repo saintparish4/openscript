@@ -383,6 +383,17 @@ Ordinary tasks needing a person:
   Travel's user has sent nothing and Slack's agent has never posted, so
   nothing is known there and nothing changes.
 - **Over all four suites it still misses the bar:** 42 of 97, against a third.
+- **As the package ships it since 2026-10-15, 44 of 97.** The frozen rule
+  let through a listed tool called with none of its destination arguments,
+  as if leaving the destination out kept it. That is right for an update to
+  an existing payment and wrong for a new calendar event with no
+  participants, which a later candidate showed an attack can use. The
+  package now holds such a call unless the tool is listed in `updates`.
+  Replayed again as a labelled run (`replay.py --shipped`, with banking's
+  `update_scheduled_transaction` as its one update): workspace 16 to 18,
+  everything else unchanged, still no attacker call let through. The
+  re-scores of the model runs are unchanged: their only such calls are
+  updates to a scheduled payment.
 - **With models, the same direction.** The committed banking runs, re-scored
   exactly (their careful approver approved every ordinary call, so holding a
   call changed nothing that followed): Claude Sonnet 5.5 from 11 of 16 tasks
@@ -470,12 +481,13 @@ Ordinary tasks needing a person:
   attacker call let through rules it out, and it is still over a third on
   Slack. The session rule stays as it is, and it asks often on work that
   reads and then acts. The candidate stays in the harness.
-- **The first leak applies to `known=` as shipped.** A listed tool called
-  with none of its destination arguments is let through: right for changing
+- **The first leak was in `known=` too, and is fixed.** A listed tool called
+  with none of its destination arguments was let through: right for changing
   an existing payment's amount, wrong for creating a calendar event. No
-  attack in the replay used it with `known=`: travel has no sending history,
+  attack in the replay used it with `known=` (travel has no sending history,
   and no attack in any suite calls a listed tool without its destination
-  arguments.
+  arguments), but the package now holds such a call unless the tool is
+  listed in `updates`. Measured above, as shipped: 44 of 97.
 
 The replay's caveats hold: no model, and only the calls in each task's
 minimal solution.
@@ -550,7 +562,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | What | Number |
 |---|---|
-| Tests | 837 |
+| Tests | 844 |
 | Labelled eval prompts | 1,799 across 8 corpora (348 written here, 1,451 public) |
 | Built-in policies | 10, all pure-local |
 | Opt-in policies | 1 (`SemanticPolicy`), head not trained, no number claimed |
@@ -561,6 +573,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-15 | `known=` now holds a listed tool called with none of its destination arguments unless it is listed in `updates`: no destination is not a known one. The replay as shipped: 44 of 97 ordinary tasks needing a person instead of 42 (two workspace tasks that create an event with no participants), still no attacker call let through |
 | 2026-10-15 | A candidate measured and not adopted: counting destinations the user named as known brings the session rule to 30 of 97 ordinary tasks, under a third, but Slack stays at 14 of 21 and 21 travel attacks get through, 20 of them a calendar event with no participants. The session rule stays as it is |
 | 2026-10-15 | The session rule with known destinations, run with Claude Sonnet 5.5 on banking under the same amendment: it asked on 4 of 16 ordinary tasks with a careful approver, the 4 the re-score named, under the bar on banking; with nobody to approve, 12 of 16 tasks were done instead of 7. No attack was followed, so it contained nothing here |
 | 2026-10-15 | AgentDojo's Slack suite with Claude Sonnet 5.5, under an amendment frozen first: the model followed none of the 105 attacks in any run, and the session rule asked on 16 of 21 ordinary tasks, over the bar again. The amendment also scores AgentDojo's trace-reading checks on the calls that ran, as the replay does |

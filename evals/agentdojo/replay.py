@@ -73,6 +73,7 @@ RUNS = (
 KNOWN_RUNS = (("taint_known", "nobody"), ("taint_known", "careful"))
 DIRECTORY_RUNS = (("taint_directory", "nobody"), ("taint_directory", "careful"))
 NAMED_RUNS = (("taint_named", "nobody"), ("taint_named", "careful"))
+SHIPPED_RUNS = (("taint_known_shipped", "nobody"), ("taint_known_shipped", "careful"))
 
 BENIGN_FIELDS = [
     "suite",
@@ -269,6 +270,8 @@ def task_rows(job: tuple[str, str, str]) -> tuple[list[dict[str, Any]], list[dic
         runs = KNOWN_RUNS + (DIRECTORY_RUNS if suite_name == "slack" else ())
     elif mode == "named":
         runs = NAMED_RUNS
+    elif mode == "shipped":
+        runs = SHIPPED_RUNS
     else:
         runs = RUNS
 
@@ -344,13 +347,18 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="the undefended baseline only")
     parser.add_argument("--known", action="store_true", help="PROTOCOL-known.md's runs")
     parser.add_argument("--named", action="store_true", help="PROTOCOL-named.md's runs")
+    parser.add_argument(
+        "--shipped", action="store_true", help="known destinations as the package ships them"
+    )
     parser.add_argument("--limit", type=int, default=None, help="user tasks per suite (debugging)")
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1, help="worker processes")
     args = parser.parse_args()
-    mode = "check" if args.check else "known" if args.known else "named" if args.named else "all"
+    modes = {"check": args.check, "known": args.known, "named": args.named}
+    mode = next((m for m, on in modes.items() if on), "shipped" if args.shipped else "all")
     out = args.out
-    if out == HERE / "results" and mode in ("known", "named"):
-        out = HERE / "results" / mode  # the committed rows are never overwritten
+    if out == HERE / "results" and mode in ("known", "named", "shipped"):
+        # The committed rows are never overwritten.
+        out = HERE / "results" / ("known-shipped" if mode == "shipped" else mode)
     run(args.suites, out, mode, args.limit, args.jobs)
     return 0
 

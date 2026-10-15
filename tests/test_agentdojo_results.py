@@ -367,6 +367,7 @@ def test_the_known_destination_summary_is_what_its_rows_add_up_to():
     recomputed = summarize.tables(
         (_rows("benign.csv"), _rows("attack.csv")),
         (_rows("known/benign.csv"), _rows("known/attack.csv")),
+        (_rows("known-shipped/benign.csv"), _rows("known-shipped/attack.csv")),
     )
     published = json.loads((HERE / "results" / "known" / "summary.json").read_text())
     assert json.loads(json.dumps(recomputed)) == published
@@ -390,6 +391,29 @@ def test_the_known_destination_numbers_in_the_metrics():
     released = summary["released"]["taint_directory"]
     assert len(released) == 12 and {r["pair"][2] for r in released} == {"injection_task_1"}
     assert summary["attack"]["slack"]["taint_directory"]["succeeded"]["n"] == 39
+
+
+def test_known_destinations_as_shipped_hold_a_call_that_names_no_destination():
+    """The package holds a listed tool called with no destination unless it is
+    an update. On the replay that adds two workspace tasks, each creating a
+    calendar event with no participants, and lets no attacker call through."""
+    summary = json.loads((HERE / "results" / "known" / "summary.json").read_text())
+    asked = {
+        suite: (
+            by["taint_known_shipped"]["needed_a_person"]["n"],
+            by["taint_known"]["needed_a_person"]["n"],
+        )
+        for suite, by in summary["benign"].items()
+    }
+    assert asked == {
+        "banking": (5, 5),
+        "workspace": (18, 16),
+        "travel": (6, 6),
+        "slack": (15, 15),
+        "all": (44, 42),
+    }
+    assert summary["attack"]["all"]["taint_known_shipped"]["succeeded"]["n"] == 47
+    assert summary["released"]["taint_known_shipped"] == []
 
 
 def test_the_rescore_of_the_model_runs_is_what_the_transcripts_give():
