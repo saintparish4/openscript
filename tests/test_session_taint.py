@@ -410,3 +410,86 @@ def test_a_sink_runs_unasked_exactly_when_its_session_has_read_nothing(
         assert d.ran == expected
 
     asyncio.run(scenario())
+
+
+# -- a store of its own, a verdict without a call, and prefixes -----------------
+
+
+class ListStore:
+    """A TaintStore that records what it was asked, standing for one on disk."""
+
+    def __init__(self) -> None:
+        self.read: dict[str, list[str]] = {}
+        self.calls: list[str] = []
+
+    def sources(self, session_id: str) -> list[str]:
+        self.calls.append(f"sources {session_id}")
+        return list(self.read.get(session_id, []))
+
+    def add(self, session_id: str, source: str) -> None:
+        self.calls.append(f"add {session_id} {source}")
+        self.read.setdefault(session_id, []).append(source)
+
+    def clear(self, session_id: str) -> None:
+        self.calls.append(f"clear {session_id}")
+        self.read.pop(session_id, None)
+
+
+async def test_a_store_of_its_own_holds_the_memory_and_two_instances_can_share_it():
+    store = ListStore()
+    reader = Desk(SessionTaintPolicy(sources=SOURCES, sinks=SINKS, store=store))
+    await reader.call("fetch_issue")
+    assert store.read == {"s1": ["fetch_issue"]}
+
+    # A second instance, as a second process would be, sees the same memory.
+    writer = Desk(SessionTaintPolicy(sources=SOURCES, sinks=SINKS, store=store))
+    with pytest.raises(ActionBlockedError):
+        await writer.call("send_email")
+    assert writer.ran == []
+
+    writer.policy.reset("s1")
+    assert store.read == {} and "clear s1" in store.calls
+
+
+def test_check_gives_before_actions_verdict_without_making_the_call():
+    policy = SessionTaintPolicy(sources=SOURCES, sinks=SINKS)
+    assert policy.check("s1", "send_email")["requires_approval"] is False
+    assert policy.record("s1", "send_email") is False, "a sink that is not a source taints nothing"
+    assert policy.record("s1", "fetch_issue") is True
+    entry = policy.check("s1", "send_email")
+    assert (
+        entry["requires_approval"] and entry["allowed"] and entry["tainted_by"] == ["fetch_issue"]
+    )
+    assert "fetch_issue" in entry["reason"]
+
+    deny = SessionTaintPolicy(sources=SOURCES, sinks=SINKS, on_taint="deny")
+    deny.record("s1", "read_page")
+    assert deny.check("s1", "run_shell")["allowed"] is False
+
+
+async def test_check_and_before_action_agree():
+    policy = SessionTaintPolicy(sources=SOURCES, sinks=SINKS)
+    policy.record("s1", "read_page")
+    for name in ["send_email", "fetch_issue", "list_files", ""]:
+        ctx = ActionContext(
+            action="tool_call", agent_id="a", session_id="s1", input_data={"name": name}
+        )
+        await policy.before_action(ctx)
+        assert ctx.metadata["session_taint"] == policy.check("s1", name)
+
+
+def test_a_name_ending_in_a_star_is_a_prefix():
+    policy = SessionTaintPolicy(
+        sources=["WebFetch", "mcp__github__get_*"], sinks=["mcp__github__create_*", "Bash"]
+    )
+    assert policy.record("s1", "mcp__github__get_issue") is True
+    assert policy.record("s1", "mcp__github__list_issues") is False
+    assert policy.check("s1", "mcp__github__create_pull_request")["requires_approval"]
+    assert not policy.check("s1", "mcp__github__get_file")["requires_approval"]
+    assert not policy.check("s1", "mcp__slack__create_post")["requires_approval"]
+
+
+@pytest.mark.parametrize("name", ["mcp__*__get", "*issue", "a*b*"])
+def test_a_star_anywhere_but_the_end_is_an_error(name: str):
+    with pytest.raises(ValueError, match="only end a name"):
+        SessionTaintPolicy(sources=[name], sinks=SINKS)

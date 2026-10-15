@@ -33,7 +33,12 @@ from sdk.policies.output_schema import HallucinationMode, OnInvalid, OutputSchem
 from sdk.policies.redaction import find_pii, redact_data, redact_pii, redact_secrets
 from sdk.policies.secrets import InternalURLMode, SecretsPolicy, find_secrets
 from sdk.policies.semantic import SemanticHead, SemanticMode, SemanticPolicy
-from sdk.policies.session_taint import SessionTaintPolicy, TaintAction
+from sdk.policies.session_taint import (
+    InMemoryTaintStore,
+    SessionTaintPolicy,
+    TaintAction,
+    TaintStore,
+)
 from sdk.policies.tool_firewall import ToolFirewallPolicy, ToolRules, validate_tool_call
 from sdk.policies.toxicity import ToxicityPolicy
 
@@ -54,6 +59,7 @@ __all__ = [
     "HallucinationMode",
     "HarmfulRequestPolicy",
     "InMemoryApprovalStore",
+    "InMemoryTaintStore",
     "Interceptor",  # deprecated alias
     "InterceptorDecision",
     "InterceptorResult",
@@ -82,6 +88,7 @@ __all__ = [
     "StreamGuard",
     "StreamOutputMode",
     "TaintAction",
+    "TaintStore",
     "ThreatInterceptor",  # deprecated alias
     "ToolFirewallPolicy",
     "ToolRules",
