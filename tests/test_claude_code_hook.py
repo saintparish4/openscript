@@ -425,3 +425,68 @@ def test_the_console_script_points_at_main():
     except ValueError:
         pytest.skip("the package is not installed with its entry points here")
     assert entry.value == "sdk.hooks.claude_code:main"
+
+
+# -- the validated config, kept between calls ------------------------------------------
+
+
+def _cache(hook: Hook) -> list[Path]:
+    return sorted((hook.state / "claude-code" / "config-cache").glob("*.json"))
+
+
+def test_a_changed_config_takes_effect_on_the_next_call(tmp_path):
+    hook = Hook(tmp_path)
+    silent(hook.pre("WebFetch", url="x"))
+    asked(hook.pre("mcp__github__create_issue", owner="acme"))
+    assert len(_cache(hook)) == 1
+    loosened = {**CONFIG, "session": {**CONFIG["session"], "sinks": ["mcp__github__merge_*"]}}
+    hook.config.write_text(yaml.safe_dump(loosened))
+    silent(hook.pre("mcp__github__create_issue", owner="acme"))
+    assert len(_cache(hook)) == 2, "a new config is a new key, not an edit of the old one"
+
+
+def test_a_changed_rules_file_takes_effect_on_the_next_call(tmp_path):
+    rules = tmp_path / "rules.yaml"
+    rules.write_text(yaml.safe_dump({"rules": {"mcp__x__send": {"deny": True}}}))
+    hook = Hook(tmp_path, {"version": 1, "firewall": {"rules_path": "rules.yaml"}})
+    blocked(hook.pre("mcp__x__send", to="a"))
+    rules.write_text(yaml.safe_dump({"rules": {"mcp__x__send": {"requires_approval": True}}}))
+    asked(hook.pre("mcp__x__send", to="a"))
+
+
+def test_a_cache_entry_it_cannot_read_is_validated_again(tmp_path):
+    hook = Hook(tmp_path)
+    hook.pre("mcp__github__get_issue", number=1)
+    (entry,) = _cache(hook)
+    entry.write_text("{not json")
+    asked(hook.pre("mcp__github__create_issue", owner="acme"))
+    entry.write_text(json.dumps({"format": 1, "settings": {"role": None}, "depends_on": {}}))
+    asked(hook.pre("mcp__github__create_issue", owner="acme"))
+
+
+def test_with_the_config_cached_a_post_call_imports_no_pydantic(tmp_path):
+    """The point of the cache: the call made after every tool stays cheap."""
+    hook = Hook(tmp_path)
+    hook.post("Bash", {"stdout": "x", "stderr": ""}, command="ls")  # validates and caches
+    probe = (
+        "import sys\n"
+        "from sdk.hooks.claude_code import main\n"
+        "code = main(sys.argv[1:])\n"
+        "sys.stderr.write('PYDANTIC=%s\\n' % ('pydantic' in sys.modules))\n"
+        "raise SystemExit(code)\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", probe, "--config", str(hook.config), "post-tool-use"],
+        input=json.dumps(
+            payload(
+                "PostToolUse", "Bash", {"command": "env"}, response={"stdout": AWS, "stderr": ""}
+            )
+        ),
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        env=hook.env,
+        timeout=60,
+    )
+    assert proc.returncode == 0 and AWS not in proc.stdout, proc.stderr
+    assert "PYDANTIC=False" in proc.stderr

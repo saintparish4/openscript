@@ -7,7 +7,6 @@ from collections.abc import Collection
 from pathlib import Path
 from typing import Any, Literal
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from contracts.interceptor import BasePolicy
@@ -140,6 +139,8 @@ class ToolRules(BaseModel):
 
 def load_rules(path: str | Path) -> ToolRules:
     """Load ToolRules from a YAML file at *path*."""
+    import yaml  # only here: a caller with rules in hand never pays for it
+
     with open(path) as fh:
         data = yaml.safe_load(fh)
     if data is None:

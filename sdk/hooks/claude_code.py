@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import logging
 import os
 import sys
 from datetime import UTC, datetime
@@ -51,7 +50,9 @@ def main(argv: list[str] | None = None) -> int:
     sys.stdout.flush()
     decision = os.fdopen(os.dup(1), "w", encoding="utf-8")
     os.dup2(2, 1)
-    logging.disable(logging.CRITICAL)
+    # pydantic looks for plugins among every installed package the first time
+    # a model is built. This process wants none, and Claude Code waits for it.
+    os.environ.setdefault("PYDANTIC_DISABLE_PLUGINS", "__all__")
 
     parser = argparse.ArgumentParser(prog="openscript-hook", description=__doc__.split("\n")[0])
     parser.add_argument("--config", type=Path, help="the YAML config (see the module docstring)")
@@ -94,15 +95,15 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _pre_tool_use(payload: dict[str, Any], config_path: Path | None, out: IO[str]) -> int:
-    from sdk.hooks.config import load_config
-    from sdk.policies.tool_firewall import validate_tool_call
-
     name, args, session_id = _call(payload)
-    config, rules = load_config(_config_path(config_path, payload))
+    config = _settings(_config_path(config_path, payload))
     asks: list[tuple[str, str]] = []
 
-    if rules is not None:
-        verdict = validate_tool_call({"name": name, "args": args}, role=config.role, rules=rules)
+    if config["rules"] is not None:
+        from sdk.policies.tool_firewall import ToolRules, validate_tool_call
+
+        rules = ToolRules.model_validate(config["rules"])
+        verdict = validate_tool_call({"name": name, "args": args}, role=config["role"], rules=rules)
         if not verdict["allowed"]:
             _audit(config, payload, "deny", "tool_firewall", verdict["reason"])
             return _block(f"the tool rules refuse this call: {verdict['reason']}")
@@ -110,7 +111,7 @@ def _pre_tool_use(payload: dict[str, Any], config_path: Path | None, out: IO[str
             asks.append(("tool_firewall", verdict["reason"]))
 
     tainted_by: list[str] = []
-    if config.session is not None:
+    if config["session"] is not None:
         session = _session_policy(config)
         entry = session.check(session_id, name)
         tainted_by = entry["tainted_by"]
@@ -134,14 +135,12 @@ def _pre_tool_use(payload: dict[str, Any], config_path: Path | None, out: IO[str
 
 
 def _post_tool_use(payload: dict[str, Any], config_path: Path | None, out: IO[str]) -> int:
-    from sdk.hooks.config import load_config
-
     name, _args, session_id = _call(payload)
-    config, _rules = load_config(_config_path(config_path, payload))
-    if config.session is not None:
+    config = _settings(_config_path(config_path, payload))
+    if config["session"] is not None:
         _session_policy(config).record(session_id, name)  # again, in case PreToolUse never ran
 
-    if not config.redact.covers(name) or "tool_response" not in payload:
+    if not _redacts(config["redact"], name) or "tool_response" not in payload:
         return 0
     redacted, labels = _redact_output(name, payload["tool_response"], config)
     if not labels:
@@ -199,19 +198,94 @@ def _state() -> Path:
     return state_dir("claude-code")
 
 
-def _session_policy(config: Any) -> Any:
+class _ConfigMissing(Exception):
+    pass
+
+
+#: The shape of a cached config. An entry of another shape, or another format
+#: version, is validated again rather than trusted.
+_CACHE_FORMAT = 1
+_SETTINGS_KEYS = frozenset({"role", "rules", "session", "redact", "audit"})
+
+
+def _settings(path: Path) -> dict[str, Any]:
+    """The validated config, as plain data.
+
+    Validating the YAML costs pydantic, which costs more than the rest of a
+    call. So the first call for a given config validates it in full
+    (sdk.hooks.config) and keeps the result in the state directory, keyed by
+    the file's bytes and those of any rules file it names; later calls read
+    that and import neither pydantic nor YAML. A changed file is a new key,
+    and a cache entry that cannot be read is simply validated again.
+    """
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        raise _ConfigMissing(f"no OpenScript config at {path}") from None
+    key = hashlib.sha256(str(path.resolve()).encode("utf-8") + b"\0" + raw).hexdigest()
+    cache = _state() / "config-cache" / f"{key}.json"
+    try:
+        entry = json.loads(cache.read_text(encoding="utf-8"))
+        settings: dict[str, Any] = entry["settings"]
+        if (
+            entry["format"] == _CACHE_FORMAT
+            and set(settings) == _SETTINGS_KEYS
+            and isinstance(settings["redact"], dict)
+            and isinstance(settings["audit"], dict)
+            and all(_digest(Path(dep)) == digest for dep, digest in entry["depends_on"].items())
+        ):
+            return settings
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass
+
+    from sdk.hooks.config import load_config
+
+    config, rules = load_config(path)
+    settings = {
+        "role": config.role,
+        "rules": rules.model_dump(mode="json") if rules is not None else None,
+        "session": config.session.model_dump(mode="json") if config.session else None,
+        "redact": config.redact.model_dump(mode="json"),
+        "audit": config.audit.model_dump(mode="json"),
+    }
+    depends_on = {}
+    if config.firewall is not None and config.firewall.rules_path:
+        rules_file = (path.parent / config.firewall.rules_path).resolve()
+        depends_on[str(rules_file)] = _digest(rules_file)
+    cache.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    partial = cache.with_suffix(f".{os.getpid()}.tmp")
+    partial.write_text(
+        json.dumps({"format": _CACHE_FORMAT, "settings": settings, "depends_on": depends_on})
+    )
+    os.replace(partial, cache)  # whole or not at all, for a hook running alongside
+    return settings
+
+
+def _digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _redacts(redact: dict[str, Any], name: str) -> bool:
+    return bool(redact["secrets"] or redact["pii"] or redact["internal_urls"]) and any(
+        name == tool or (tool.endswith("*") and name.startswith(tool[:-1]))
+        for tool in redact["tools"]
+    )
+
+
+def _session_policy(config: dict[str, Any]) -> Any:
     from sdk.policies.session_taint import SessionTaintPolicy
     from sdk.policies.taint_store import FileTaintStore
 
+    session = config["session"]
     return SessionTaintPolicy(
-        sources=config.session.sources,
-        sinks=config.session.sinks,
-        on_taint=config.session.on_taint,
+        sources=session["sources"],
+        sinks=session["sinks"],
+        on_taint=session["on_taint"],
         store=FileTaintStore(_state() / "sessions"),
     )
 
 
-def _redact_output(name: str, response: Any, config: Any) -> tuple[Any, list[str]]:
+def _redact_output(name: str, response: Any, config: dict[str, Any]) -> tuple[Any, list[str]]:
     """The tool's output with secrets masked, in the shape the tool gave it.
 
     Claude Code ignores a replacement for a built-in tool that does not match
@@ -220,11 +294,12 @@ def _redact_output(name: str, response: Any, config: Any) -> tuple[Any, list[str
     from sdk.policies.redaction import redact_data
 
     def redact(value: Any) -> tuple[Any, list[str]]:
+        redact_config = config["redact"]
         return redact_data(
             value,
-            secrets=config.redact.secrets,
-            pii=config.redact.pii,
-            internal_urls=config.redact.internal_urls,
+            secrets=redact_config["secrets"],
+            pii=redact_config["pii"],
+            internal_urls=redact_config["internal_urls"],
         )
 
     if name == "Bash" and isinstance(response, dict):
@@ -261,7 +336,7 @@ def _block(reason: str) -> int:
 
 
 def _audit(
-    config: Any,
+    config: dict[str, Any],
     payload: dict[str, Any],
     verdict: str,
     policy: str,
@@ -292,9 +367,9 @@ def _audit(
             json.dumps(args, sort_keys=True, default=str).encode("utf-8")
         ).hexdigest(),
     }
-    if config.audit.include_args:
+    if config["audit"]["include_args"]:
         record["args"] = redact_data(args)[0]
-    path = Path(config.audit.path) if config.audit.path else _state() / "audit.jsonl"
+    path = Path(config["audit"]["path"]) if config["audit"]["path"] else _state() / "audit.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     append_jsonl(path, record)
 
