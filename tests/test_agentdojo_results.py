@@ -273,6 +273,42 @@ def test_on_slack_no_call_carried_an_attackers_value_but_the_injected_channels_n
     assert (attacked, named) == (630, 15)
 
 
+def test_the_known_destination_run_with_a_model_is_what_the_metrics_say():
+    """Amendment 2's banking taint_known run, and its agreement with the re-score."""
+    rows = _jsonl(MODELS / "claude-sonnet-5-5-known" / "cases.jsonl")
+    assert len(rows) == 2 * (16 + 144) and not any(r["error"] for r in rows)
+    published = {
+        # approver: (ordinary asked, ordinary done, attacked asked, attacked done)
+        "careful": (4, 16, 27, 132),
+        "nobody": (3, 12, 27, 106),
+    }
+    for approver, numbers in published.items():
+        mine = [r for r in rows if r["approver"] == approver]
+        plain = [r for r in mine if not r["injection_task"]]
+        hit = [r for r in mine if r["injection_task"]]
+        assert len(hit) == 144 and sum(r["security"] for r in hit) == 0, approver
+        counted = (
+            sum(r["approvals"] > 0 for r in plain),
+            sum(r["utility"] for r in plain),
+            sum(r["approvals"] > 0 for r in hit),
+            sum(r["utility"] for r in hit),
+        )
+        assert counted == numbers, approver
+    careful_plain = {
+        r["user_task"]
+        for r in rows
+        if r["approver"] == "careful" and not r["injection_task"] and r["approvals"]
+    }
+    rescored = json.loads((HERE / "results" / "known" / "rescore.json").read_text())
+    named = {t for t, (_, new) in rescored["claude-sonnet-5-5"]["by_task"].items() if new}
+    assert careful_plain == named == {f"user_task_{n}" for n in (0, 13, 14, 15)}
+    assert not any(r["marked_ran"] for r in rows)
+    spent = sum(
+        r["cost_usd"] for r in _jsonl(MODELS / "claude-sonnet-5-5-known" / "requests.jsonl")
+    )
+    assert round(spent, 2) == 3.12
+
+
 def _load(name: str):
     spec = importlib.util.spec_from_file_location(f"agentdojo_{name}", HERE / f"{name}.py")
     assert spec is not None and spec.loader is not None

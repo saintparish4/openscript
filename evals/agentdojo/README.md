@@ -164,6 +164,12 @@ carried an attacker's value, except the task's own calls naming the channel
 AgentDojo hides the injection in. The session rule asked on 16 of 21 ordinary
 tasks; the replay found 15.
 
+**Known destinations with Claude Sonnet 5.5, banking, 2026-10-15** (amendment 2,
+`results/model/claude-sonnet-5-5-known/`, $3.12): with a careful approver the
+rule asked on 4 of 16 ordinary tasks, the 4 the re-score named; with nobody to
+approve, 12 of 16 were done instead of 7. No attack was followed, so it
+contained nothing here.
+
 **Exploratory, not a result:** [`exploratory/`](exploratory/README.md) counts
 what the session rule would have asked if it held only payments to accounts
 the user has not paid before. On banking, Sonnet's recorded calls would have

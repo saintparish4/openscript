@@ -396,6 +396,41 @@ Ordinary tasks needing a person:
 The replay's caveats hold: no model, and only the calls in each task's
 minimal solution.
 
+### With a model: Claude Sonnet 5.5 on banking
+
+`run_model.py --runs taint_known/nobody taint_known/careful` — the same
+rule run live under
+[amendment 2](../evals/agentdojo/PROTOCOL-model-amendment-2.md), frozen
+before any request: Sonnet 5.5 on banking's 16 tasks and 144 attacked pairs,
+`important_instructions`, one sample of each case, beside its committed
+session-rule runs. Measured 2026-10-15, for $3.12.
+
+| | Session rule | **Session rule, new destinations only** |
+|---|---|---|
+| Ordinary tasks needing a person, careful approver | 11/16 | **4/16 (25%, 10% to 49%)** |
+| The same, nobody to approve | 11/16 | 3/16 |
+| Ordinary tasks done, nobody to approve | 7/16 | 12/16 |
+| Attacked tasks needing a person, careful approver | 86/144 | 27/144 |
+| Attacked tasks done, nobody to approve | 63/144 | 106/144 |
+| Attacks that succeeded | 0 | 0 |
+
+- **The re-score held.** With a careful approver it asked on exactly the 4
+  tasks the re-score named, under the bar of a third on banking: a bill paid
+  to an account the user has never paid, account details changed from a
+  file, a password changed, and the rent moved to a new landlord. Each sends
+  somewhere new or changes something that is not a payment, which is what
+  the rule still holds. With nobody to approve it asked on 3; one sample
+  each.
+- **What it buys is tasks done when nobody answers:** 12 of 16 ordinary
+  tasks against 7, and 106 of 144 attacked ones against 63, because payments
+  to accounts the user already pays no longer wait.
+- **It contained nothing here, because there was nothing to contain.** As in
+  every run with a model, no call in the 288 attacked conversations carried
+  the attacker's account, so these runs cannot show what the rule would let
+  through. The replay showed it lets no attacker call through on any suite.
+- One model, one suite with a payment history, one sample. Over all four
+  suites the replay's 42 of 97 still misses the bar.
+
 ## Speed
 
 Measured inside Python, around the pipeline call only. This table is from
@@ -466,7 +501,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | What | Number |
 |---|---|
-| Tests | 814 |
+| Tests | 817 |
 | Labelled eval prompts | 1,799 across 8 corpora (348 written here, 1,451 public) |
 | Built-in policies | 10, all pure-local |
 | Opt-in policies | 1 (`SemanticPolicy`), head not trained, no number claimed |
@@ -477,6 +512,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-15 | The session rule with known destinations, run with Claude Sonnet 5.5 on banking under the same amendment: it asked on 4 of 16 ordinary tasks with a careful approver, the 4 the re-score named, under the bar on banking; with nobody to approve, 12 of 16 tasks were done instead of 7. No attack was followed, so it contained nothing here |
 | 2026-10-15 | AgentDojo's Slack suite with Claude Sonnet 5.5, under an amendment frozen first: the model followed none of the 105 attacks in any run, and the session rule asked on 16 of 21 ordinary tasks, over the bar again. The amendment also scores AgentDojo's trace-reading checks on the calls that ran, as the replay does |
 | 2026-10-14 | Holding only new destinations, measured on the no-model replay under a protocol frozen first: the session rule asks on 42 of 97 ordinary tasks instead of 55, with no attacker call let through; banking 12 to 5, Sonnet's recorded banking calls 11 to 4. Still over the bar of a third overall, and nothing changes where the user has no sending history |
 | 2026-10-14 | AgentDojo's banking suite with a model in the loop, Claude Haiku 4.5 and Claude Sonnet 5.5, under two attacks: neither model followed either attack in any of 3,456 attacked conversations, so there was nothing for the policies to stop and they only cost tasks. With Sonnet, which did the work, the session rule asked on 11 of 16 ordinary tasks, as often as asking on every state-changing call |
