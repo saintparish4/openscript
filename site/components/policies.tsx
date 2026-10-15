@@ -31,9 +31,9 @@ const MEASURED = [
     label: "benign prompts wrongly blocked, across three public sets nobody here wrote",
   },
   {
-    value: "0 / 3,456",
+    value: "0 / 4,086",
     label:
-      "attacked conversations in which Claude Haiku 4.5 or Sonnet 5.5 followed the planted instruction, on AgentDojo",
+      "attacked conversations in which Claude Haiku 4.5 or Sonnet 5.5 followed the planted instruction, on AgentDojo's banking and Slack suites",
   },
   {
     value: "11 / 16",

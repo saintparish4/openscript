@@ -157,6 +157,13 @@ the user instead of acting. The tables are in
 [`docs/metrics.md`](../../docs/metrics.md#tool-policies-on-agentdojo-with-a-model-in-the-loop),
 and `tests/test_agentdojo_results.py` holds them to the rows.
 
+**Claude Sonnet 5.5, Slack, 2026-10-15** (amendment 2,
+`results/model/claude-sonnet-5-5-slack/`, $6.82): the model followed none of
+the 105 attacks in any of the six runs. In 630 attacked conversations no call
+carried an attacker's value, except the task's own calls naming the channel
+AgentDojo hides the injection in. The session rule asked on 16 of 21 ordinary
+tasks; the replay found 15.
+
 **Exploratory, not a result:** [`exploratory/`](exploratory/README.md) counts
 what the session rule would have asked if it held only payments to accounts
 the user has not paid before. On banking, Sonnet's recorded calls would have

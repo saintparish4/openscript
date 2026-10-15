@@ -27,10 +27,10 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
 
 ### Why it matters
 
-- **Nothing load-bearing depends on detection, and that choice is measured.** On AgentDojo's banking suite, Claude Haiku 4.5 and Claude Sonnet 5.5 followed none of the planted instructions in 3,456 attacked conversations, so those runs could not test what the rules contain. The pattern detectors catch only 2 to 7% of attacks they were not written for. So the boundary is the rules, the approvals and the record, not recognising an attack.
+- **Nothing load-bearing depends on detection, and that choice is measured.** On AgentDojo's banking suite (Claude Haiku 4.5 and Claude Sonnet 5.5) and its Slack suite (Sonnet), the models followed none of the planted instructions in 4,086 attacked conversations, so those runs could not test what the rules contain. The pattern detectors catch only 2 to 7% of attacks they were not written for. So the boundary is the rules, the approvals and the record, not recognising an attack.
 - **Benchmarked against a public suite, with each protocol frozen before its results.**
   - In a replay of [AgentDojo](https://github.com/ethz-spylab/agentdojo) with no model, the session rule stopped 570 of 617 attacks with an approver who refused the attacker's calls.
-  - Its cost is published alongside: it asked a person on 55 of 97 ordinary tasks. Every one of those tasks is built to read something an attacker can write, the worst case for this rule. With Sonnet doing the banking tasks, it asked on 11 of 16, as often as asking every time.
+  - Its cost is published alongside: it asked a person on 55 of 97 ordinary tasks. Every one of those tasks is built to read something an attacker can write, the worst case for this rule. With Sonnet doing the work, it asked on 11 of 16 banking tasks, as often as asking every time, and on 16 of 21 Slack tasks.
   - Holding only calls to new destinations cut that to 42 of 97 and let no attacker call through. It helps only where there is a sending history to know, and it is still over the one-third bar set beforehand. It does not make approvals rare.
 - **Pure local, enforced in CI.** All ten built-in policies are regexes, heuristics, checksums or declarative rules, with no network or LLM call. `tests/test_audit.py` fails the build if one grows a network import, which is why the same code runs in a browser with nothing behind it.
 - **Fast enough to sit in the loop.**

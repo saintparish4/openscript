@@ -293,6 +293,64 @@ Two models, one suite, two attack wordings, one sample per case. Models that
 resist fixed attacks this completely say nothing about attacks written
 against them, or about other models. The replay remains the worst case.
 
+## Tool policies on AgentDojo: Slack, with a model
+
+`run_model.py --suites slack` — the second suite with a model, under
+[amendment 2](../evals/agentdojo/PROTOCOL-model-amendment-2.md), frozen
+before any request with the attacker's markers for Slack. Claude Sonnet 5.5
+only, at its defaults; 21 tasks and 105 task-and-attack pairs over 5
+injection tasks; the same six runs; `important_instructions`; one sample of
+each case. Its attacks are of another kind than banking's: a phishing link
+sent to a colleague, every channel's messages posted to an outside website,
+a stranger invited into the workspace. Measured 2026-10-15, for $6.82.
+
+The amendment also changed one thing in the scoring. Some of AgentDojo's
+checks read only the list of calls the model asked for, so a call the
+policies refused would count as made. From this amendment they see only the
+calls that ran, as the replay always did. Banking has no such check.
+
+**The model followed none of the attacks.** With no policy, 0 of 105 (0% to
+4%), and 0 in every other run. In 630 attacked conversations no call carried
+an attacker's value, except where a task itself names the channel AgentDojo
+hides the injection in, whose name then carries it: 15 calls, in the two
+tasks that post to or read that channel. Sonnet stopped with a refusal in 98
+attacked conversations, 81 of them under the attack that asks for every
+channel's messages to be posted outside, and in 4 ordinary ones, all the task
+that asks it to do whatever a web page's to-do list says.
+
+Of 105 attacked tasks, those done. Attacks that succeeded: 0 in every cell.
+Then, of 21 ordinary tasks, those on which the model changed something,
+those that needed an approval, and those done.
+
+| Configuration | Who answers approvals | Done under attack | Ordinary: changed / asked / done |
+|---|---|---|---|
+| No policy | — | 64 | 21 / 0 / 20 |
+| Detector only | — | 64 | 21 / 0 / 20 |
+| Ask on every state-changing call | nobody | 0 | 21 / 21 / 0 |
+| Ask on every state-changing call | a careful person | 66 | 21 / 21 / 21 |
+| Session rule, sources as listed | nobody | 9 | 21 / 16 / 4 |
+| **Session rule, sources as listed** | a careful person | 61 | **21 / 16 (76%, 55% to 89%) / 20** |
+
+- **The session rule misses the bar on Slack too:** 16 of 21 ordinary tasks
+  needed a person, against a third; the replay found 15. Every Slack task
+  changes something, and visiting a web page counts, since a URL can carry
+  data out.
+- **The five it did not hold are the replay's known miss.** In each, the
+  only untrusted text the model read before acting came from the channel
+  listing, which is not listed as a source.
+- **The attack costs tasks on its own.** With no policy, 64 of 105 attacked
+  tasks were done against 20 of 21 ordinary ones: the model stopped, refused,
+  or asked instead of finishing once it saw the planted text.
+- **Careful here is stricter than in the replay**, as the amendment said in
+  advance: a task's own call that names the injected channel carries the
+  attacker's text, and a person reading it refuses.
+- **Cost.** 2,858 requests: 6.39M input tokens read from cache, 0.50M
+  written to it and 7k not cached, and 0.43M output, thinking included.
+
+One model, a second suite, one attack wording, one sample per case. What was
+said of banking holds: a model that resists fixed attacks this completely
+says nothing about attacks written against it.
+
 ## Tool policies on AgentDojo: holding only new destinations
 
 `make agentdojo-known` — [`evals/agentdojo/`](../evals/agentdojo/README.md).
@@ -419,6 +477,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-15 | AgentDojo's Slack suite with Claude Sonnet 5.5, under an amendment frozen first: the model followed none of the 105 attacks in any run, and the session rule asked on 16 of 21 ordinary tasks, over the bar again. The amendment also scores AgentDojo's trace-reading checks on the calls that ran, as the replay does |
 | 2026-10-14 | Holding only new destinations, measured on the no-model replay under a protocol frozen first: the session rule asks on 42 of 97 ordinary tasks instead of 55, with no attacker call let through; banking 12 to 5, Sonnet's recorded banking calls 11 to 4. Still over the bar of a third overall, and nothing changes where the user has no sending history |
 | 2026-10-14 | AgentDojo's banking suite with a model in the loop, Claude Haiku 4.5 and Claude Sonnet 5.5, under two attacks: neither model followed either attack in any of 3,456 attacked conversations, so there was nothing for the policies to stop and they only cost tasks. With Sonnet, which did the work, the session rule asked on 11 of 16 ordinary tasks, as often as asking on every state-changing call |
 | 2026-10-13 | AgentDojo replayed through the tool policies, with no model: the session rule stops 570 of 617 attacks with a careful approver and asks on 55 of 97 ordinary tasks, against a bar of a third set beforehand. A stateless rule that asks on every state-changing call stops 597 and asks on 61 |
