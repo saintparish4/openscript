@@ -258,3 +258,14 @@ def test_a_second_attack_keeps_the_first_runs_cases_and_shares_its_tasks_with_no
     first_rows = {row["key"] for row in rows if row["attack"] != "tool_knowledge"}
     assert {case.key for case in first} == first_rows, "the first run's keys moved"
     assert attacked == {row["key"] for row in rows if row["attack"] == "tool_knowledge"}
+
+
+def test_a_suite_with_no_markers_runs_with_any_approver_but_the_careful_one():
+    """markers.yaml covers banking only. Only the careful approver reads it, so
+    only it refuses to run a suite that has none."""
+    from run_model import Case, markers_for
+
+    plain = Case("slack", "user_task_0", "injection_task_1", "taint_text", "nobody")
+    assert markers_for(plain) == []
+    with pytest.raises(SystemExit, match=r"markers\.yaml has nothing for slack"):
+        markers_for(Case("slack", "user_task_0", "injection_task_1", "taint_text", "careful"))
