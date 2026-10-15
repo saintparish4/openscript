@@ -34,8 +34,8 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
   - Holding only calls to new destinations cut that to 44 of 97 and let no attacker call through. It helps only where there is a sending history to know, and over all four suites it is still over the one-third bar set beforehand. Run live with Sonnet on banking, where the user has a payment history, it asked on 4 of 16 tasks. It does not make approvals rare.
 - **Pure local, enforced in CI.** All ten built-in policies are regexes, heuristics, checksums or declarative rules, with no network or LLM call. `tests/test_audit.py` fails the build if one grows a network import, which is why the same code runs in a browser with nothing behind it.
 - **Fast enough to sit in the loop.**
-  - The input policies take 0.07 to 1.6 ms per prompt (p50, native).
-  - The demo's whole pipeline takes 2.4 ms p50 under WebAssembly on a CI runner.
+  - The input policies take 0.05 to 0.7 ms per prompt (p50, native).
+  - The demo's whole pipeline takes 5.3 ms p50 under WebAssembly on a CI runner.
   - The Claude Code hook adds about 150 ms before a call and 70 ms after it on a quiet machine, each a fresh process, inside a latency budget written down before it was measured.
 - **Fails closed.**
   - Security policies block when they error.
@@ -115,7 +115,7 @@ openscript/
 ├── demo/                     a terminal walkthrough of the pipeline
 ├── tools/                    policy audit, browser wheel builds, hook latency
 ├── tests/                    the test suite
-└── docs/                     guide.md (the full reference) and metrics.md (every number)
+└── docs/                     guide.md (the full reference), metrics.md (every number), the demo recording
 ```
 
 ## Getting Started
@@ -166,7 +166,9 @@ make install                     # .venv, requirements.txt, then pip install -e 
 
 ## Usage
 
-![The terminal walkthrough: an injection refused, secrets and PII redacted, a tool call held for approval](demo/injection_demo.gif)
+![The live demo: a page tells Lena's browsing agent to send her session elsewhere. The scan misses the note, and the tool rule refuses the form post it provokes](docs/demo.gif)
+
+The full walkthrough, under a minute: [`docs/demo.mp4`](docs/demo.mp4). It goes on to a call held for a team lead and approved once, and an API key masked before the model is given it.
 
 ### 1. Wrap an Agent
 
@@ -322,14 +324,12 @@ The payloads from that session are replayed in the tests. The guide covers [its 
 ### 7. Run the Demos
 
 ```bash
-pip install -e ".[demo]" && python demo/injection_demo.py   # the terminal walkthrough above, in memory
+pip install -e ".[demo]" && python demo/injection_demo.py   # a terminal walkthrough, in memory
 make demo-serve                                              # the browser demo, served on :8081
 make extension                                               # assemble the Chrome extension, then load extension/ unpacked
 ```
 
 The [browser demo](https://openscript-demo.vercel.app/) is twenty-one prompts from seven fictional people. Each one shows what the sender asked for, what reaching the agent unchecked would have meant, and what the pipeline did instead. One prompt is there because it gets through, and is shown as a miss. Another is a page that politely tells a browsing agent to send the session elsewhere. The detector scores it zero, and the form post it provokes is refused anyway, because the destination is not on the allowlist.
-
-![The live demo: a page tells Lena's browsing agent to send her session elsewhere. The scan misses the note, and the tool rule refuses the form post it provokes](docs/demo.png)
 
 ## Configuration
 

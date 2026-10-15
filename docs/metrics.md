@@ -494,29 +494,32 @@ minimal solution.
 
 ## Speed
 
-Measured inside Python, around the pipeline call only. This table is from
-2026-09-20 and has not been re-measured since; `make evals` prints the native
-rows for whatever machine it runs on.
+Measured inside Python, around the pipeline call only. Re-measured
+2026-10-15: the policy rows on the local WSL box with a load average under 1,
+the gallery row from CI's run on `master` that day. `make evals` prints the
+native rows for whatever machine it runs on.
 
 | What | p50 | max | Measured by |
 |---|---|---|---|
-| Prompt injection, per prompt | 0.21 ms | 1.2 ms | `make evals` |
-| Toxicity, per prompt | 0.07 ms | 0.2 ms | `make evals` |
-| Harmful request, per prompt | 1.6 ms | 6.9 ms | `make evals` |
-| Full gallery pipeline, under Pyodide | 2.4 ms | 9.8 ms | `npm run verify` on a CI runner |
-| Same, on a loaded local WSL box | 7.1 ms | 29.7 ms | `make demo-verify` |
+| Prompt injection, per prompt | 0.12 ms | 0.6 ms | `make evals` |
+| Toxicity, per prompt | 0.05 ms | 0.14 ms | `make evals` |
+| Harmful request, per prompt | 0.71 ms | 3.1 ms | `make evals` |
+| Full gallery pipeline, under Pyodide | 5.3 ms | 20.1 ms | `npm run verify` on a CI runner |
+| Same, on the local WSL box | 4.6 ms | 17.1 ms | `make demo-verify` |
 
-Quote the CI row. The two rows are the same code minutes apart, and the gap
-between them is the machine, which is also why the 1.5 ms p50 recorded on
-2026-09-16 is not a controlled comparison — it was measured locally and the
-provenance of the hardware state is gone.
+Quote the CI row. The September table (injection 0.21 ms, toxicity 0.07 ms,
+harmful request 1.6 ms, gallery 2.4 ms) is not a like-for-like comparison in
+either direction: the policies were measured then on a busier box, and the
+gallery has since grown from ten prompts to twenty-one, the new ones
+including tool calls and a browsing agent's turn.
 
 Where the time goes is measurable regardless: `HarmfulRequestPolicy` costs
-2.6 ms p50 natively against 0.2 ms for injection and 0.07 ms for toxicity, so
-its bank is most of the budget. Cost is linear in input length times the number
-of views — a pathological 10 KB prompt takes about 0.9 s, and doubling the
-length doubles the time rather than squaring it, so there is no catastrophic
-backtracking in the banks or the normalizer.
+0.71 ms p50 natively against 0.12 ms for injection and 0.05 ms for toxicity,
+so its bank is most of the budget. Cost is linear in input length times the
+number of views — a pathological 10 KB prompt took about 0.9 s when measured
+on 2026-09-20, and doubling the length doubles the time rather than squaring
+it, so there is no catastrophic backtracking in the banks or the
+normalizer.
 
 Normalization itself is not the cost: plain prose produces exactly one view,
 which is what it produced before. Only text that has been obfuscated pays for
@@ -528,13 +531,14 @@ a second pass.
 PreToolUse hook before every call it matches, so this is time added to the
 agent's turn. Each run is a fresh process, as Claude Code starts it, so the
 interpreter's start is included. The budget, median 200 ms and p95 300 ms,
-was written down before the first measurement. Measured 2026-10-14 on the
-local WSL box with a load average under 2.
+was written down before the first measurement. Measured again 2026-10-15 on
+the local WSL box with a load average under 1 (on 2026-10-14: 149 / 168 ms
+and 70 / 75 ms).
 
 | Event | Median | p95 | Budget |
 |---|---|---|---|
-| `pre-tool-use` (a held write in a tainted session) | 149 ms | 168 ms | 200 / 300 ms |
-| `post-tool-use` (a Bash output with secrets to mask) | 70 ms | 75 ms | 200 / 300 ms |
+| `pre-tool-use` (a held write in a tainted session) | 144 ms | 149 ms | 200 / 300 ms |
+| `post-tool-use` (a Bash output with secrets to mask) | 68 ms | 71 ms | 200 / 300 ms |
 
 The first measurement missed: 190 to 205 ms median, with a p95 of 321 ms for
 `post-tool-use`. Validating the YAML config with pydantic cost more than the
@@ -551,7 +555,7 @@ quiet figure with that caveat, not without it.
 |---|---|---|
 | Cold load, iOS Safari (cellular) | ~5-6 s to ready | By hand, 2026-09-20 |
 | Cold load, desktop Chrome | ~5-6 s to ready | By hand, 2026-09-20 |
-| Every gallery prompt behaves as advertised | 21/21 | `make demo-verify`, 2026-10-13. Ten of the original prompts were also checked by hand on device on 2026-09-20; the twenty-one as they stand have not been |
+| Every gallery prompt behaves as advertised | 21/21 | `make demo-verify` and CI, 2026-10-15. Ten of the original prompts were also checked by hand on device on 2026-09-20; the twenty-one as they stand have not been |
 | Over the wire, cold | ~7.2 MB brotli | DevTools, 2026-09-16 |
 | Self-hosted wheels | 164 KB (80 KB openscript + 76 KB structlog) | `du -sh site/public/wheels` |
 
@@ -568,11 +572,13 @@ section scrolls into view — which on the current layout is immediately.
 | Opt-in policies | 1 (`SemanticPolicy`), head not trained, no number claimed |
 | Policies that make a network call | 0, enforced by `tests/test_audit.py` |
 | CI jobs | lint, type-check, test, pyodide, demo, build |
+| AgentDojo cases run with a model | 4,724 (Claude Haiku 4.5 and Claude Sonnet 5.5), $37.78 of a $100 budget |
 
 ## History
 
 | Date | Change |
 |---|---|
+| 2026-10-15 | Close-out: speed re-measured (input policies 0.05 to 0.7 ms p50 natively; the gallery 5.3 ms p50 under Pyodide on CI, now twenty-one prompts; the Claude Code hook 144 ms before a call and 68 ms after), and the demo recorded |
 | 2026-10-15 | `known=` now holds a listed tool called with none of its destination arguments unless it is listed in `updates`: no destination is not a known one. The replay as shipped: 44 of 97 ordinary tasks needing a person instead of 42 (two workspace tasks that create an event with no participants), still no attacker call let through |
 | 2026-10-15 | A candidate measured and not adopted: counting destinations the user named as known brings the session rule to 30 of 97 ordinary tasks, under a third, but Slack stays at 14 of 21 and 21 travel attacks get through, 20 of them a calendar event with no participants. The session rule stays as it is |
 | 2026-10-15 | The session rule with known destinations, run with Claude Sonnet 5.5 on banking under the same amendment: it asked on 4 of 16 ordinary tasks with a careful approver, the 4 the re-score named, under the bar on banking; with nobody to approve, 12 of 16 tasks were done instead of 7. No attack was followed, so it contained nothing here |
