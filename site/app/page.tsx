@@ -1,4 +1,5 @@
 import { DemoSection } from "@/components/demo-section";
+import { Elsewhere } from "@/components/elsewhere";
 import { EXAMPLES } from "@/lib/examples";
 import { Hero } from "@/components/hero";
 import { ArrowUpRight, GitHubIcon, Mark } from "@/components/icons";
@@ -65,14 +66,15 @@ export default function Page() {
 
         <Policies />
         <Pipeline />
+        <Elsewhere />
 
         <section className="section closing">
           <div className="container">
             <h2 className="duo">
               Don&rsquo;t take the page&rsquo;s word for it.
               <span>
-                Every prompt in the gallery runs against the real policies in CI, and the
-                detection numbers are published with the misses left in.
+                Every prompt in the gallery runs against the real policies in CI, and every
+                number, detection and AgentDojo alike, is published with the misses left in.
               </span>
             </h2>
             <div className="hero__actions">
@@ -81,7 +83,7 @@ export default function Page() {
                 View the source
               </a>
               <a className="btn btn--ghost" href={METRICS_URL}>
-                Measured detection numbers
+                Measured numbers
                 <ArrowUpRight size={14} />
               </a>
             </div>
@@ -107,7 +109,7 @@ export default function Page() {
               <a href={SOURCE_URL}>Source</a>
             </li>
             <li>
-              <a href={METRICS_URL}>Measured detection numbers</a>
+              <a href={METRICS_URL}>Measured numbers</a>
             </li>
           </ul>
         </div>

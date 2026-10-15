@@ -1315,6 +1315,31 @@ kbd {
 }
 
 .card__name { margin: 0; font-size: 1.0625rem; font-weight: 500; }
+
+/* Two cards side by side at every width that has room for two, with no
+   full-width last card as the three-column bento has. */
+@media (min-width: 40rem) {
+  .bento--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bento.bento--pair > :last-child { grid-column: auto; }
+}
+
+@media (min-width: 64rem) {
+  .bento.bento--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  color: var(--ink);
+  font-size: 0.875rem;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+.card__link:hover { text-decoration-color: currentColor; }
 .card__text { margin: 0.5rem 0 0; color: var(--muted); font-size: 0.875rem; line-height: 1.6; }
 
 .limits {

@@ -91,6 +91,15 @@ export const Play = (p: IconProps) => (
 
 /* ── Policies ──────────────────────────────────────────────────────── */
 
+/** A browser window: the extension. */
+export const BrowserIcon = (p: IconProps) => (
+  <Stroke {...p}>
+    <rect x="3" y="4.5" width="18" height="15" rx="2" />
+    <path d="M3 9h18" />
+    <path d="M6.5 6.75h.01M9.5 6.75h.01" />
+  </Stroke>
+);
+
 export const TerminalIcon = (p: IconProps) => (
   <Stroke {...p}>
     <path d="m4 7 5 5-5 5" />

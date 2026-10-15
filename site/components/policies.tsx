@@ -156,7 +156,7 @@ export function Policies() {
             </p>
           </div>
           <a className="btn btn--ghost" href={METRICS_URL}>
-            Measured detection numbers
+            Measured numbers
             <ArrowUpRight size={14} />
           </a>
           <dl className="measured">
