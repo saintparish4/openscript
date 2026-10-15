@@ -174,6 +174,11 @@ agentdojo-known: $(AGENTDOJO)/.venv  ## PROTOCOL-known.md: the replay with known
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/summarize_known.py
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/rescore_known.py
 
+.PHONY: agentdojo-named
+agentdojo-named: $(AGENTDOJO)/.venv  ## PROTOCOL-named.md: the replay with destinations the user named, its tables and the model re-score
+	cd $(AGENTDOJO) && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python replay.py --named
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/summarize_named.py
+
 MODEL ?= scripted
 
 .PHONY: agentdojo-model

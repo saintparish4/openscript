@@ -36,6 +36,10 @@ FROZEN = {
     # Slack, and known destinations with a model, frozen before any request under them.
     "PROTOCOL-model-amendment-2.md": "498253caa7197980e0475295eff8b59b701649b96ca938e7ba3924739b304794",
     "markers-slack.yaml": "0df97ca533ab15cdebda5af0b47f0a7e542f37db2e5a66dbb2449fcf9cd6aea2",
+    # Destinations the user named, a candidate measured before any run of it.
+    "PROTOCOL-named.md": "81cd62a163d8822535f3740813a27f9eab33e4bd3880a2587ed4dd595644039d",
+    "named.yaml": "9319ba2094ce356fa705bf71fb42e5e4f5a36298e1e832a8358ec9d8ba59f140",
+    "named.py": "b8672ba856fd864a0ac358fb29f0c6fabca4ae45700087990bcae317d984be50",
 }
 
 

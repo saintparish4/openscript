@@ -44,6 +44,9 @@ CONFIGURATIONS = ("none", "detector", "approve_all", "taint_text", "taint_all")
 #: The configurations PROTOCOL-known.md adds: the session rule with known
 #: destinations (the rule), and with every Slack member and channel (a variant).
 KNOWN_CONFIGURATIONS = ("taint_known", "taint_directory")
+#: The configuration PROTOCOL-named.md adds: destinations the user named count
+#: as known too, with a check on links (named.py, a candidate not in sdk/).
+NAMED_CONFIGURATIONS = ("taint_named",)
 
 #: (tool, arguments, who made the call) -> whether a person approves it.
 Approver = Callable[[str, Mapping[str, Any], str], bool]
@@ -73,7 +76,7 @@ def load_known() -> dict[str, Any]:
 def known_for(configuration: str, suite: str) -> dict[str, Any] | None:
     """The known destinations a configuration uses on *suite*: None when it
     knows none, which leaves the session rule as taint_text."""
-    if configuration == "taint_known":
+    if configuration in ("taint_known", "taint_named"):
         return load_known()["suites"].get(suite) or None
     if configuration == "taint_directory":
         return load_known()["directory"][suite]  # Slack only: anything else is a mistake
@@ -84,9 +87,13 @@ def policies_for(
     configuration: str,
     lists: Mapping[str, Sequence[str]],
     known: Mapping[str, Any] | None = None,
+    request: str = "",
+    suite: str = "",
 ) -> list[Policy]:
     """A fresh list of policies for one session. Fresh, because the session
-    rule keeps what a session has read on the instance."""
+    rule keeps what a session has read on the instance. *request* and *suite*
+    are read only by taint_named: the user's own words, and whose destination
+    arguments to use."""
     sinks = list(lists["sinks"])
     if configuration == "none":
         return []
@@ -103,6 +110,18 @@ def policies_for(
         return [SessionTaintPolicy(sources="*", sinks=sinks)]
     if configuration in KNOWN_CONFIGURATIONS:
         return [SessionTaintPolicy(sources=list(lists["sources"]), sinks=sinks, known=known)]
+    if configuration in NAMED_CONFIGURATIONS:
+        from named import NamedTaintPolicy, load_named
+
+        return [
+            NamedTaintPolicy(
+                sources=list(lists["sources"]),
+                sinks=sinks,
+                destinations=load_named()["suites"][suite],
+                said_by_user=request,
+                known=known,
+            )
+        ]
     raise ValueError(f"no such configuration: {configuration!r}")
 
 

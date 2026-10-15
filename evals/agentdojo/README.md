@@ -66,6 +66,8 @@ uv pip install --python .venv/bin/python -r requirements.txt -e ../..
 | `known.py`, `known.yaml` | The rule applied to each suite's environment; the lists it gives. Frozen |
 | `summarize_known.py`, `rescore_known.py` | Its tables from the rows, and the exact re-score of the banking model runs |
 | `results/known/` | Its rows, `summary.json` and `rescore.json` |
+| `PROTOCOL-named.md`, `named.yaml`, `named.py` | A candidate: destinations the user named count as known, with a check on links. Measured in the harness, not in `sdk/`. Frozen |
+| `summarize_named.py`, `results/named/` | Its tables, rows and the re-score of the model runs |
 | `results/benign.csv` | 97 tasks x 8 runs |
 | `results/attack.csv` | 949 pairs x 9 runs, plus the detector against four more attack wordings |
 | `results/summary.json` | What `docs/metrics.md` quotes |

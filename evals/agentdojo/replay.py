@@ -72,6 +72,7 @@ RUNS = (
 #: is Slack's alone.
 KNOWN_RUNS = (("taint_known", "nobody"), ("taint_known", "careful"))
 DIRECTORY_RUNS = (("taint_directory", "nobody"), ("taint_directory", "careful"))
+NAMED_RUNS = (("taint_named", "nobody"), ("taint_named", "careful"))
 
 BENIGN_FIELDS = [
     "suite",
@@ -171,7 +172,7 @@ def replay(
     attacker_calls = injection_task.ground_truth(before) if injection_task else []
     exposed = set(exposures(suite, user_task)) if injection_task else set()
 
-    policies = policies_for(configuration, lists, known)
+    policies = policies_for(configuration, lists, known, user_task.PROMPT, suite.name)
     runtime = GuardedRuntime(suite.tools, policies=policies, approver=APPROVERS[approver])
     taint = next((p for p in policies if isinstance(p, SessionTaintPolicy)), None)
 
@@ -266,6 +267,8 @@ def task_rows(job: tuple[str, str, str]) -> tuple[list[dict[str, Any]], list[dic
         runs: tuple[tuple[str, str], ...] = (("none", "nobody"),)
     elif mode == "known":
         runs = KNOWN_RUNS + (DIRECTORY_RUNS if suite_name == "slack" else ())
+    elif mode == "named":
+        runs = NAMED_RUNS
     else:
         runs = RUNS
 
@@ -340,11 +343,14 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=HERE / "results")
     parser.add_argument("--check", action="store_true", help="the undefended baseline only")
     parser.add_argument("--known", action="store_true", help="PROTOCOL-known.md's runs")
+    parser.add_argument("--named", action="store_true", help="PROTOCOL-named.md's runs")
     parser.add_argument("--limit", type=int, default=None, help="user tasks per suite (debugging)")
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1, help="worker processes")
     args = parser.parse_args()
-    mode = "check" if args.check else "known" if args.known else "all"
-    out = args.out if args.out != HERE / "results" or not args.known else HERE / "results" / "known"
+    mode = "check" if args.check else "known" if args.known else "named" if args.named else "all"
+    out = args.out
+    if out == HERE / "results" and mode in ("known", "named"):
+        out = HERE / "results" / mode  # the committed rows are never overwritten
     run(args.suites, out, mode, args.limit, args.jobs)
     return 0
 
