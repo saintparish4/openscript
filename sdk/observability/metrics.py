@@ -9,7 +9,7 @@ _RISK_BUCKETS = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 
 
 class MetricsRecorder:
-    """Prometheus metrics for SecureAgent actions (pip install openscript[metrics]).
+    """Prometheus metrics for SecureAgent actions (pip install -e '.[metrics]').
 
     Pass one instance per registry: SecureAgent(metrics=MetricsRecorder()).
     Metric families:
@@ -35,7 +35,7 @@ class MetricsRecorder:
             from prometheus_client import REGISTRY, Counter, Histogram
         except ImportError as exc:  # pragma: no cover - exercised without the extra
             raise ImportError(
-                "MetricsRecorder requires prometheus-client: pip install openscript[metrics]"
+                "MetricsRecorder requires prometheus-client: pip install -e '.[metrics]'"
             ) from exc
 
         registry = registry if registry is not None else REGISTRY

@@ -18,7 +18,7 @@ OTEL_ENV_FLAG = "OPENSCRIPT_OTEL"
 
 
 class ActionTracer:
-    """One OpenTelemetry span per SecureAgent action (pip install openscript[otel]).
+    """One OpenTelemetry span per SecureAgent action (pip install -e '.[otel]').
 
     Uses the ambient tracer provider — exporter setup (OTLP endpoint, which
     Datadog and friends consume) is the host application's job via the
@@ -31,7 +31,7 @@ class ActionTracer:
             from opentelemetry import trace
         except ImportError as exc:
             raise ImportError(
-                "ActionTracer requires the OpenTelemetry SDK: pip install openscript[otel]"
+                "ActionTracer requires the OpenTelemetry SDK: pip install -e '.[otel]'"
             ) from exc
         self._tracer = trace.get_tracer(instrumentation_name)
 
@@ -62,6 +62,6 @@ def tracer_from_env() -> ActionTracer | None:
     except ImportError:
         logger.warning(
             "otel_flag_set_but_sdk_missing",
-            hint="pip install openscript[otel] to emit spans",
+            hint="pip install -e '.[otel]' to emit spans",
         )
         return None

@@ -172,7 +172,7 @@ async def test_otel_env_flag_fails_open(monkeypatch):
 def test_action_tracer_requires_otel():
     from sdk.observability.tracing import ActionTracer
 
-    with pytest.raises(ImportError, match="openscript\\[otel\\]"):
+    with pytest.raises(ImportError, match=r"pip install -e '\.\[otel\]'"):
         ActionTracer()
 
 

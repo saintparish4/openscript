@@ -157,7 +157,7 @@ class OutputSchemaPolicy(BasePolicy):
          output is unsupported by the source and annotates
          ``context.metadata["hallucination"]``. Annotation only — it does
          not block; RiskScorer aggregates it. ``mode="embedding"`` uses
-         sentence-transformers (``pip install openscript[ml]``) and falls
+         sentence-transformers (``pip install -e '.[ml]'``) and falls
          back to keyword scoring when unavailable.
 
     Results land in ``context.metadata["output_validation"]`` using the
@@ -321,7 +321,7 @@ class OutputSchemaPolicy(BasePolicy):
         except ImportError:
             logger.warning(
                 "embedding_backend_unavailable",
-                hint="pip install openscript[ml]; falling back to keyword grounding",
+                hint="pip install -e '.[ml]'; falling back to keyword grounding",
             )
             return None
         if self._embedder is None:

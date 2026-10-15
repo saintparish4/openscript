@@ -32,5 +32,5 @@ policies:
   # output_schema:
   #   model: myapp.schemas:ReportModel   # dotted path to a pydantic model
   #   on_invalid: deny                   # deny | annotate
-  #   hallucination_mode: keyword        # keyword | embedding (pip install openscript[ml])
+  #   hallucination_mode: keyword        # keyword | embedding (pip install -e ".[ml]")
   #   hallucination_threshold: 0.5
