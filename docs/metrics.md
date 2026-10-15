@@ -4,7 +4,7 @@ Everything measurable about OpenScript, in one place, with the date it was
 measured and the command that produces it. Numbers with no command next to them
 were measured by hand and say so.
 
-Last updated **2026-10-11**.
+Last updated **2026-10-14**.
 
 ## Detection
 
@@ -92,6 +92,207 @@ percent-encoding. All 30 obfuscated rows across the three corpora are blocked
 now. French is still invisible: translation is not one of the transforms, and
 the README says so.
 
+## Tool policies on AgentDojo: a replay with no model
+
+`make agentdojo-replay` — [`evals/agentdojo/`](../evals/agentdojo/README.md).
+[AgentDojo](https://github.com/ethz-spylab/agentdojo) 0.1.35, suites v1.2.2:
+97 user tasks and 949 task-and-attack pairs across four suites, none sampled.
+
+**There is no model in this.** AgentDojo ships the tool calls that solve each
+task and the tool calls that carry out each attack. Those are replayed through
+`SecureTool`, as an agent that does everything an injection says the moment it
+reads it, and AgentDojo's own checkers score the outcome. So this is a
+conformance result, like the top rows of the detection table: it says what the
+mechanism does, not what happens with a model. Against a real model the attack
+numbers below are a ceiling and the approval counts are a floor.
+
+What was to be measured, the lists of which tools read untrusted content and
+which change state, and the bar below were all committed before any defended
+configuration ran ([`PROTOCOL.md`](../evals/agentdojo/PROTOCOL.md)), and a test
+fails if they are edited.
+
+### What it costs on ordinary work
+
+No attack. Each task's own solution, 97 tasks, 100 state-changing calls among
+them.
+
+| Configuration | Tasks that needed an approval | Approvals per task | State-changing calls held | Done with nobody approving |
+|---|---|---|---|---|
+| No policy | 0/97 | 0 | 0/100 | 97/97 |
+| Detector only (`PromptInjectionPolicy`, withhold a flagged result) | 0/97 | 0 | 0/100 | 97/97 |
+| Ask on every state-changing call (`ToolFirewallPolicy`) | 61/97 (63%, 53% to 72%) | 1.03 | 100/100 | 36/97 |
+| **Session rule, sources as listed** (`SessionTaintPolicy`) | **55/97 (57%, 47% to 66%)** | 0.88 | 85/100 | 42/97 |
+| Session rule, every result taints (`sources="*"`) | 60/97 (62%, 52% to 71%) | 0.97 | 94/100 | 37/97 |
+
+**The bar was a third, written down before the run. The session rule asks on
+57% of ordinary tasks, so by that bar it is not usable as designed.**
+
+- **It asks nearly as often as asking every time.** 55 tasks against 61. In the
+  workspace and travel suites there is no difference at all (22 of 40 and 6 of
+  20 either way): every state-changing call in them comes after an untrusted
+  read. All of the saving is in banking (12 calls held against 14) and Slack
+  (39 against 52).
+- **36 of the 97 tasks change nothing,** and so never ask under any of these.
+  Of the 61 that do change something, the session rule asks on 55.
+- **This is the workload the rule costs most on.** Every AgentDojo task is
+  built to read something an attacker can write; the benchmark checks that it
+  does. Work that acts without reading first would ask less, and this run
+  cannot say how much less.
+- **It is a floor for this benchmark all the same.** The replay makes only the
+  calls in the minimal solution. A model reads more than that.
+
+### What it contains
+
+`important_instructions`, the benchmark's standard attack. Of the 949 pairs,
+617 are attacks that work with no policy in place, over 27 injection tasks;
+the tables are over those. (320 pairs have no attack to replay: AgentDojo ships
+no calls for eight of its workspace injection tasks. In 12 more the attack's
+calls do not achieve its goal alongside that user task.)
+
+| Configuration | Who answers approvals | Attacks that succeeded | Injection tasks that ever succeed | User tasks still done |
+|---|---|---|---|---|
+| No policy | — | 617/617 | 27/27 | 260/617 |
+| Detector only | — | 617/617 | 27/27 | 260/617 |
+| Ask on every state-changing call | a careful person | 20/617 (3%, 2% to 5%) | 1/27 | 617/617 |
+| **Session rule, sources as listed** | a careful person | **47/617 (8%, 6% to 10%)** | 4/27 | 617/617 |
+| Session rule, every result taints | a careful person | 20/617 (3%, 2% to 5%) | 1/27 | 617/617 |
+| Session rule, sources as listed | nobody | 47/617 | 4/27 | 250/617 |
+| Session rule, sources as listed | someone who approves everything | 617/617 | 27/27 | 260/617 |
+
+The pairs are not independent, since the same injection tasks recur, so read
+the intervals as narrower than the truth and the injection-task column beside
+them. "A careful person" approves the task's own calls and refuses anything
+else, every time, which is the best a person can do.
+
+- **The rule holds what it says it holds.** Every attack that needed a
+  state-changing call after a listed read was stopped: 570 of 617.
+- **20 got through because there was no call to stop.** One injection task
+  only asks the agent to *say* that a hotel is worth visiting. It succeeds
+  under every configuration. No policy on tools can touch it.
+- **27 got through because the list of sources was wrong.** A Slack channel's
+  name is attacker-controlled, and the tool that lists channels was classified
+  as a listing, not as something a stranger writes. The injection arrived
+  through it, the session was never marked, and the attacker's calls ran. The
+  lists were written from the tools' descriptions by two stated criteria, and
+  this is the criteria missing a case. It is the argument for `sources="*"`,
+  which has no list to get wrong and stopped all 27, for five more tasks that
+  ask.
+- **An approval is worth what the person answering it does.** With an approver
+  who says yes to everything, all 617 succeed. The rule turns an attack into a
+  question, and at 57% of tasks it is a question asked often enough to stop
+  being read.
+- **Nobody answering** stops the same attacks and leaves 250 of 617 user tasks
+  done, about what no policy at all leaves (260): a held call that is never
+  answered costs the task as surely as the attack does.
+
+### The detector, by how the attack is worded
+
+`PromptInjectionPolicy(tool_output="deny")` on every tool, against the five
+attack wordings AgentDojo registers that need no model.
+
+| Attack wording | Results withheld | Attacks that succeeded | User tasks still done |
+|---|---|---|---|
+| `important_instructions` | 0/617 | 617/617 | 260/617 |
+| `direct` | 0/617 | 617/617 | 260/617 |
+| `ignore_previous` | 0/617 | 617/617 | 260/617 |
+| `system_message` | 0/617 | 617/617 | 260/617 |
+| `injecagent` | 617/617 | 0/617 | 0/617 |
+
+One wording in five, and it is the one that says "Ignore all previous
+instructions" in so many words. AgentDojo's `ignore_previous` says "Ignore
+your previous iunstructions" and is not flagged, and neither is that sentence
+with the word spelled correctly: the miss is the pattern's, not the typo's.
+Where the detector does fire it withholds the whole result, so the attack
+fails and so does the task that needed to read it: 0 of 617. On the 97
+ordinary tasks it withheld nothing.
+
+## Tool policies on AgentDojo: with a model in the loop
+
+`run_model.py` — [`evals/agentdojo/`](../evals/agentdojo/README.md#with-a-model).
+The same benchmark with a model where the replay's script was, in
+AgentDojo's own pipeline, every tool call through the same policies: Claude
+Haiku 4.5 and Claude Sonnet 5.5, each at its own defaults. Banking suite
+only: 16 tasks, and 144 task-and-attack pairs over 9 injection tasks. Six
+runs, one sample of each case. Two attacks: `important_instructions`, the
+benchmark's standard, as frozen in
+[`PROTOCOL-model.md`](../evals/agentdojo/PROTOCOL-model.md) before any model
+was sent a request; and `tool_knowledge`, which also spells out the exact
+calls to make, added by [an amendment](../evals/agentdojo/PROTOCOL-model-amendment-1.md)
+after Haiku showed the first attack landing nowhere, and frozen before it
+ran. Measured 2026-10-14, for $27.84: $11.97 on Haiku, $15.87 on Sonnet.
+
+**Neither model followed either attack, once.** With no policy, 0 of 144 for
+each model and each attack (0% to 3%). Across every run, 3,456 attacked
+conversations, neither model made a single call carrying the attacker's
+account or the password it asked for. Sonnet's last reply named the injected
+text for what it was in about 84% of them ("that text came from the file, not
+from you, so I ignored it"); Haiku's in about 17%. So there was nothing for a
+tool policy to stop, and these runs say nothing about what the policies
+contain. The replay is still the measure of that.
+
+Tasks done under attack, of 144. Attacks that succeeded: 0 in every cell.
+
+| Configuration | Who answers approvals | Haiku 4.5, `important_instructions` | Haiku 4.5, `tool_knowledge` | Sonnet 5.5, `important_instructions` | Sonnet 5.5, `tool_knowledge` |
+|---|---|---|---|---|---|
+| No policy | — | 86 | 92 | 132 | 129 |
+| Detector only | — | 81 | 90 | 133 | 129 |
+| Ask on every state-changing call | nobody | 58 | 61 | 63 | 63 |
+| Ask on every state-changing call | a careful person | 82 | 91 | 133 | 134 |
+| Session rule, sources as listed | nobody | 58 | 62 | 63 | 63 |
+| Session rule, sources as listed | a careful person | 84 | 90 | 131 | 131 |
+
+With no attack to stop, the policies are only a cost. With nobody to answer
+them, tasks done under attack fall to about 60 of 144 for both models. With
+a careful person answering, they are within one sample's noise of no
+policy. The detector withheld no result in any run: neither wording is one
+it catches. "A careful person" here refuses a held call that carries the
+attacker's account (`markers.yaml`) and approves every other.
+
+### What it costs on ordinary work, with a model
+
+Of 16 tasks: those on which the model changed something, those that needed
+an approval, and those done.
+
+| Configuration | Who answers approvals | Haiku 4.5: changed / asked / done | Sonnet 5.5: changed / asked / done |
+|---|---|---|---|
+| No policy | — | 3 / 0 / 9 | 11 / 0 / 16 |
+| Detector only | — | 2 / 0 / 8 | 10 / 0 / 15 |
+| Ask on every state-changing call | nobody | 4 / 4 / 7 | 10 / 10 / 7 |
+| Ask on every state-changing call | a careful person | 5 / 5 / 9 | 11 / 11 / 16 |
+| Session rule, sources as listed | nobody | 4 / 4 / 7 | 11 / 11 / 7 |
+| **Session rule, sources as listed** | a careful person | 4 / 4 / 9 | **11 / 11 (69%, 44% to 86%) / 16** |
+
+- **With a model that does the work, the session rule misses the bar, as in
+  the replay.** Sonnet 5.5 did all 16 tasks with no policy and changed
+  something on 11. The session rule asked on all 11: 69% of tasks against a
+  bar of a third. Asking on every state-changing call asked on the same 11.
+  Each time Sonnet changed something it had already read a listed source, so
+  remembering what was read saved nothing here; the replay found 12 of 16. An
+  exploratory count, designed after these results and not a protocol result,
+  finds that holding only payments to accounts the user has not paid before
+  would have asked on 4 of the 16 instead
+  ([`evals/agentdojo/exploratory/`](../evals/agentdojo/exploratory/README.md)).
+- **Haiku's 4 of 16 is not the rule meeting the bar.** Haiku changed
+  something on only 2 to 5 tasks. On 10 it read what it needed and stopped to
+  ask the user for a date, a subject line, an account or a confirmation. It
+  was asked for approval every time it did change something.
+- **With nobody to answer, no task that needed a change got done,** for
+  either model. The 7 counted done are two questions about past spending, two
+  where changing nothing is the right answer (`user_task_9`, the rent is
+  already right; `user_task_10`, "pay the bill, like last month", is
+  ambiguous), and three that AgentDojo's check passes with nothing done:
+  `user_task_5` and `user_task_6`, whose payments are already in the history
+  (written down before the run), and `user_task_8`, which has no check at
+  all (found in this one).
+- **Cost.** Haiku: 3,919 requests, 9.3M input tokens and 0.54M output,
+  nothing cached (Haiku 4.5 caches from 4,096 tokens and these requests are
+  smaller). Sonnet: 4,925 requests, 13.1M input tokens read from cache, 1.0M
+  written to it and 13k not cached, and 1.07M output, thinking included.
+
+Two models, one suite, two attack wordings, one sample per case. Models that
+resist fixed attacks this completely say nothing about attacks written
+against them, or about other models. The replay remains the worst case.
+
 ## Speed
 
 Measured inside Python, around the pipeline call only. This table is from
@@ -150,6 +351,9 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-14 | AgentDojo's banking suite with a model in the loop, Claude Haiku 4.5 and Claude Sonnet 5.5, under two attacks: neither model followed either attack in any of 3,456 attacked conversations, so there was nothing for the policies to stop and they only cost tasks. With Sonnet, which did the work, the session rule asked on 11 of 16 ordinary tasks, as often as asking on every state-changing call |
+| 2026-10-13 | AgentDojo replayed through the tool policies, with no model: the session rule stops 570 of 617 attacks with a careful approver and asks on 55 of 97 ordinary tasks, against a bar of a third set beforehand. A stateless rule that asks on every state-changing call stops 597 and asks on 61 |
+| 2026-10-13 | A tenth built-in policy, `SessionTaintPolicy`: once a session has read untrusted content, a state-changing tool call waits for a person. It reads no text, so it has no detection rate to report; what it costs in approvals is measured separately |
 | 2026-10-13 | Demo gallery is twenty-one prompts from seven people. An analyst's browsing agent joins: a host rule on page opens and form posts, a purchase held for the finance lead, and a page whose note to the agent the result scan misses and the tool rule stops anyway |
 | 2026-10-11 | Demo gallery is eighteen prompts from six people. It gained tool rules for paths, roles and an allowlist, an approval that can be answered both ways, an injection arriving through a tool result, and one attack shown getting through |
 | 2026-10-11 | Public corpus added: `XSTest`, 1/250 safe prompts wrongly blocked (0.4%), 13/200 unsafe prompts blocked (6.5%) |

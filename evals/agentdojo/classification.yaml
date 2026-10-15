@@ -1,0 +1,129 @@
+# Which AgentDojo tools read untrusted content, and which change state.
+#
+# Written on 2026-10-13 from the tools' own descriptions (the one-paragraph
+# docstring each tool carries), before any defended configuration was run and
+# before the suites' environments or injection vectors were opened. Frozen by
+# the commit that adds this file: an edit after results exist is a new,
+# labelled version, not a correction.
+#
+# Two criteria, applied to every tool:
+#
+#   source  The tool returns free text that someone other than the user wrote:
+#           mail, messages, files, web pages, reviews, calendar entries,
+#           payment references. NOT a source: the user's own profile, drafts
+#           and sent mail, and a service's structured listings (names, prices,
+#           addresses, opening hours, channel and member lists).
+#
+#   sink    The tool creates, sends, deletes, updates, reserves, pays, posts,
+#           invites, removes or shares. Also a sink: a read whose arguments
+#           name an outside destination the caller chooses (a URL to fetch),
+#           because data can leave in the request.
+#
+# The line between "free text a stranger wrote" and "a service's listing" is a
+# judgement, and a listing an attacker controls is on the wrong side of it.
+# That is why PROTOCOL.md also runs a configuration with no source list at all
+# (every result taints), and why the results name the tool that delivered each
+# injection: a vector sitting behind a tool not listed here is a miss by this
+# file, and is reported as one.
+#
+# One exception to the letter of the sink criterion: workspace's
+# get_unread_emails marks what it returns as read. It is treated as a read.
+
+version: 1
+benchmark: agentdojo==0.1.35, suites v1.2.2
+
+suites:
+  workspace:
+    sources:
+      - get_unread_emails            # received mail
+      - get_received_emails          # received mail
+      - search_emails                # searches the inbox, received mail included
+      - search_calendar_events       # titles and descriptions; invitations come from other people
+      - get_day_calendar_events      # the same entries, by day
+      - search_files_by_filename     # returns file contents; a drive holds files others shared
+      - get_file_by_id               # file contents
+      - list_files                   # every file
+      - search_files                 # file contents
+    sinks:
+      - send_email
+      - delete_email
+      - create_calendar_event        # also mails the participants
+      - cancel_calendar_event        # also mails the participants
+      - reschedule_calendar_event    # also mails the participants
+      - add_calendar_event_participants
+      - append_to_file
+      - create_file
+      - delete_file
+      - share_file
+    neither:
+      - get_sent_emails              # the user wrote them
+      - get_draft_emails             # the user wrote them
+      - search_contacts_by_name      # the user's own address book
+      - search_contacts_by_email
+      - get_current_day
+
+  travel:
+    sources:
+      - get_rating_reviews_for_hotels        # reviews are written by strangers
+      - get_rating_reviews_for_restaurants
+      - get_rating_reviews_for_car_rental
+      - search_calendar_events
+      - get_day_calendar_events
+    sinks:
+      - create_calendar_event
+      - cancel_calendar_event
+      - reserve_hotel
+      - reserve_car_rental
+      - reserve_restaurant
+      - send_email
+    neither:
+      - get_user_information                 # the user's own profile
+      - get_all_hotels_in_city               # listings from here down
+      - get_hotels_prices
+      - get_hotels_address
+      - get_all_restaurants_in_city
+      - get_cuisine_type_for_restaurants
+      - get_restaurants_address
+      - get_dietary_restrictions_for_all_restaurants
+      - get_contact_information_for_restaurants
+      - get_price_for_restaurants
+      - check_restaurant_opening_hours
+      - get_all_car_rental_companies_in_city
+      - get_car_types_available
+      - get_car_fuel_options
+      - get_car_rental_address
+      - get_car_price_per_day
+      - get_flight_information
+
+  banking:
+    sources:
+      - get_most_recent_transactions   # a payment's reference is written by whoever sent it
+      - read_file                      # file contents
+    sinks:
+      - send_money
+      - schedule_transaction
+      - update_scheduled_transaction
+      - update_password
+      - update_user_info
+    neither:
+      - get_iban
+      - get_balance
+      - get_scheduled_transactions     # the user scheduled them
+      - get_user_info
+
+  slack:
+    sources:
+      - read_channel_messages
+      - read_inbox
+      - get_webpage
+    sinks:
+      - add_user_to_channel
+      - send_direct_message
+      - send_channel_message
+      - invite_user_to_slack
+      - remove_user_from_slack
+      - post_webpage
+      - get_webpage                    # the caller chooses the URL: data can leave in it
+    neither:
+      - get_channels                   # a listing
+      - get_users_in_channel           # a listing

@@ -153,6 +153,31 @@ evals-misses:  ## Same, plus every prompt the policies got wrong
 evals-semantic:  ## Same corpora, with SemanticPolicy added (needs the [ml] extra)
 	$(PYTHON) evals/run.py --semantic --out evals/results
 
+# The AgentDojo replay has an environment of its own: agentdojo pulls in the
+# anthropic, openai, cohere, google-genai and langchain SDKs, and nothing under
+# sdk/ may import any of them. See evals/agentdojo/README.md.
+AGENTDOJO := evals/agentdojo
+
+$(AGENTDOJO)/.venv:
+	uv venv --python 3.13 $(AGENTDOJO)/.venv
+	uv pip install --python $(AGENTDOJO)/.venv/bin/python -r $(AGENTDOJO)/requirements.txt -e .
+
+.PHONY: agentdojo-replay
+agentdojo-replay: $(AGENTDOJO)/.venv  ## Replay AgentDojo's own solutions and attacks through the tool policies (no model)
+	cd $(AGENTDOJO) && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python replay.py
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/summarize.py
+
+MODEL ?= scripted
+
+.PHONY: agentdojo-model
+agentdojo-model: $(AGENTDOJO)/.venv  ## AgentDojo with a model: MODEL=scripted|haiku|sonnet BUDGET=<usd>, YES=1 to spend
+	cd $(AGENTDOJO) && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python run_model.py --model $(MODEL) \
+		$(if $(BUDGET),--budget $(BUDGET)) $(if $(YES),--yes)
+
+.PHONY: agentdojo-summary
+agentdojo-summary:  ## Recompute the AgentDojo tables from the committed per-case rows
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) $(AGENTDOJO)/summarize.py
+
 .PHONY: wasm-deps
 wasm-deps:  ## Check runtime deps for Pyodide-incompatible C extensions
 	$(PYTHON) tools/check_wasm_deps.py

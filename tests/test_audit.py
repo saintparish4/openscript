@@ -39,6 +39,7 @@ EXPECTED_POLICIES = {
     "secrets",
     "compliance",
     "tool_firewall",
+    "session_taint",
     "output_schema",
     "audit",
 }
@@ -59,7 +60,7 @@ FORBIDDEN_AT_IMPORT = [
 ]
 
 
-def test_registry_has_exactly_the_nine_audited_policies():
+def test_registry_has_exactly_the_ten_audited_policies():
     found = {r["policy"] for r in audit()}
     assert found == EXPECTED_POLICIES, (
         f"policy registry changed: added={found - EXPECTED_POLICIES}, "

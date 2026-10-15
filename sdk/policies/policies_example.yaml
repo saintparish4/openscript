@@ -21,6 +21,14 @@ policies:
   # nothing; give the policies to SecureTool to put it in front of a tool.
   tool_firewall:
     rules_path: sdk/policies/tools_example.yaml
+  # Also tool calls only. Once a session has run one of `sources`, every call
+  # to one of `sinks` waits for a person. Neither list has a default, and the
+  # one list of policies has to be shared by all of a session's tools: what a
+  # session has read is remembered on the policy instance.
+  # session_taint:
+  #   sources: [fetch_issue, read_page]   # or "*": every tool's result taints
+  #   sinks: [send_email, run_shell]      # or "*": every tool is held
+  #   on_taint: require_approval          # require_approval | deny
   # output_schema:
   #   model: myapp.schemas:ReportModel   # dotted path to a pydantic model
   #   on_invalid: deny                   # deny | annotate

@@ -1,0 +1,7 @@
+# The AgentDojo replay's own environment. Kept apart from the project's:
+# agentdojo pulls in the anthropic, openai, cohere, google-genai and langchain
+# SDKs, and nothing under sdk/ may import any of them.
+#
+#   uv venv --python 3.13 evals/agentdojo/.venv
+#   uv pip install --python evals/agentdojo/.venv/bin/python -r evals/agentdojo/requirements.txt -e .
+agentdojo==0.1.35

@@ -17,6 +17,7 @@ from sdk.policies.compliance import CompliancePolicy, PHIMode
 from sdk.policies.harmful_request import HarmfulRequestPolicy
 from sdk.policies.output_schema import OutputSchemaPolicy
 from sdk.policies.secrets import InternalURLMode, SecretsPolicy
+from sdk.policies.session_taint import SessionTaintPolicy
 from sdk.policies.tool_firewall import ToolFirewallPolicy, ToolRules
 from sdk.policies.toxicity import ToxicityPolicy
 
@@ -89,6 +90,20 @@ def _build_tool_firewall(params: dict[str, Any], writer: EventWriter | None) -> 
     return ToolFirewallPolicy(
         rules=ToolRules.model_validate(rules) if rules is not None else None,
         rules_path=params.get("rules_path"),
+    )
+
+
+def _build_session_taint(params: dict[str, Any], writer: EventWriter | None) -> Policy:
+    _take(params, "session_taint", {"sources", "sinks", "on_taint"})
+    missing = sorted({"sources", "sinks"} - set(params))
+    if missing:
+        # No defaults: which tools read untrusted content and which change
+        # state is a fact about the application, not something to guess.
+        raise ValueError(f"policy 'session_taint' needs {' and '.join(missing)}")
+    return SessionTaintPolicy(
+        sources=params["sources"],
+        sinks=params["sinks"],
+        on_taint=params.get("on_taint", "require_approval"),
     )
 
 
@@ -183,6 +198,7 @@ _REGISTRY: dict[str, PolicyFactory] = {
     "compliance": _build_compliance,
     "semantic": _build_semantic,
     "tool_firewall": _build_tool_firewall,
+    "session_taint": _build_session_taint,
     "output_schema": _build_output_schema,
     "audit": _build_audit,
     "noop": _build_noop,
