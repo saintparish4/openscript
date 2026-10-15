@@ -207,11 +207,14 @@ openscript-hook check --config your-project/.claude/openscript.yaml          # w
 
 Then merge [`sdk/hooks/settings_example.json`](sdk/hooks/settings_example.json) into `your-project/.claude/settings.json`, with the absolute path to `openscript-hook`. On each call it answers **deny** (the call does not run, and Claude is told why), **ask** (Claude Code's own prompt, with OpenScript's reason), or nothing, and Claude Code decides as it always would.
 
+Tried in a real Claude Code session (2.1.292, auto permission mode), with a small MCP issue tracker: a comment posted before any read went through; after the agent read an issue, the next comment brought up Claude Code's prompt with OpenScript's reason, and two comments asked for in one message were held one by one; a comment on an issue the rules did not allow was refused and Claude said why; and a `.env` reached the model masked through both Bash and Read. The payloads from that session are replayed in [`tests/test_claude_code_hook.py`](tests/test_claude_code_hook.py).
+
 What it does not do, stated plainly:
 
 - **It only tightens.** It never approves a call, so your own permission rules and modes still apply on top of it.
 - **Bash, Write and Edit are not held after a read by default.** In a coding session that would ask on nearly every command after any web read. Argument rules and redaction still apply to them if you configure them.
-- **Redaction changes what the model is sent, not what Claude Code records.** The transcript and your terminal still hold the original output. For Bash and Read the masked output has to match Claude Code's own output shape, or Claude Code ignores it.
+- **Redaction changes what the model is sent, not what Claude Code records.** The transcript and your terminal still hold the original output. For built-in tools the masked output has to match the tool's own output shape, or Claude Code ignores it: it does for Bash and Read, checked in a real session; for other built-in tools it has not been checked. The hook tells the model that something was masked, because without that it took the stars for the file's real content.
+- **A new conversation is a new session.** `/clear` gives Claude Code a new session id, so what was read before it no longer holds anything, which is right: the model no longer has that text either.
 - **It fails closed while deciding.** A missing or invalid config, or any error, blocks the call. A hook that times out does not block: that is Claude Code's rule. The example settings run it as `openscript-hook pre-tool-use || exit 2`, so a hook that cannot start blocks too; Claude Code 2.1.295 and later also take `"onFailure": "block"`.
 - **Install it per project.** With no config, every call it is asked about is refused, so put it in the project's `.claude/settings.json`, or set `OPENSCRIPT_HOOK_CONFIG` if you use it everywhere.
 - **Its memory and audit log are files** in `~/.local/state/openscript/claude-code` (or `$OPENSCRIPT_STATE_DIR`), kept on a local disk: appends from parallel hooks are safe there and not on a network share.
