@@ -267,7 +267,11 @@ an approval, and those done.
   something on 11. The session rule asked on all 11: 69% of tasks against a
   bar of a third. Asking on every state-changing call asked on the same 11.
   Each time Sonnet changed something it had already read a listed source, so
-  remembering what was read saved nothing here; the replay found 12 of 16.
+  remembering what was read saved nothing here; the replay found 12 of 16. An
+  exploratory count, designed after these results and not a protocol result,
+  finds that holding only payments to accounts the user has not paid before
+  would have asked on 4 of the 16 instead
+  ([`evals/agentdojo/exploratory/`](../evals/agentdojo/exploratory/README.md)).
 - **Haiku's 4 of 16 is not the rule meeting the bar.** Haiku changed
   something on only 2 to 5 tasks. On 10 it read what it needed and stopped to
   ask the user for a date, a subject line, an account or a confirmation. It

@@ -137,3 +137,9 @@ cost tasks. With Sonnet, which did the work, the session rule asked on 11 of
 the user instead of acting. The tables are in
 [`docs/metrics.md`](../../docs/metrics.md#tool-policies-on-agentdojo-with-a-model-in-the-loop),
 and `tests/test_agentdojo_results.py` holds them to the rows.
+
+**Exploratory, not a result:** [`exploratory/`](exploratory/README.md) counts
+what the session rule would have asked if it held only payments to accounts
+the user has not paid before. On banking, Sonnet's recorded calls would have
+needed a person on 4 of 16 ordinary tasks instead of 11, with every attack
+still held. It was designed after the results, on one suite, and says so.
