@@ -6,7 +6,7 @@ import "@fontsource-variable/jetbrains-mono/wght.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://openscript-rho.vercel.app"),
+  metadataBase: new URL("https://openscript-demo.vercel.app"),
   title: "OpenScript — see the policy pipeline run",
   description:
     "An interactive demo of the OpenScript security gateway. Every policy runs in your browser; nothing you run is sent anywhere.",

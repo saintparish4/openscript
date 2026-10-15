@@ -12,7 +12,7 @@ on:
   workflow_dispatch: {}
 
 env:
-  DEMO_URL: https://openscript-rho.vercel.app
+  DEMO_URL: https://openscript-demo.vercel.app
 
 jobs:
   smoke:
