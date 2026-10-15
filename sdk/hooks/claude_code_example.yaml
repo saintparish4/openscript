@@ -1,0 +1,57 @@
+# OpenScript's policies for Claude Code. Copy this to .claude/openscript.yaml
+# in your project, change the names to your MCP servers' tools, and run
+# `openscript-hook check` to see what it will do. Every key is checked: a
+# misspelt one is an error, not a setting quietly ignored.
+version: 1
+
+# Rules on a call's arguments: what Claude Code's own permissions cannot say.
+# A rule refuses a call outright, or (requires_approval) asks you first.
+firewall:
+  rules:
+    mcp__github__create_issue:
+      args:
+        owner: {one_of: [your-org]}          # issues only in your own organisation
+    mcp__github__merge_pull_request:
+      requires_approval: true                # always ask before a merge
+    mcp__github__delete_repository:
+      deny: true                             # never
+    mcp__slack__slack_post_message:
+      args:
+        channel_id: {one_of: [C0123456789]}  # one channel, and no other
+
+# Once the session has read something a stranger could have written (a web
+# page, an issue, a message), these calls wait for you. Names ending in * are
+# prefixes. List your MCP servers' reading tools as sources: "mcp__*" would
+# count every MCP result as untrusted, the results of writes included. Bash,
+# Write and Edit are not held: in a coding session that would ask on nearly
+# every command after any web read.
+session:
+  sources:
+    - WebFetch
+    - WebSearch
+    - "mcp__github__get_*"
+    - "mcp__github__list_*"
+    - "mcp__github__search_*"
+    - "mcp__slack__slack_get_*"
+    - "mcp__slack__slack_list_*"
+  sinks:
+    - mcp__github__create_issue
+    - mcp__github__add_issue_comment
+    - mcp__github__create_pull_request
+    - mcp__github__merge_pull_request
+    - mcp__github__push_files
+    - "mcp__slack__slack_post_*"
+    - mcp__slack__slack_reply_to_thread
+  on_taint: require_approval                 # or deny
+
+# Mask secrets in what these tools return, before the model reads it. PII is
+# off by default: its email, phone and IP patterns fire on ordinary git logs.
+redact:
+  secrets: true
+  pii: false
+  tools: [Bash, Read, WebFetch, WebSearch, "mcp__*"]
+
+# One JSON line per decision, never with the tool's output. Arguments are kept
+# only as a digest unless include_args is true, and then with secrets masked.
+audit:
+  include_args: false
