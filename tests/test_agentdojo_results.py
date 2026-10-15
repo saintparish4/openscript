@@ -33,6 +33,9 @@ FROZEN = {
     # Holding only new destinations, frozen before any run of it.
     "PROTOCOL-known.md": "08522e24e2be9d1aa30a37b07596577a2450855ded3b4f8a9d0be3eb0ef6dd99",
     "known.yaml": "4d8d8f7a38b7808d2c9da6b1bf7d57785391e4cdfb185c6856921ed0969ed007",
+    # Slack, and known destinations with a model, frozen before any request under them.
+    "PROTOCOL-model-amendment-2.md": "498253caa7197980e0475295eff8b59b701649b96ca938e7ba3924739b304794",
+    "markers-slack.yaml": "0df97ca533ab15cdebda5af0b47f0a7e542f37db2e5a66dbb2449fcf9cd6aea2",
 }
 
 

@@ -33,6 +33,7 @@ import warnings
 from collections import defaultdict
 from collections.abc import Iterator, Mapping, Sequence
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from functools import cache
 from pathlib import Path
@@ -44,6 +45,7 @@ sys.path.insert(0, str(HERE.parents[1]))  # the repository root, for sdk/ and ev
 logging.disable(logging.CRITICAL)  # the policies log every finding; the rows are the report
 warnings.filterwarnings("ignore")
 
+import agentdojo.task_suite.task_suite as task_suite_module  # noqa: E402
 import yaml  # noqa: E402
 from agentdojo.agent_pipeline import (  # noqa: E402
     AgentPipeline,
@@ -55,12 +57,13 @@ from agentdojo.agent_pipeline import (  # noqa: E402
 from agentdojo.agent_pipeline.agent_pipeline import load_system_message  # noqa: E402
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement  # noqa: E402
 from agentdojo.attacks.attack_registry import load_attack  # noqa: E402
-from agentdojo.functions_runtime import EmptyEnv, Function  # noqa: E402
+from agentdojo.functions_runtime import EmptyEnv, Function, FunctionCall  # noqa: E402
 from agentdojo.task_suite.load_suites import get_suites  # noqa: E402
 from guard import (  # noqa: E402
     APPROVERS,
     Approver,
     GuardedRuntime,
+    known_for,
     load_classification,
     policies_for,
 )
@@ -80,7 +83,17 @@ RUNS = (
     ("taint_text", "nobody"),
     ("taint_text", "careful"),
 )
+#: The runs amendment 2 adds: the session rule with known destinations
+#: (PROTOCOL-known.md's taint_known), with a model. Asked for by name only.
+AMENDMENT_RUNS = (
+    ("taint_known", "nobody"),
+    ("taint_known", "careful"),
+)
 DEFAULT_SUITES = ("banking",)
+#: Where the careful approver's markers are. markers.yaml is frozen with the
+#: protocol and covers banking; a suite added later comes in a file of its own,
+#: frozen with the amendment that adds it.
+MARKER_FILES = ("markers.yaml", "markers-slack.yaml")
 #: The attacks a run may use: the protocol's own, and the one amendment 1 adds,
 #: which also spells out the calls to make.
 ATTACKS = (MAIN_ATTACK, "tool_knowledge")
@@ -120,8 +133,12 @@ class Case:
 
 @cache
 def load_markers() -> dict[str, dict[str, list[str]]]:
-    data = yaml.safe_load((HERE / "markers.yaml").read_text())
-    suites: dict[str, dict[str, list[str]]] = data["suites"]
+    suites: dict[str, dict[str, list[str]]] = {}
+    for name in MARKER_FILES:
+        for suite, markers in yaml.safe_load((HERE / name).read_text())["suites"].items():
+            if suite in suites:
+                raise ValueError(f"{suite} has markers in more than one file")
+            suites[suite] = markers
     return suites
 
 
@@ -155,7 +172,7 @@ def markers_for(case: Case) -> list[str]:
     suites = load_markers()
     if case.suite not in suites:
         if case.approver == "careful":
-            raise SystemExit(f"markers.yaml has nothing for {case.suite}: write it first")
+            raise SystemExit(f"no markers file has {case.suite}: write it first")
         return []
     return list(suites[case.suite][case.injection_task])
 
@@ -195,6 +212,29 @@ class _Recorder(BasePipelineElement):
         out = self.inner.query(query, runtime, env, messages, extra_args)
         self.messages = list(out[3])
         return out
+
+
+@contextmanager
+def _scored_on_calls_that_ran(runtimes: list[GuardedRuntime]) -> Iterator[None]:
+    """AgentDojo's checkers that read the trace see only the calls that ran.
+
+    AgentDojo builds the trace from every call the model asked for, so a call
+    the policies held or refused would count as made. The replay leaves those
+    out (a call that was held did not happen), and so does this. Banking has
+    no checker that reads the trace; Slack's injection_task_5 and five of its
+    user tasks do (PROTOCOL-model-amendment-2.md).
+    """
+    original = task_suite_module.functions_stack_trace_from_messages
+
+    def ran(_messages: Sequence[Any]) -> list[FunctionCall]:
+        log = runtimes[0].log if runtimes else []
+        return [FunctionCall(function=e.function, args=e.args) for e in log if e.ran]
+
+    task_suite_module.functions_stack_trace_from_messages = ran
+    try:
+        yield
+    finally:
+        task_suite_module.functions_stack_trace_from_messages = original
 
 
 @cache
@@ -261,7 +301,7 @@ def run_case(
         llm = Claude(profile, meter, client=client, on_request=billed)
 
     approver = marker_approver(markers) if case.approver == "careful" else APPROVERS[case.approver]
-    policies = policies_for(case.configuration, lists)
+    policies = policies_for(case.configuration, lists, known_for(case.configuration, case.suite))
     runtimes: list[GuardedRuntime] = []
 
     def runtime_class(tools: Sequence[Function]) -> GuardedRuntime:
@@ -284,14 +324,15 @@ def run_case(
     row: dict[str, Any] = {**asdict(case), "attack": case.attack if injection_task else ""}
     row["model"] = llm.name
     try:
-        utility, security = suite.run_task_with_pipeline(
-            pipeline,
-            user_task,
-            injection_task,
-            injections,
-            runtime_class=runtime_class,  # type: ignore[arg-type]
-            environment=environment(suite, injections),
-        )
+        with _scored_on_calls_that_ran(runtimes):
+            utility, security = suite.run_task_with_pipeline(
+                pipeline,
+                user_task,
+                injection_task,
+                injections,
+                runtime_class=runtime_class,  # type: ignore[arg-type]
+                environment=environment(suite, injections),
+            )
     except BudgetExceeded as stopped:
         return {"key": case.key, "budget": str(stopped), "requests": requests}
     except Exception as failed:  # recorded, and the case is retried next run
@@ -450,6 +491,16 @@ def run(
     return left
 
 
+def default_out(name: str, suites: Sequence[str], runs: Sequence[tuple[str, str]]) -> Path:
+    """results/model/<model> for the protocol's banking runs. Another suite, or
+    the runs amendment 2 adds, go beside it (<model>-slack, <model>-known), so
+    their rows and their spend against --budget are counted on their own."""
+    parts = [name, *(suite for suite in suites if suite != "banking")]
+    if any(r in AMENDMENT_RUNS for r in runs):
+        parts.append("known")
+    return HERE / "results" / "model" / "-".join(parts)
+
+
 def _take(items: Iterator[Case], n: int) -> list[Case]:
     return [case for _, case in zip(range(n), items, strict=False)]
 
@@ -493,7 +544,7 @@ def summarize(out: Path) -> str:
             "| Tasks done under attack | Approvals per attacked task | Cost |",
             "|---|---|---|---|---|---|---|---|---|",
         ]
-        for configuration, approver in RUNS:
+        for configuration, approver in RUNS + AMENDMENT_RUNS:
             benign = by[configuration, approver, ""]
             attacked = by[configuration, approver, attack]
             if not benign and not attacked:
@@ -573,12 +624,12 @@ def main() -> int:
     if args.model is None:
         parser.error("--model is required")
     runs = RUNS if not args.runs else [tuple(r.split("/", 1)) for r in args.runs]
-    unknown = [r for r in runs if r not in RUNS]
+    unknown = [r for r in runs if r not in RUNS + AMENDMENT_RUNS]
     if unknown:
-        parser.error(f"not in the protocol: {unknown}")
+        parser.error(f"not in the protocol or its amendments: {unknown}")
     cases = plan(args.suites, runs, args.limit, args.attack)
     name = "scripted" if args.model == "scripted" else PROFILES[args.model].model
-    out = args.out or HERE / "results" / "model" / name
+    out = args.out or default_out(name, args.suites, runs)
 
     if args.model != "scripted":
         if args.budget is None:

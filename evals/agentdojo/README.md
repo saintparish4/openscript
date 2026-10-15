@@ -59,6 +59,7 @@ uv pip install --python .venv/bin/python -r requirements.txt -e ../..
 | `PROTOCOL-model.md` | The run with a model: models, runs, approvers, budget. Frozen |
 | `markers.yaml` | The attacker's values, which the `careful` approver refuses in a model run. Frozen |
 | `PROTOCOL-model-amendment-1.md` | A second attack, `tool_knowledge`, added after the Haiku run. Frozen |
+| `PROTOCOL-model-amendment-2.md`, `markers-slack.yaml` | Slack with Sonnet 5.5, and known destinations with a model on banking; Slack's markers. Frozen |
 | `model.py` | `Claude`, a metered model element, and `ScriptedAgent`, the replay's agent as one |
 | `run_model.py` | The run with a model, its budget, and its tables |
 | `PROTOCOL-known.md` | Holding only new destinations: the rule, the runs, what is reported. Frozen |
@@ -120,10 +121,24 @@ Or `make agentdojo-model MODEL=haiku BUDGET=25`, with `YES=1` to spend. `--attac
 ([amendment 1](PROTOCOL-model-amendment-1.md)); its cases go in the same directory and the
 tasks with no attack are not run again.
 
+[Amendment 2](PROTOCOL-model-amendment-2.md) adds Slack and the session rule with known
+destinations. Each goes in a directory of its own beside the model's banking results, so
+its rows and its spend are counted apart:
+
+```bash
+.venv/bin/python run_model.py --model sonnet --suites slack --budget 20 --yes          # results/model/claude-sonnet-5-5-slack
+.venv/bin/python run_model.py --model sonnet --runs taint_known/nobody taint_known/careful \
+    --budget 8 --yes                                                                    # results/model/claude-sonnet-5-5-known
+```
+
+It also changes one thing in the scoring, for every suite: AgentDojo's checkers that read
+the trace see only the calls that ran, as in the replay. Banking has none, so its committed
+rows are unaffected.
+
 - `--model scripted` drives the replay's compromised agent through the model
-  harness. On every banking case it agrees with the replay's rows on attack
-  outcome, approvals and compromise, and its request sizes give a floor on
-  what a model run sends (about 8.4M input tokens for banking's 960 cases).
+  harness. On every banking and Slack case it agrees with the replay's rows on
+  attack outcome, approvals and compromise, and its request sizes give a floor
+  on what a model run sends (about 8.4M input tokens for banking's 960 cases).
 - `--budget` is in US dollars, for the output directory. No request is sent
   once it is reached. A run can be stopped and started again: finished cases
   are skipped and what was spent stays counted.
