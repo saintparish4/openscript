@@ -24,6 +24,7 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
 - **An audit trail.** With `AuditPolicy` in the list, every action and every refusal becomes an event with an aggregated risk score, including calls stopped before anything ran.
 - **A Claude Code hook.** `openscript-hook` gives Claude Code argument rules, the session memory, secret masking and an audit log. It only ever makes Claude Code stricter.
 - **Any agent framework.** Anything with `ainvoke`/`invoke` (or `astream`/`stream`) can be wrapped. Streaming has a guarded mode that scans as it goes, and an optional FastAPI server adds an event store, a dashboard, an approval queue, Prometheus and OpenTelemetry.
+- **A Java client.** `clients/java` puts a Java agent and its tools behind the same Python policies, run by the server. Nothing is reimplemented in Java, and it has no dependencies beyond the JDK.
 
 ### Why it matters
 
@@ -70,6 +71,7 @@ Every number above, with its date, command and caveats, is in [`docs/metrics.md`
 | In the browser | Pyodide 0.28.3 (CPython on WebAssembly), Next.js 16 static export, React 19, TypeScript |
 | Browser extension | Chrome Manifest V3, with Pyodide running in the side panel |
 | Optional server | FastAPI, SQLAlchemy with asyncpg on Postgres, Alembic, Redis, Prometheus, OpenTelemetry |
+| Java client | Java 17, the JDK's `HttpClient`, Maven; JUnit 5 for its tests |
 | Evaluation | Labelled corpora (1,799 prompts, 1,451 of them public), AgentDojo 0.1.35, the Anthropic Python SDK for runs with a model |
 | Quality | pytest, mypy `--strict`, ruff, black, GitHub Actions, a daily check of the deployed demo |
 
@@ -107,7 +109,8 @@ openscript/
 │   └── observability/        risk scoring, Prometheus metrics, OpenTelemetry tracing
 ├── contracts/                the Policy protocol, ActionContext, decisions, failure modes
 ├── events/                   event writer and store; approval stores (in-memory, Redis)
-├── server/                   optional FastAPI server: events, SSE, dashboard, approvals, /metrics
+├── server/                   optional FastAPI server: events, SSE, dashboard, approvals, /v1/guard, /metrics
+├── clients/java/             a Java client: SecureAgent and SecureTool over /v1/guard
 ├── site/                     the live demo: a Next.js static export that runs the package via Pyodide
 ├── extension/                a Chrome extension: the package around a scripted browsing agent
 ├── web/                      a bare Pyodide probe page and its headless check
@@ -321,7 +324,35 @@ It was tried in a real Claude Code session with a small MCP issue tracker:
 
 The payloads from that session are replayed in the tests. The guide covers [its limits](docs/guide.md#the-claude-code-hook-what-it-adds-and-what-it-does-not-do): Bash is not held by default, and the transcript keeps the unmasked output.
 
-### 7. Run the Demos
+### 7. Guard a Java Agent
+
+The policies run in Python. A Java program reaches them through the server, which runs one phase of the pipeline per request: the client asks about the input, runs its agent or tool on what came back, then asks about the output. The two lists are configured on the server, as a Python program would build them for `SecureAgent` and `SecureTool`:
+
+```bash
+OPENSCRIPT_GUARD_CONFIG=server/guard_example.yaml uvicorn server.app:app   # Postgres up, OPENSCRIPT_API_KEY set
+```
+
+```java
+OpenScriptClient client = OpenScriptClient.builder()
+    .baseUrl("http://localhost:8000")
+    .apiKey(System.getenv("OPENSCRIPT_API_KEY"))
+    .build();
+
+SecureAgent agent = client.secureAgent(input -> model.complete((String) input.get("prompt")));
+String answer = (String) agent.invoke(Map.of("prompt", userText));   // the model gets the redacted prompt
+
+SecureTool wire = client.secureTool("wire_money", args -> bank.wire(args),
+    CheckOptions.defaults().withRole("finance"));
+try {
+  wire.call(Map.of("amount", 250, "to", "acct-7"));
+} catch (ActionBlockedException e) {
+  if (e.requiresApproval()) { /* a person decides e.approvalId(); retry with withApprovalId(...) */ }
+}
+```
+
+It fails closed: an unreachable server, a wrong key or a policy that raised is an `OpenScriptException`, and the agent or tool does not run. Each guarded call costs two round trips to the server. The session rule's memory is in the server process, so run one worker, and the approval store is shared with `/v1/approvals` (in memory unless `REDIS_URL` is set). Details in [`clients/java/README.md`](clients/java/README.md); `make java-live` runs its tests against the real policies.
+
+### 8. Run the Demos
 
 ```bash
 pip install -e ".[demo]" && python demo/injection_demo.py   # a terminal walkthrough, in memory
@@ -343,6 +374,7 @@ The [browser demo](https://openscript-demo.vercel.app/) is twenty-one prompts fr
 | `OPENSCRIPT_API_KEY` | the server | none: protected endpoints return 500 until it is set | The key every endpoint except `/health` expects in `X-API-KEY` |
 | `DATABASE_URL` | the server, Alembic | `postgresql+asyncpg://openscript:openscript@localhost:5432/openscript` | The event store |
 | `REDIS_URL` | the server | none: approvals stay in the server's memory | Shares the approval queue with SDK clients in other processes |
+| `OPENSCRIPT_GUARD_CONFIG` | the server | none: `/v1/guard` answers 503 | The policies behind `/v1/guard`, for the Java client ([example](server/guard_example.yaml)). An invalid file stops the server from starting |
 | `OPENSCRIPT_HOOK_CONFIG` | `openscript-hook` | `$CLAUDE_PROJECT_DIR/.claude/openscript.yaml` | The hook's config (`--config` overrides it) |
 | `OPENSCRIPT_STATE_DIR` | `openscript-hook` | `$XDG_STATE_HOME/openscript`, else `~/.local/state/openscript` | Where the hook keeps session memory, its config cache and the audit log (under `claude-code/`). Keep it on a local disk |
 | `ANTHROPIC_API_KEY` | `evals/agentdojo/run_model.py` | none | Only for AgentDojo runs with a real model, which also need `--budget` and `--yes` |

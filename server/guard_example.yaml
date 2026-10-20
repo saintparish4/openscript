@@ -1,0 +1,55 @@
+# Example config for /v1/guard: the policies a client in another language
+# (clients/java) reaches through the server. Point the server at it with
+#
+#   OPENSCRIPT_GUARD_CONFIG=server/guard_example.yaml uvicorn server.app:app
+#
+# Two lists, as a Python program builds two. Each takes exactly what
+# load_policies() takes, in the same order-is-significant form. `audit` writes
+# to the server's event store, so the server needs its Postgres.
+
+# Action "invoke": the input a client is about to give its agent, and what the
+# agent returned. What SecureAgent(agent, policies=...) would run.
+agent:
+  prompt_injection:
+    threshold: 0.5
+  toxicity:
+    threshold: 0.5
+  harmful_request:
+    threshold: 0.5
+  secrets:
+    mode: redact          # masked before the model is given it
+  pii:
+    mode: redact          # masked before the caller gets it back
+  audit: {}               # last, so its events carry the final risk score
+
+# Action "tool_call": a tool's name and arguments, and what it returned. What
+# SecureTool(fn, policies=...) would run around each tool.
+tool:
+  tool_firewall:
+    # rules_path works too, and is read relative to this file.
+    rules:
+      default_deny: true
+      rules:
+        fetch_page:
+          allowed_roles: ["*"]
+          args:
+            # The whole URL must match. A redirect the tool follows is not
+            # something this rule sees.
+            url: {pattern: 'https://docs\.example\.com/.*'}
+        send_email:
+          allowed_roles: ["*"]
+          unlisted_args: deny
+          args:
+            to: {required: true, pattern: '[^@\s]+@example\.com'}
+            body: {}
+        wire_money:
+          allowed_roles: ["finance"]
+          requires_approval: true
+          args:
+            amount: {max: 10000}
+  # Once a session has run fetch_page, send_email waits for a person. What a
+  # session has read is remembered by the server process, per session id.
+  session_taint:
+    sources: [fetch_page]
+    sinks: [send_email, wire_money]
+  audit: {}

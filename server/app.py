@@ -19,8 +19,11 @@ from contracts.server_types import EventType
 from contracts.session_graph import SessionGraph
 from events.approvals import ApprovalStore, InMemoryApprovalStore, RedisApprovalStore
 from events.store import EventStore
+from events.writer import EventWriter
 from server.auth import require_api_key
+from server.guard import load_checkpoints
 from server.routers import approvals as approvals_router
+from server.routers import guard as guard_router
 from server.routers import sessions as sessions_router
 from server.routers import sse as sse_router
 from server.routers import threat as threat_router
@@ -54,8 +57,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.event_store = EventStore(engine)
     app.state.approval_store = _approval_store()
+    # The policies behind /v1/guard. Unset, the endpoint answers 503; set and
+    # invalid, the server does not start. The pipeline shares the approval
+    # store with /v1/approvals, so an approval it asks for is decided there.
+    guard_config = os.environ.get("OPENSCRIPT_GUARD_CONFIG", "")
+    writer: EventWriter | None = None
+    app.state.guard = None
+    if guard_config:
+        writer = EventWriter(app.state.event_store)
+        await writer.start()
+        app.state.guard = load_checkpoints(
+            guard_config, writer=writer, approval_store=app.state.approval_store
+        )
+        logger.info("guard_configured", config=guard_config, actions=sorted(app.state.guard))
     logger.info("server_started", database=db_url.split("@")[-1])
     yield
+    if writer is not None:
+        await writer.stop()
     await engine.dispose()
     logger.info("server_stopped")
 
@@ -67,6 +85,7 @@ app.include_router(threat_router.router)
 app.include_router(sessions_router.router)
 app.include_router(sse_router.router)
 app.include_router(approvals_router.router)
+app.include_router(guard_router.router)
 
 # Dashboard static files — served at /dashboard/
 if _STATIC_DIR.exists():
