@@ -11,6 +11,8 @@ import java.util.Map;
  *     decision is not {@link Decision#ALLOW}
  * @param findings what each policy wrote, keyed by category ({@code "threat"}, {@code "pii"},
  *     {@code "tool_firewall"}, ...), in the same shape as Python's {@code context.metadata}
+ * @param pipelineMillis time spent in the policies, measured by the server
+ * @param roundTripNanos the whole request, measured by this client: the pipeline, HTTP and JSON
  */
 public record GuardResult(
     Decision decision,
@@ -21,7 +23,9 @@ public record GuardResult(
     Map<String, Object> output,
     double riskScore,
     Map<String, Double> riskCategories,
-    Map<String, Object> findings) {
+    Map<String, Object> findings,
+    double pipelineMillis,
+    long roundTripNanos) {
 
   public boolean allowed() {
     return decision == Decision.ALLOW;

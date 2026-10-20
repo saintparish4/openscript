@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,9 +18,10 @@ class GuardRequest(BaseModel):
     """One phase of one action, asked by a client that runs the action itself."""
 
     phase: Literal["input", "output"]
-    #: "invoke" for an agent's input and output, "tool_call" for a tool's
-    #: {"name", "args"} and its result. The two go to different policy lists.
-    action: Literal["invoke", "tool_call"]
+    #: "invoke" for an agent's input and output, "stream" for the same when
+    #: the answer is streamed (SecureAgent.stream's action), "tool_call" for a
+    #: tool's {"name", "args"} and its result. Tools go to a different list.
+    action: Literal["invoke", "stream", "tool_call"]
     session_id: str = "default"
     agent_id: str = "default"
     input: dict[str, Any]
@@ -47,6 +49,37 @@ class GuardResponse(BaseModel):
     risk_categories: dict[str, float] = Field(default_factory=dict)
     #: What each policy wrote about this phase, keyed by its category.
     findings: dict[str, Any] = Field(default_factory=dict)
+    #: Time spent in the pipeline, measured inside the server, so a client can
+    #: tell the policies' cost from the network's.
+    pipeline_ms: float = 0.0
+    #: Action "stream", phase "input" only: the guards that scan a guarded
+    #: stream as it goes, and the tail a client must hold back for them.
+    stream_guards: list[str] | None = None
+    stream_window: int | None = None
+
+
+class StreamScanRequest(BaseModel):
+    """The text a client is holding back in a guarded stream, to be scanned."""
+
+    session_id: str = "default"
+    agent_id: str = "default"
+    #: The input as the input phase left it. Only for the record of a refusal.
+    input: dict[str, Any] = Field(default_factory=dict)
+    #: The held tail plus whatever has arrived since.
+    text: str
+    #: True at the end of the stream: matches at the edge are now definite.
+    final: bool = False
+
+
+class StreamScanResponse(BaseModel):
+    decision: Literal["allow", "deny"]
+    #: The text as the guards left it (redacted); "" when denied.
+    text: str = ""
+    reason: str = ""
+    blocked_by: str = ""
+    labels: list[str] = Field(default_factory=list)
+    risk: float = 0.0
+    pipeline_ms: float = 0.0
 
 
 def _checkpoint(request: Request, action: str) -> Checkpoint:
@@ -65,10 +98,15 @@ def _checkpoint(request: Request, action: str) -> Checkpoint:
     return checkpoint
 
 
+def _ms(start: float) -> float:
+    return round((time.perf_counter() - start) * 1000, 3)
+
+
 def _response(
     context: ActionContext,
     phase: str,
     decision: str,
+    start: float,
     blocked_by: str = "",
     approval_id: str = "",
 ) -> GuardResponse:
@@ -92,6 +130,7 @@ def _response(
         risk_score=round(context.risk_score, 4),
         risk_categories=context.risk_categories,
         findings=jsonable_encoder(findings),
+        pipeline_ms=_ms(start),
     )
 
 
@@ -129,6 +168,7 @@ async def guard(req: GuardRequest, request: Request) -> GuardResponse:
         output_data=req.output or {},
         metadata=metadata,
     )
+    start = time.perf_counter()
     try:
         if req.phase == "input":
             context = await checkpoint.check_input(context, req.approval_id)
@@ -137,8 +177,55 @@ async def guard(req: GuardRequest, request: Request) -> GuardResponse:
     except ActionBlockedError as blocked:
         context = blocked.context or context
         decision = "require_approval" if blocked.approval_id else "deny"
-        return _response(context, req.phase, decision, blocked.interceptor, blocked.approval_id)
+        return _response(
+            context, req.phase, decision, start, blocked.interceptor, blocked.approval_id
+        )
     except RuntimeError as exc:
         # A FAIL_CLOSED policy that raised. The action is refused either way.
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return _response(context, req.phase, "allow")
+
+    response = _response(context, req.phase, "allow", start)
+    if req.action == "stream" and req.phase == "input":
+        guards = checkpoint.stream_guards()
+        response.stream_guards = [guard.name for guard in guards]
+        # What SecureAgent holds back: no match a guard can make is longer.
+        response.stream_window = max((guard.max_match_len for guard in guards), default=0)
+    return response
+
+
+@router.post("/guard/stream", dependencies=[Depends(require_api_key)])
+async def guard_stream(req: StreamScanRequest, request: Request) -> StreamScanResponse:
+    """Scan the held-back text of a guarded stream, as SecureAgent does per chunk.
+
+    The client releases everything but the last stream_window characters of
+    what comes back, and sends the rest again with the next chunk. A deny
+    comes back as an answer with no text: nothing of the match is released.
+    """
+    checkpoint = _checkpoint(request, "stream")
+    context = ActionContext(
+        action="stream",
+        agent_id=req.agent_id,
+        session_id=req.session_id,
+        input_data=req.input,
+    )
+    start = time.perf_counter()
+    try:
+        text = await checkpoint.scan_stream(context, req.text, req.final)
+    except ActionBlockedError as blocked:
+        found = context.metadata.get("stream_guard", {})
+        return StreamScanResponse(
+            decision="deny",
+            reason=blocked.reason,
+            blocked_by=blocked.interceptor,
+            labels=found.get("labels", []),
+            risk=found.get("risk", 0.0),
+            pipeline_ms=_ms(start),
+        )
+    found = context.metadata.get("stream_guard", {})
+    return StreamScanResponse(
+        decision="allow",
+        text=text,
+        labels=found.get("labels", []),
+        risk=found.get("risk", 0.0),
+        pipeline_ms=_ms(start),
+    )

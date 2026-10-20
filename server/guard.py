@@ -28,13 +28,14 @@ from typing import Any
 
 import yaml
 
-from contracts.interceptor import Policy
+from contracts.interceptor import Policy, StreamGuard
 from contracts.types import ActionContext
 from sdk.middleware.middleware import SecureAgent
 from sdk.policies.config import load_policies
 
-#: The config's sections, by the action each one is asked about.
-SECTIONS = {"invoke": "agent", "tool_call": "tool"}
+#: The config's sections, by the action each one is asked about. A streamed
+#: answer is an agent's, so it is held to the agent's list, as in Python.
+SECTIONS = {"invoke": "agent", "stream": "agent", "tool_call": "tool"}
 
 
 class Checkpoint(SecureAgent):
@@ -52,6 +53,27 @@ class Checkpoint(SecureAgent):
         with self._trace(context):
             context = await self._run_after(context)
             return self._finalize(context)
+
+    def stream_guards(self) -> list[StreamGuard]:
+        """The incremental scanners of the policies that have one (secrets, PII)."""
+        guards: list[StreamGuard] = []
+        for policy in self._policies:
+            factory = getattr(policy, "stream_guard", None)
+            guard = factory() if callable(factory) else None
+            if guard is not None:
+                guards.append(guard)
+        return guards
+
+    async def scan_stream(self, context: ActionContext, text: str, final: bool) -> str:
+        """One pass of guarded streaming over the text a client is holding back.
+
+        SecureAgent's own _apply_guards: the guards are stateless over the
+        text they are given, so the client keeps the held tail and sends it
+        with each new chunk, and the server needs no memory of the stream.
+        A deny raises ActionBlockedError, after the audit hears of it.
+        """
+        with self._trace(context):
+            return await self._apply_guards(text, self.stream_guards(), context, final)
 
 
 def _resolve_rules_path(policies: dict[str, Any], base: Path) -> dict[str, Any]:
@@ -81,8 +103,8 @@ def load_checkpoints(
     if unknown:
         raise ValueError(f"{path}: unknown section(s) {sorted(unknown)}; expected 'agent', 'tool'")
 
-    checkpoints: dict[str, Checkpoint] = {}
-    for action, section in SECTIONS.items():
+    by_section: dict[str, Checkpoint] = {}
+    for section in dict.fromkeys(SECTIONS.values()):
         policies = raw.get(section)
         if policies is None:
             continue
@@ -91,9 +113,14 @@ def load_checkpoints(
         built: list[Policy] = load_policies(
             _resolve_rules_path(policies, path.parent), writer=writer
         )
-        checkpoints[action] = Checkpoint(
+        by_section[section] = Checkpoint(
             agent=None, policies=built, approval_store=approval_store, writer=writer
         )
+    # One pipeline per section, shared by the actions asked of it: what a
+    # policy remembers is remembered once.
+    checkpoints = {
+        action: by_section[section] for action, section in SECTIONS.items() if section in by_section
+    }
     if not checkpoints:
         raise ValueError(f"{path}: no 'agent' or 'tool' section")
     return checkpoints
