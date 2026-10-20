@@ -350,7 +350,9 @@ try {
 }
 ```
 
-It fails closed: an unreachable server, a wrong key or a policy that raised is an `OpenScriptException`, and the agent or tool does not run. Each guarded call costs two round trips to the server. The session rule's memory is in the server process, so run one worker, and the approval store is shared with `/v1/approvals` (in memory unless `REDIS_URL` is set). Details in [`clients/java/README.md`](clients/java/README.md); `make java-live` runs its tests against the real policies.
+Every call also has an async form (`invokeAsync`, `callAsync`, `checkInputAsync`, ...) returning a `CompletableFuture`. A streaming agent gets Python's three stream modes, including guarded streaming, where the server scans a held-back tail before any text is released. An `InMemoryMetrics` recorder counts every check and writes Prometheus text.
+
+It fails closed: an unreachable server, a wrong key or a policy that raised is an `OpenScriptException`, and the agent or tool does not run. Each guarded call costs two round trips to the server: 4.7 ms p50 for an agent call with the server on the same machine ([measured](docs/metrics.md#the-java-client-per-call)). The session rule's memory is in the server process, so run one worker, and the approval store is shared with `/v1/approvals` (in memory unless `REDIS_URL` is set). Details in [`clients/java/README.md`](clients/java/README.md); `make java-live` runs its tests against the real policies.
 
 ### 8. Run the Demos
 

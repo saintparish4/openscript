@@ -69,6 +69,57 @@ try {
 
 The approval is single-use, expires after an hour, and is bound to the tool's name and exact arguments, including their types: `10` and `10.0` are two different calls. `client.pendingApprovals()` lists what is waiting.
 
+### Async
+
+Every check has an `...Async` form returning a `CompletableFuture`, and so do the wrappers: `invokeAsync`, `callAsync`, `pendingApprovalsAsync`, `decideApprovalAsync`. A failed future's cause is the exception the blocking form would throw.
+
+```java
+// An agent that answers with a future: nothing blocks on the model or the server.
+SecureAgent agent = client.secureAsyncAgent(input -> asyncModel.complete(input));
+agent.invokeAsync(Map.of("prompt", userText))
+    .thenAccept(answer -> reply(answer))
+    .exceptionally(error -> refuse(error.getCause()));
+```
+
+Either kind of agent or tool can be called either way. A blocking `Agent` or `Tool` called through `invokeAsync`/`callAsync` runs on the client's executor (`builder().executor(...)`, the common fork-join pool by default); an `AsyncAgent` called through `invoke` is waited for.
+
+### Streaming
+
+`secureStreamingAgent` takes an agent that returns a `java.util.stream.Stream` of chunks and gives back a stream of what the policies let through, with Python's three modes:
+
+```java
+SecureStreamingAgent agent = client.secureStreamingAgent(
+    input -> model.streamText((String) input.get("prompt")),
+    CheckOptions.defaults(), StreamMode.GUARDED);
+
+try (Stream<Object> answer = agent.stream(Map.of("prompt", userText))) {
+  answer.forEach(System.out::print);
+}
+```
+
+- `BUFFER` (the default): every chunk is collected and the whole answer checked before any of it is delivered. Text arrives as one chunk.
+- `GUARDED`: text arrives as it streams, minus a held-back tail as long as the longest match a stream guard can make (512 characters with the example config, from the secrets guard). The server scans what is held before anything is released, so a secret or an email split across chunks is redacted, and a private key refuses the stream before any of it goes out. The policies without a guard run over the whole answer at the end.
+- `PASSTHROUGH`: chunks are delivered unscanned; the output policies run afterwards for the record, and a refusal throws after the caller has everything.
+
+The input is checked when `stream()` is called, so a refused prompt throws there and the agent never starts. Refusals of the output throw from the stream as it is consumed. Close the stream to close the agent's.
+
+In `GUARDED` mode each release is a request to the server: once the window is full, that is one per chunk. `withMinRelease(n)` holds back `n` characters more before each scan: fewer requests, larger and later pieces, the same guarantee. Measured below: 130 requests and 196 ms for a 1,020-character answer by default, 4 requests and 9.3 ms with `withMinRelease(256)`.
+
+Streaming is pull-based and blocks the consuming thread while the server is asked; there is no async form of it.
+
+### Metrics
+
+Pass a `MetricsRecorder` to the builder and it is told about every request: action, phase, decision or HTTP status, risk, findings, the server's pipeline time and the client's round trip. `InMemoryMetrics` counts them and writes Prometheus text, with the families of Python's `MetricsRecorder` under an `openscript_client_` prefix (`checks_total`, `errors_total`, `check_risk_score`, `policy_violations_total`, `injections_flagged_total`, `tool_calls_denied_total`, `pii_redacted_total`) plus `round_trip_seconds` and `pipeline_seconds`:
+
+```java
+InMemoryMetrics metrics = new InMemoryMetrics();
+OpenScriptClient client = OpenScriptClient.builder()
+    .baseUrl(url).apiKey(key).metrics(metrics).build();
+// serve metrics.toPrometheus() from your own /metrics endpoint
+```
+
+Each `GuardResult` also carries `pipelineMillis()` (the policies, timed by the server) and `roundTripNanos()` (the whole request, timed here). A recorder that throws is logged and ignored: it cannot change an answer.
+
 ### Without the wrappers
 
 `checkInput`, `checkOutput`, `checkToolCall` and `checkToolResult` each make one request and return a `GuardResult` (decision, reason, the input and output as the policies left them, risk, and every policy's findings). `result.orThrow(phase)` turns a refusal into the exception. Use them when the agent is not one call, but run the output phase for every tool that ran: that is how the session rule learns a source was read.
@@ -76,17 +127,32 @@ The approval is single-use, expires after an hour, and is bound to the tool's na
 ## What to know
 
 - **It fails closed.** No server, a wrong key, nothing configured (503), a policy that failed closed (500), an unknown decision, or an argument that is not JSON: each is an `OpenScriptException`, thrown before the agent or tool runs.
-- **Two round trips per guarded call**, one per phase.
+- **Two round trips per guarded call**, one per phase: 4.7 ms p50 for an agent call on the local box, measured below.
 - **The session rule's memory is in the server process.** What a session has read is remembered per session id by the one `SessionTaintPolicy` the server built. Run one worker, or sessions will forget.
 - **Approvals live in the server's store**, shared with `/v1/approvals`: in memory unless the server has `REDIS_URL`.
 - **It sees each call, not the agent's reasoning.** Like the Python wrappers, it sees an agent's input and final output, and each tool call you wrap. A tool you do not wrap is not guarded.
 - **The approval used on the input is spent there.** The output phase is checked on its own. None of the built-in policies asks for approval on the way out.
+
+## Speed
+
+`make java-latency` times guarded calls against the real server with `guard_example.yaml`. On 2026-10-20, with the server (one worker), its Postgres and the client all on one WSL box (AMD Ryzen 5 5625U), 2,000 runs after 300 warm-up:
+
+| Call | Requests | p50 | p95 |
+|---|---|---|---|
+| `checkInput` (1.3 ms of it in the policies) | 1 | 3.4 ms | 5.2 ms |
+| `SecureAgent.invoke` | 2 | 4.7 ms | 6.6 ms |
+| `SecureTool.call`, allowed | 2 | 3.3 ms | 4.4 ms |
+| Guarded stream, 1,020 characters in 4-character chunks | 130 | 196 ms | 235 ms |
+| The same with `withMinRelease(256)` | 4 | 9.3 ms | 12.1 ms |
+
+Over a network, add the network's round trip per request. The method and the full table are in [`docs/metrics.md`](../../docs/metrics.md#the-java-client-per-call).
 
 ## Tests
 
 ```bash
 make java-test     # the client against a stub server
 make java-live     # against the real policies: starts the server with guard_example.yaml (needs Postgres)
+make java-latency  # the timings above (needs Postgres; RUNS=2000 WARMUP=300)
 ```
 
 `make java-live` fails if the live tests were skipped. CI runs it with a Postgres service.

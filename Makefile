@@ -269,3 +269,7 @@ java-test:  ## Build the Java client and run its tests against a stub server
 .PHONY: java-live
 java-live:  ## Run the Java client's tests against the real policies (starts the server; needs Postgres)
 	PYTHON=$(PYTHON) MVN=$(MVN) bash tools/java_live_check.sh
+
+.PHONY: java-latency
+java-latency:  ## Time guarded Java calls against the real server (needs Postgres; RUNS=2000 WARMUP=300)
+	PYTHON=$(PYTHON) MVN=$(MVN) bash tools/java_live_check.sh --latency $(or $(RUNS),2000) $(or $(WARMUP),300)

@@ -9,7 +9,16 @@
 # process.
 #
 #   PYTHON=.venv/bin/python MVN=mvn bash tools/java_live_check.sh
+#
+# With --latency [RUNS] [WARMUP], it runs LatencyBenchmark against the same
+# server instead of the tests, and prints its tables.
 set -euo pipefail
+
+MODE=test
+if [[ "${1:-}" == "--latency" ]]; then
+  MODE=latency
+  shift
+fi
 
 cd "$(dirname "$0")/.."
 PYTHON="${PYTHON:-python}"
@@ -46,6 +55,13 @@ curl -sf "${OPENSCRIPT_SERVER_URL}/health" >/dev/null || {
 }
 
 cd clients/java
+if [[ "$MODE" == latency ]]; then
+  "$MVN" -B -q test-compile
+  java -cp target/classes:target/test-classes \
+    io.github.saintparish4.openscript.LatencyBenchmark \
+    "$OPENSCRIPT_SERVER_URL" "$OPENSCRIPT_API_KEY" "$@"
+  exit 0
+fi
 "$MVN" -B -q test
 # Surefire reports skips quietly. A live run that skipped is not a live run.
 if grep -q 'Skipped: [1-9]' target/surefire-reports/*LiveServerTest.txt; then
