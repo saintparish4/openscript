@@ -123,3 +123,6 @@ site/tsconfig.tsbuildinfo
 # files already being tracked.
 !site/public/wheels/
 !site/public/wheels/**
+
+# Java client build output
+clients/java/target/

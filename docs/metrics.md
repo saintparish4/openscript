@@ -549,6 +549,46 @@ schemas. On the same box under a load average of 10 to 20, from processes not
 part of this measurement, the p95 of `pre-tool-use` reached 366 ms: quote the
 quiet figure with that caveat, not without it.
 
+### The Java client, per call
+
+`make java-latency` (`LatencyBenchmark` in `clients/java`), 2026-10-20. The
+client's wall clock around each whole call, with an agent or tool that returns
+at once, so what is timed is the guard: the requests, the policies, HTTP and
+JSON. The server's own time in the pipeline is the last column, to separate
+the two. No budget was set for these; they are a measurement, not a gate.
+
+How it was run: the real server (`uvicorn server.app:app`, one worker, Python
+3.14.0) with `server/guard_example.yaml` (agent list: prompt injection,
+toxicity, harmful request, secrets, PII, audit; tool list: firewall, session
+rule, audit), its event store in a local Postgres 16, and the client on Java
+27.0.1, all three on the local WSL box (AMD Ryzen 5 5625U, 8 threads) over
+localhost. 2,000 runs after 300 warm-up for single calls; 100 after 15 for
+streams. Percentiles are nearest-rank. The load average was 2.4 to 3.1, most
+of it the measured processes themselves; a second run agreed within about 10%.
+
+| Call | Requests | p50 | p95 | p99 | Server pipeline p50 |
+|---|---|---|---|---|---|
+| `checkInput`, a clean prompt | 1 | 3.4 ms | 5.2 ms | 6.9 ms | 1.3 ms |
+| `SecureAgent.invoke` | 2 | 4.7 ms | 6.6 ms | 8.4 ms | |
+| `SecureTool.call`, allowed | 2 | 3.3 ms | 4.4 ms | 5.3 ms | |
+| `SecureTool.call`, refused by the firewall | 1 | 1.7 ms | 2.7 ms | 3.5 ms | |
+| Stream, buffer, 1,020 characters in 4-character chunks | 2 | 5.1 ms | 6.8 ms | 7.8 ms | |
+| Stream, passthrough, the same | 2 | 5.1 ms | 6.7 ms | 7.0 ms | |
+| Stream, guarded, the same | 130 | 196 ms | 235 ms | 277 ms | |
+| Stream, guarded with `withMinRelease(256)`, the same | 4 | 9.3 ms | 12.1 ms | 12.7 ms | |
+
+Of a 3.4 ms check, 1.3 ms is the policies; the rest is the request. Guarded
+streaming at its default asks the server once per chunk once the 512-character
+window is full, as Python's guarded mode scans once per chunk in process: over
+HTTP that is 130 requests for this answer. Holding back 256 characters more
+before each scan made it 4 requests and 9.3 ms, with the same guarantee, since
+that depends only on the window; the cost is that text arrives in larger,
+later pieces.
+
+Throughput, `SecureAgent` with two requests per call, against one server
+worker: 204 calls per second one after another, 277 with `invokeAsync` and 4
+in flight, 305 with 16 in flight.
+
 ## The demo, on real devices
 
 | What | Number | How |
@@ -578,6 +618,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-10-20 | The Java client measured against the real server on the local box: 3.4 ms p50 for one check (1.3 ms of it the policies), 4.7 ms for a guarded agent call (two requests); guarded streaming 196 ms for a 1,020-character answer at one request per chunk, 9.3 ms when it holds back 256 characters more |
 | 2026-10-15 | Close-out: speed re-measured (input policies 0.05 to 0.7 ms p50 natively; the gallery 5.3 ms p50 under Pyodide on CI, now twenty-one prompts; the Claude Code hook 144 ms before a call and 68 ms after), and the demo recorded |
 | 2026-10-15 | `known=` now holds a listed tool called with none of its destination arguments unless it is listed in `updates`: no destination is not a known one. The replay as shipped: 44 of 97 ordinary tasks needing a person instead of 42 (two workspace tasks that create an event with no participants), still no attacker call let through |
 | 2026-10-15 | A candidate measured and not adopted: counting destinations the user named as known brings the session rule to 30 of 97 ordinary tasks, under a third, but Slack stays at 14 of 21 and 21 travel attacks get through, 20 of them a calendar event with no participants. The session rule stays as it is |

@@ -256,3 +256,20 @@ extension-check: extension extension/node_modules  ## Drive the extension's agen
 .PHONY: extension-fixture
 extension-fixture:  ## Serve the two local sites the extension's agent acts on (:8090 vendor, :8091 collect)
 	node extension/fixture/serve.mjs
+
+# ── Java client ───────────────────────────────────────────────────────────────
+
+MVN ?= mvn
+
+.PHONY: java-test
+java-test:  ## Build the Java client and run its tests against a stub server
+	cd clients/java && $(MVN) -B -q test
+	@grep -h 'Tests run' clients/java/target/surefire-reports/*.txt
+
+.PHONY: java-live
+java-live:  ## Run the Java client's tests against the real policies (starts the server; needs Postgres)
+	PYTHON=$(PYTHON) MVN=$(MVN) bash tools/java_live_check.sh
+
+.PHONY: java-latency
+java-latency:  ## Time guarded Java calls against the real server (needs Postgres; RUNS=2000 WARMUP=300)
+	PYTHON=$(PYTHON) MVN=$(MVN) bash tools/java_live_check.sh --latency $(or $(RUNS),2000) $(or $(WARMUP),300)
