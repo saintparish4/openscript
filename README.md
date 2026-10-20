@@ -116,7 +116,7 @@ openscript/
 ├── web/                      a bare Pyodide probe page and its headless check
 ├── evals/                    labelled corpora and run.py; agentdojo/ is the benchmark harness
 ├── demo/                     a terminal walkthrough of the pipeline
-├── tools/                    policy audit, browser wheel builds, hook latency
+├── tools/                    policy audit, browser wheel builds, hook latency, the Java client's live check
 ├── tests/                    the test suite
 └── docs/                     guide.md (the full reference), metrics.md (every number), the demo recording
 ```
@@ -131,6 +131,7 @@ openscript/
   - **Node.js** and npm, to build the demo site or the extension.
   - **Chrome or Chromium**, to load the extension.
   - **[uv](https://docs.astral.sh/uv/)**, for the AgentDojo harness, which keeps its own Python 3.13 environment.
+  - **Java 17 or newer** and **Maven**, for the Java client in `clients/java`.
 
 ### Installation
 
@@ -392,6 +393,7 @@ For the server, `cp .env.example .env` (or `make env`) gives a working starting 
 | `.claude/openscript.yaml` | The Claude Code hook: rules, session sources and sinks, redaction, audit | [`sdk/hooks/claude_code_example.yaml`](sdk/hooks/claude_code_example.yaml) |
 | `.claude/settings.json` | Which Claude Code tool calls go through the hook | [`sdk/hooks/settings_example.json`](sdk/hooks/settings_example.json) |
 | `.env` | The server | [`.env.example`](.env.example) |
+| `guard.yaml`, named by `OPENSCRIPT_GUARD_CONFIG` | The policies `/v1/guard` runs for the Java client: an `agent` list and a `tool` list | [`server/guard_example.yaml`](server/guard_example.yaml) |
 
 Every rule file is validated strictly, so a misspelt key fails at load instead of being quietly ignored.
 
@@ -419,7 +421,7 @@ ruff check . && black --check .   # lint and format
 mypy --strict sdk/ contracts/     # type-check
 ```
 
-If you touch `sdk/policies/` or `sdk/interceptors/`, also run `pytest tests/test_audit.py tests/test_pyodide_compat.py`. Every built-in policy must stay pure local and importable under Pyodide, because the browser demo runs it with no backend. [CONTRIBUTING.md](CONTRIBUTING.md) has the full checklist, including how to add a policy.
+If you touch `sdk/policies/` or `sdk/interceptors/`, also run `pytest tests/test_audit.py tests/test_pyodide_compat.py`. Every built-in policy must stay pure local and importable under Pyodide, because the browser demo runs it with no backend. If you touch `clients/java/` or the server's `/v1/guard`, run `make java-test`, and `make java-live` with Postgres up: CI runs the Java client against the real server and fails if those tests were skipped. [CONTRIBUTING.md](CONTRIBUTING.md) has the full checklist, including how to add a policy.
 
 Report bugs through [GitHub Issues](https://github.com/saintparish4/openscript/issues), with the policy, the input that misbehaved, and what you expected instead.
 
