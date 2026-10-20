@@ -264,6 +264,7 @@ MVN ?= mvn
 .PHONY: java-test
 java-test:  ## Build the Java client and run its tests against a stub server
 	cd clients/java && $(MVN) -B -q test
+	@grep -h 'Tests run' clients/java/target/surefire-reports/*.txt
 
 .PHONY: java-live
 java-live:  ## Run the Java client's tests against the real policies (starts the server; needs Postgres)
