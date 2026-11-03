@@ -8,7 +8,7 @@ it turns the expected failure into a passing test.
 
 | ID | Found by | What gets through | Status |
 |---|---|---|---|
-| B1 | State machine, `tests/bypass/test_state_machine.py` | An approval a person gave in one session redeems the identical call in another, tainted session | **Open** |
+| B1 | State machine, `tests/bypass/test_state_machine.py` | An approval a person gave in one session redeems the identical call in another, tainted session | **Fixed.** An approval is redeemed only in the session and by the agent it was asked for. The state machine now passes |
 | B2 | State machine and failure injection | With the default in-process memory, a restart or a second worker forgets what a session read, and the next sink runs unheld | **Open by configuration.** Pass a `store` the workers share. Tested both ways |
 | B3 | Observer, `tests/bypass/test_mediation.py` | An SDK agent with a code tool that is not listed as a sink reaches the sink's host after a read | **Open** |
 | B4 | Observer | Under the example hook settings, a Bash command reaches the sink's host after a web read, while the gated MCP call is held | **Open** |

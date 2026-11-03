@@ -177,20 +177,11 @@ SETTINGS = settings(
 )
 
 
-#: Found by this machine, reported in docs/red-team.md before it was fixed.
-B1 = pytest.mark.xfail(
-    strict=True,
-    reason="B1: an approval given in one session redeems the identical call in another",
-)
-
-
-@B1
 def test_with_memory_on_disk_every_effect_in_a_tainted_session_was_approved_for_it():
     _machine("file", restarts=True).TestCase.settings = SETTINGS
     _machine("file", restarts=True).TestCase().runTest()
 
 
-@B1
 def test_with_memory_in_the_process_and_no_restart_the_same_holds():
     _machine("memory", restarts=False).TestCase.settings = SETTINGS
     _machine("memory", restarts=False).TestCase().runTest()
