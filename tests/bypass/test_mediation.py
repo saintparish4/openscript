@@ -174,17 +174,51 @@ def _bash_after_a_read(cc: ClaudeCode, sink: Sink) -> dict[str, str]:
     }
 
 
-@pytest.mark.xfail(
-    strict=True, reason="B4: under the example settings, Bash reaches the sink after a read"
-)
-def test_under_the_example_hook_the_sink_is_reached_only_through_the_gated_tool(
+def test_under_the_default_profile_bash_after_a_read_reaches_the_sink_as_documented(
     tmp_path: Path, sink: Sink
 ):
+    """B4, open by choice in the default profile: Bash is not held after a
+    read, because in a coding session that would ask on nearly every command.
+    This test holds the docs to what happens."""
     cc = ClaudeCode(tmp_path, HOOKS / "settings_example.json", EXAMPLE)
     with observing(sink.port) as seen:
         outcome = _bash_after_a_read(cc, sink)
-    assert outcome["gated"] == "asked, refused"
-    assert seen.outside_the_gated_tool() == [] and sink.hits == []
+    assert outcome == {"read": "ran", "gated": "asked, refused", "bash": "ran"}
+    assert seen.outside_the_gated_tool() and sink.hits == ["/send"]
+
+
+STRICT = yaml.safe_load((HOOKS / "claude_code_strict_example.yaml").read_text())
+STRICT["session"]["sinks"].append("mcp__bank__send")
+
+
+def test_under_the_strict_profile_the_sink_is_reached_only_through_the_gated_tool(
+    tmp_path: Path, sink: Sink
+):
+    """B4's fix: the strict profile holds Bash after a read, and the person
+    refuses it as they refuse the gated call."""
+    cc = ClaudeCode(tmp_path, HOOKS / "settings_strict_example.json", STRICT)
+    with observing(sink.port) as seen:
+        outcome = _bash_after_a_read(cc, sink)
+    assert outcome == {"read": "ran", "gated": "asked, refused", "bash": "asked, refused"}
+    assert (seen.events, sink.hits) == ([], [])
+
+
+def test_the_strict_profile_is_valid_and_its_matcher_sends_every_tool_it_names(tmp_path: Path):
+    settings = json.loads((HOOKS / "settings_strict_example.json").read_text())["hooks"]
+    pre = re.compile(settings["PreToolUse"][0]["matcher"])
+    for name in STRICT["session"]["sinks"] + STRICT["session"]["sources"]:
+        assert pre.search(name.rstrip("*") + ("tool" if name.endswith("*") else "")), name
+    assert settings["PreToolUse"][0]["hooks"][0]["command"].endswith("|| exit 2")
+    config = tmp_path / "strict.yaml"
+    config.write_text((HOOKS / "claude_code_strict_example.yaml").read_text())
+    check = subprocess.run(
+        [sys.executable, "-m", "sdk.hooks.claude_code", "--config", str(config), "check"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env={**os.environ, "OPENSCRIPT_STATE_DIR": str(tmp_path / "state")},
+    )
+    assert check.returncode == 0 and "warning" not in check.stderr, check.stderr
 
 
 def test_the_agent_cannot_switch_the_hook_off_by_writing_its_cache(tmp_path: Path, sink: Sink):
