@@ -75,10 +75,16 @@ def observing(port: int) -> Iterator[Observer]:
 
 
 class Sink:
-    """The service an irreversible call reaches: it counts every hit."""
+    """The service an irreversible call reaches: it counts every hit.
 
-    def __init__(self) -> None:
+    With a *ledger* it is also the effect side of evals/ledger.py: a hit is
+    applied only with a valid token in its ``token`` query parameter.
+    """
+
+    def __init__(self, ledger: Any = None) -> None:
         self.hits: list[str] = []
+        self.applied: list[str] = []
+        self._ledger = ledger
         sink = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -87,6 +93,13 @@ class Sink:
 
             def _hit(self) -> None:
                 sink.hits.append(self.path)
+                path, _, query = self.path.partition("?")
+                token = dict(p.split("=", 1) for p in query.split("&") if "=" in p).get("token")
+                if (
+                    sink._ledger is None
+                    or sink._ledger.check("send", {"path": path}, token).applied
+                ):
+                    sink.applied.append(self.path)
                 self.send_response(200)
                 self.send_header("Content-Length", "2")
                 self.end_headers()

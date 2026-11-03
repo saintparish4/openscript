@@ -24,6 +24,7 @@ import pytest
 import yaml
 
 from contracts.types import ActionBlockedError
+from evals.ledger import Ledger, TokenClass
 from sdk import SecureTool, SessionTaintPolicy
 
 from .observer import IN_GATED_TOOL, Sink, observing
@@ -79,11 +80,26 @@ def _sdk_turn(sink: Sink, sinks: list[str]) -> None:
     asyncio.run(turn())
 
 
-@pytest.mark.xfail(strict=True, reason="B3: a code tool that is not a sink reaches the sink's host")
-def test_an_sdk_agent_reaches_the_sink_only_through_the_gated_tool(sink: Sink):
+def test_a_code_tool_that_is_not_a_sink_reaches_the_host_as_documented(sink: Sink):
+    """B3, open by configuration: the session rule holds what is listed. A
+    code tool can do whatever the process can, so it has to be listed."""
     with observing(sink.port) as seen:
         _sdk_turn(sink, sinks=["bank_send"])
-    assert seen.outside_the_gated_tool() == [] and sink.hits == []
+    assert seen.outside_the_gated_tool() == [f"socket.connect 127.0.0.1:{sink.port}"]
+    assert sink.hits == ["/send"]
+
+
+def test_with_the_effect_side_in_front_the_code_tool_reaches_the_host_and_changes_nothing():
+    """B3 at the effect side: the same hit, refused there, because no person's
+    token came with it. The ledger's own record is the evidence."""
+    ledger = Ledger(mode="enforce")
+    guarded = Sink(ledger=ledger)
+    try:
+        _sdk_turn(guarded, sinks=["bank_send"])
+    finally:
+        guarded.close()
+    assert guarded.hits == ["/send"] and guarded.applied == []
+    assert [(e.token, e.applied) for e in ledger.entries] == [(TokenClass.NONE, False)]
 
 
 def test_with_the_code_tool_listed_as_a_sink_nothing_reaches_the_host(sink: Sink):
