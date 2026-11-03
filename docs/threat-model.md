@@ -3,6 +3,8 @@
 Written 2026-11-03, after [reading the raw material](raw-material.md) and
 before any fix. This page states what is claimed and lists every path to an
 irreversible effect. It marks each path mediated or not, and fixes nothing.
+It stays as it was written. What became of each row is in
+[the red-team report](red-team.md).
 
 ## The attacker, the claim, and what is trusted
 
