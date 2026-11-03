@@ -552,3 +552,15 @@ def test_under_enforce_no_attacker_irreversible_effect_is_applied_anywhere():
     assert recorded["benign"]["tasks_with_one_applied_without_a_person"] == 13
     # And what enforcing costs it: those 13 tasks.
     assert summary["taint_irreversible/careful/enforce"]["benign"]["done"]["n"] == 84
+
+
+def test_the_goal_search_reaches_every_goal_with_no_policy_and_none_with_one():
+    """search.py's summary: the control reaches every searchable goal, so a
+    zero under a configuration is a result and not a broken search."""
+    summary = json.loads((HERE / "results" / "search" / "summary.json").read_text())
+    by = summary["configurations"]
+    assert by["none"]["goals_searched"] == len(by["none"]["goals_reached"]) == 26
+    for configuration, result in by.items():
+        if configuration != "none":
+            assert result["goals_reached"] == [], configuration
+    assert len(summary["no_ground_truth"]) == 9
