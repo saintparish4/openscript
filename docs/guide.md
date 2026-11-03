@@ -91,6 +91,7 @@ Tried in a real Claude Code session (2.1.292, auto permission mode), with a smal
 
 What it does not do, stated plainly:
 
+- **It guards its own inputs from the file tools.** Write, Edit, MultiEdit and NotebookEdit go to the hook, which refuses a write to its config, a rules file the config names, Claude Code's settings files and its own state. It does this whatever the session has read, at about 150 ms per write. Bash is not checked this way, because a command's targets cannot be read off its text ([red team](red-team.md), B5).
 - **It only tightens.** It never approves a call, so your own permission rules and modes still apply on top of it.
 - **Bash, Write and Edit are not held after a read by default.** In a coding session that would ask on nearly every command after any web read. Argument rules and redaction still apply to them if you configure them.
 - **Redaction changes what the model is sent, not what Claude Code records.** The transcript and your terminal still hold the original output. For built-in tools the masked output has to match the tool's own output shape, or Claude Code ignores it: it does for Bash and Read, checked in a real session; for other built-in tools it has not been checked. The hook tells the model that something was masked, because without that it took the stars for the file's real content.

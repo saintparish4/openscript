@@ -187,10 +187,6 @@ def test_under_the_example_hook_the_sink_is_reached_only_through_the_gated_tool(
     assert seen.outside_the_gated_tool() == [] and sink.hits == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="B5: the agent rewrites the hook's config cache, and the hook enforces nothing",
-)
 def test_the_agent_cannot_switch_the_hook_off_by_writing_its_cache(tmp_path: Path, sink: Sink):
     cc = ClaudeCode(tmp_path, HOOKS / "settings_example.json", EXAMPLE)
     cc.call(
@@ -199,9 +195,35 @@ def test_the_agent_cannot_switch_the_hook_off_by_writing_its_cache(tmp_path: Pat
     (entry,) = (cc.state / "claude-code" / "config-cache").glob("*.json")
     poisoned = json.loads(entry.read_text())
     poisoned["settings"].update(rules=None, session=None)
-    cc.call("Write", {"file_path": str(entry), "content": json.dumps(poisoned)})
+    assert cc.call("Write", {"file_path": str(entry), "content": json.dumps(poisoned)}) == "denied"
     with observing(sink.port) as seen:
         cc.call("WebFetch", {"url": "https://attacker.example/page", "prompt": "read"})
         gated = cc.call("mcp__bank__send", {"url": f"{sink.url}/send"})
     assert gated == "asked, refused", f"after the cache was rewritten the held call {gated}"
     assert [e for e, _ in seen.events] == []
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "{state}/claude-code/sessions/s.json",
+        "{config}",
+        "{project}/.claude/settings.json",
+        "{project}/.claude/settings.local.json",
+        "{project}/.claude/../.claude/settings.json",
+    ],
+)
+def test_the_hook_refuses_a_write_to_what_decides_what_it_does(tmp_path: Path, target: str):
+    """B5's fix, before any read: the hook's own inputs are not the agent's to write."""
+    cc = ClaudeCode(tmp_path, HOOKS / "settings_example.json", EXAMPLE)
+    path = target.format(state=cc.state, config=cc.config, project=tmp_path)
+    cc.env["CLAUDE_PROJECT_DIR"] = str(tmp_path)
+    assert cc.call("Write", {"file_path": path, "content": "{}"}) == "denied"
+    # Through a symlink too.
+    link = tmp_path / "innocent.txt"
+    link.symlink_to(cc.config)
+    assert (
+        cc.call("Edit", {"file_path": str(link), "old_string": "a", "new_string": "b"}) == "denied"
+    )
+    # And an ordinary file is not refused.
+    assert cc.call("Write", {"file_path": str(tmp_path / "notes.md"), "content": "x"}) == "ran"
