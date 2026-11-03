@@ -45,6 +45,8 @@ FROZEN = {
     # Holding only what cannot be undone, frozen before any run of it.
     "PROTOCOL-irreversible.md": "30a147fb150d78121bde88a79a09807237e0a04a56510940b020a7383da42d2d",
     "irreversible.yaml": "46fdf2b6c69c504181f719383a19382a0176418f55b5bdb6d035688ac17fa58e",
+    # The effect side keeps the record, frozen before the ledger existed in code.
+    "PROTOCOL-ledger.md": "e23eba7478771ce8ac051f910e4459cb9743241c162d8d8c6e932364d5179678",
 }
 
 
