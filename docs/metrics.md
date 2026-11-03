@@ -4,7 +4,7 @@ Everything measurable about OpenScript, in one place, with the date it was
 measured and the command that produces it. Numbers with no command next to them
 were measured by hand and say so.
 
-Last updated **2026-10-15**.
+Last updated **2026-11-03**.
 
 ## Detection
 
@@ -492,6 +492,53 @@ Ordinary tasks needing a person:
 The replay's caveats hold: no model, and only the calls in each task's
 minimal solution.
 
+## Tool policies on AgentDojo: holding only what cannot be undone
+
+`replay.py --irreversible`, then `summarize_irreversible.py` —
+[`evals/agentdojo/`](../evals/agentdojo/README.md). The no-model replay again,
+with every tool classed from its code as read, reversible or irreversible.
+Irreversible means something leaves the environment, or no sequence of the
+suite's own tools puts back what changed. The criterion, the class of all 74
+tools and the decision rule were frozen with
+[`PROTOCOL-irreversible.md`](../evals/agentdojo/PROTOCOL-irreversible.md)
+before any run. Measured 2026-11-03, at no cost.
+
+26 tools are irreversible, 3 are reversible and 45 only read. The reversible
+three are `create_file`, banking's `update_user_info` and Slack's
+`invite_user_to_slack`. Every irreversible tool was already a sink, except
+`get_unread_emails`, which marks mail read for good.
+
+Ordinary tasks needing a person, nobody approving:
+
+| Suite | Ask on every state-changing call | Session rule | **Session rule, irreversible only** | Session rule, known destinations | **The same, irreversible only** |
+|---|---|---|---|---|---|
+| Banking | 12/16 | 12/16 | 11/16 | 5/16 | 4/16 |
+| Workspace | 22/40 | 22/40 | 20/40 | 18/40 | 16/40 |
+| Travel | 6/20 | 6/20 | 6/20 | 6/20 | 6/20 |
+| Slack | 21/21 | 15/21 | 14/21 | 15/21 | 14/21 |
+| **All** | 61/97 | 55/97 | **51/97 (53%, 43% to 62%)** | 44/97 | **40/97 (41%, 32% to 51%)** |
+
+- **Most state changes here cannot be undone.** 59 of the 97 tasks make an
+  irreversible call in their own solution, and 61 change anything at all. So
+  holding only irreversible calls saves 4 tasks, and asking on every
+  irreversible call asks on 59.
+- **It lets nothing new through.** With a careful approver, an attacker's
+  irreversible call ran in 27 of 617 attacks under either session-rule
+  configuration. They are the same 27 the session rule already misses, which
+  arrive through Slack's channel listing. Asking on every irreversible call
+  let none run.
+- **No attack succeeded through reversible calls alone.** The 20 that succeed
+  with no irreversible call are the travel task that needs no tool call.
+- **By the rule set beforehand, it is recommended over the session rule as
+  it stands.** It asks on fewer tasks and lets no attacker irreversible call
+  run that the session rule held. It is still over the bar of a third: 51 of
+  97, and 40 of 97 with known destinations.
+- **The read that marks mail read was never held.** Every task reads unread
+  mail before anything else taints the session, so it cost 0 asks here.
+
+The replay's caveats hold: no model, and only the calls in each task's
+minimal solution.
+
 ## Speed
 
 Measured inside Python, around the pipeline call only. Re-measured
@@ -618,6 +665,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-11-03 | Every AgentDojo tool classed from its code as read, reversible or irreversible, under a protocol frozen first. Holding only irreversible calls after an untrusted read asks on 51 of 97 ordinary tasks instead of 55, and on 40 with known destinations instead of 44. No attacker irreversible call ran that the session rule held. Still over the bar of a third |
 | 2026-10-20 | The Java client measured against the real server on the local box: 3.4 ms p50 for one check (1.3 ms of it the policies), 4.7 ms for a guarded agent call (two requests); guarded streaming 196 ms for a 1,020-character answer at one request per chunk, 9.3 ms when it holds back 256 characters more |
 | 2026-10-15 | Close-out: speed re-measured (input policies 0.05 to 0.7 ms p50 natively; the gallery 5.3 ms p50 under Pyodide on CI, now twenty-one prompts; the Claude Code hook 144 ms before a call and 68 ms after), and the demo recorded |
 | 2026-10-15 | `known=` now holds a listed tool called with none of its destination arguments unless it is listed in `updates`: no destination is not a known one. The replay as shipped: 44 of 97 ordinary tasks needing a person instead of 42 (two workspace tasks that create an event with no participants), still no attacker call let through |

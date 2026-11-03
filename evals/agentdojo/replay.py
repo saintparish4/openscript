@@ -9,6 +9,7 @@ the numbers do and do not mean; it was committed before this file produced any.
     .venv/bin/python replay.py --check        # the undefended baseline only
     .venv/bin/python replay.py                # everything, into results/
     .venv/bin/python replay.py --known        # PROTOCOL-known.md's runs, into results/known/
+    .venv/bin/python replay.py --irreversible # PROTOCOL-irreversible.md's runs, into results/irreversible/
 
 Run from this directory, in the environment README.md describes.
 """
@@ -43,9 +44,11 @@ from agentdojo.task_suite.task_suite import TaskSuite  # noqa: E402
 from agentdojo.types import text_content_block_from_string  # noqa: E402
 from guard import (  # noqa: E402
     APPROVERS,
+    IRREVERSIBLE_CONFIGURATIONS,
     GuardedRuntime,
     known_for,
     load_classification,
+    load_irreversible,
     policies_for,
 )
 
@@ -74,6 +77,17 @@ KNOWN_RUNS = (("taint_known", "nobody"), ("taint_known", "careful"))
 DIRECTORY_RUNS = (("taint_directory", "nobody"), ("taint_directory", "careful"))
 NAMED_RUNS = (("taint_named", "nobody"), ("taint_named", "careful"))
 SHIPPED_RUNS = (("taint_known_shipped", "nobody"), ("taint_known_shipped", "careful"))
+#: PROTOCOL-irreversible.md's runs.
+IRREVERSIBLE_RUNS = tuple(
+    (configuration, approver)
+    for configuration in IRREVERSIBLE_CONFIGURATIONS
+    for approver in ("nobody", "careful")
+)
+#: The columns those runs add. Benign: the task's own irreversible calls, and
+#: how many of its reads of unread mail were held. Attack: the attacker's
+#: irreversible calls that ran, which is what the claim is about.
+IRREVERSIBLE_BENIGN_FIELDS = ["irreversible_calls", "held_unread"]
+IRREVERSIBLE_ATTACK_FIELDS = ["inj_irreversible", "inj_irreversible_ran"]
 
 BENIGN_FIELDS = [
     "suite",
@@ -176,6 +190,7 @@ def replay(
     policies = policies_for(configuration, lists, known, user_task.PROMPT, suite.name)
     runtime = GuardedRuntime(suite.tools, policies=policies, approver=APPROVERS[approver])
     taint = next((p for p in policies if isinstance(p, SessionTaintPolicy)), None)
+    irreversible = set(_irreversible()[suite.name])
 
     compromised = False
     delivered_by = ""
@@ -217,6 +232,11 @@ def replay(
     }
     if injection_task is None:
         row["sink_calls"] = sum(entry.function in lists["sinks"] for entry in mine)
+        row["irreversible_calls"] = sum(call.function in irreversible for call in user_calls)
+        row["held_unread"] = sum(
+            entry.function == "get_unread_emails" and entry.status in ("held", "approved")
+            for entry in mine
+        )
         return row
     row.update(
         injection_task=injection_task.ID,
@@ -227,6 +247,8 @@ def replay(
         inj_sinks=sum(call.function in lists["sinks"] for call in attacker_calls),
         inj_ran=sum(entry.ran for entry in theirs),
         inj_stopped=sum(not entry.ran for entry in theirs),
+        inj_irreversible=sum(call.function in irreversible for call in attacker_calls),
+        inj_irreversible_ran=sum(entry.ran and entry.function in irreversible for entry in theirs),
         security=int(
             suite._check_injection_task_security(injection_task, output, before, env, trace)
         ),
@@ -246,6 +268,11 @@ def _interleave(
 @cache
 def _classification() -> dict[str, dict[str, list[str]]]:
     return load_classification()
+
+
+@cache
+def _irreversible() -> dict[str, list[str]]:
+    return load_irreversible()
 
 
 @cache
@@ -272,6 +299,8 @@ def task_rows(job: tuple[str, str, str]) -> tuple[list[dict[str, Any]], list[dic
         runs = NAMED_RUNS
     elif mode == "shipped":
         runs = SHIPPED_RUNS
+    elif mode == "irreversible":
+        runs = IRREVERSIBLE_RUNS
     else:
         runs = RUNS
 
@@ -328,8 +357,19 @@ def run(suites: list[str], out: Path, mode: str, limit: int | None, jobs: int) -
         (out / f"attack{suffix}.csv").open("w", newline="") as attack_file,
         ProcessPoolExecutor(max_workers=jobs) as pool,
     ):
-        benign = csv.DictWriter(benign_file, BENIGN_FIELDS, lineterminator="\n")
-        attack = csv.DictWriter(attack_file, ATTACK_FIELDS, lineterminator="\n")
+        extra = mode == "irreversible"
+        benign = csv.DictWriter(
+            benign_file,
+            BENIGN_FIELDS + (IRREVERSIBLE_BENIGN_FIELDS if extra else []),
+            lineterminator="\n",
+            extrasaction="ignore",
+        )
+        attack = csv.DictWriter(
+            attack_file,
+            ATTACK_FIELDS + (IRREVERSIBLE_ATTACK_FIELDS if extra else []),
+            lineterminator="\n",
+            extrasaction="ignore",
+        )
         benign.writeheader()
         attack.writeheader()
         # map() hands results back in the order the work was given, so the
@@ -350,13 +390,21 @@ def main() -> int:
     parser.add_argument(
         "--shipped", action="store_true", help="known destinations as the package ships them"
     )
+    parser.add_argument(
+        "--irreversible", action="store_true", help="PROTOCOL-irreversible.md's runs"
+    )
     parser.add_argument("--limit", type=int, default=None, help="user tasks per suite (debugging)")
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1, help="worker processes")
     args = parser.parse_args()
-    modes = {"check": args.check, "known": args.known, "named": args.named}
+    modes = {
+        "check": args.check,
+        "known": args.known,
+        "named": args.named,
+        "irreversible": args.irreversible,
+    }
     mode = next((m for m, on in modes.items() if on), "shipped" if args.shipped else "all")
     out = args.out
-    if out == HERE / "results" and mode in ("known", "named", "shipped"):
+    if out == HERE / "results" and mode in ("known", "named", "shipped", "irreversible"):
         # The committed rows are never overwritten.
         out = HERE / "results" / ("known-shipped" if mode == "shipped" else mode)
     run(args.suites, out, mode, args.limit, args.jobs)
