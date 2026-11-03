@@ -14,7 +14,9 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 
+import pytest
 import yaml
 
 HERE = Path(__file__).resolve().parents[1] / "evals" / "agentdojo"
@@ -40,6 +42,9 @@ FROZEN = {
     "PROTOCOL-named.md": "81cd62a163d8822535f3740813a27f9eab33e4bd3880a2587ed4dd595644039d",
     "named.yaml": "9319ba2094ce356fa705bf71fb42e5e4f5a36298e1e832a8358ec9d8ba59f140",
     "named.py": "b8672ba856fd864a0ac358fb29f0c6fabca4ae45700087990bcae317d984be50",
+    # Holding only what cannot be undone, frozen before any run of it.
+    "PROTOCOL-irreversible.md": "30a147fb150d78121bde88a79a09807237e0a04a56510940b020a7383da42d2d",
+    "irreversible.yaml": "46fdf2b6c69c504181f719383a19382a0176418f55b5bdb6d035688ac17fa58e",
 }
 
 
@@ -444,3 +449,35 @@ def test_every_suites_known_lists_are_accepted_by_the_session_rule():
         sinks=lists["slack"]["sinks"],
         known=known["directory"]["slack"],
     )
+
+
+def _irreversible() -> dict[str, dict[str, Any]]:
+    suites: dict[str, dict[str, Any]] = yaml.safe_load((HERE / "irreversible.yaml").read_text())[
+        "suites"
+    ]
+    return suites
+
+
+def test_every_tool_is_classed_once_as_read_reversible_or_irreversible():
+    total = 0
+    for suite, classes in _irreversible().items():
+        names = [*classes["irreversible"], *classes["reversible"], *classes["read"]]
+        assert len(names) == len(set(names)), f"{suite} lists a tool twice"
+        total += len(names)
+    assert total == 74
+
+
+def test_the_irreversible_classes_name_the_suites_own_tools():
+    suites = pytest.importorskip("agentdojo.task_suite.load_suites").get_suites("v1.2.2")
+    for suite, classes in _irreversible().items():
+        listed = {*classes["irreversible"], *classes["reversible"], *classes["read"]}
+        assert listed == {tool.name for tool in suites[suite].tools}, suite
+
+
+def test_everything_irreversible_that_changes_state_was_already_a_sink():
+    """The new list holds nothing the old one did not, but one read that
+    marks mail read: it can only ask less, except through that read."""
+    lists = yaml.safe_load((HERE / "classification.yaml").read_text())["suites"]
+    for suite, classes in _irreversible().items():
+        extra = set(classes["irreversible"]) - set(lists[suite]["sinks"])
+        assert extra == ({"get_unread_emails"} if suite == "workspace" else set()), suite
