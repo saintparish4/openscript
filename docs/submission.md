@@ -75,7 +75,7 @@ command) or **theoretical**.
 Everything here is free to rerun. It needs no API key.
 
 ```bash
-pip install -e . && pytest                          # 908 tests
+make install && .venv/bin/pytest                    # 908 tests
 make agentdojo-replay                               # the AgentDojo environment, then the replay
 cd evals/agentdojo
 .venv/bin/python replay.py --irreversible           # about a minute on 8 cores
