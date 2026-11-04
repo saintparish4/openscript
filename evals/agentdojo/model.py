@@ -64,7 +64,12 @@ class Profile:
 PROFILES: dict[str, Profile] = {
     "haiku": Profile("claude-haiku-4-5", input=1.00, output=5.00),
     "sonnet": Profile("claude-sonnet-5-5", input=2.00, output=10.00),
+    # Amendment 3: an open model on a pod of its own. Its requests cost
+    # nothing; the pod's hours are the cost, read from RunPod's billing.
+    "qwen": Profile("Qwen/Qwen2.5-7B-Instruct", input=0.0, output=0.0),
 }
+#: The profiles served through an OpenAI-compatible API (vLLM), not Anthropic's.
+OPEN_MODELS = frozenset({"qwen"})
 
 #: Where an assistant turn keeps the blocks exactly as the model wrote them.
 RAW = "anthropic_content"
@@ -307,3 +312,78 @@ class ScriptedAgent(BasePipelineElement):
             tool_calls=[FunctionCall(function=call.function, args=dict(call.args), id=f"c{turn}")],
         )
         return query, runtime, env, [*messages, message], extra_args
+
+
+class _Metered:
+    """An OpenAI client whose chat completions are counted on a Meter."""
+
+    def __init__(
+        self, client: Any, meter: Meter, on_request: Callable[[dict[str, Any]], None] | None
+    ) -> None:
+        self._client, self._meter, self._on_request = client, meter, on_request
+        self.chat = self
+        self.completions = self
+
+    def create(self, **request: Any) -> Any:
+        self._meter.check()
+        response = self._client.chat.completions.create(**request)
+        usage = response.usage
+        counted = type(
+            "Usage",
+            (),
+            {
+                "input_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+                "output_tokens": getattr(usage, "completion_tokens", 0) or 0,
+            },
+        )()
+        record = self._meter.add(
+            counted, response.choices[0].finish_reason if response.choices else None
+        )
+        if self._on_request is not None:
+            self._on_request(record)
+        return response
+
+
+class OpenModel(BasePipelineElement):
+    """An open model behind an OpenAI-compatible API, as an AgentDojo element.
+
+    AgentDojo's own OpenAI element does the work, at its default temperature
+    of 0. The endpoint and its key come from OPENSCRIPT_OPEN_MODEL_URL (the
+    base URL, ending in /v1) and OPENSCRIPT_OPEN_MODEL_KEY. Its name starts
+    with "local", so AgentDojo's attacks address it as a local model.
+    """
+
+    def __init__(
+        self,
+        profile: Profile,
+        meter: Meter,
+        client: Any = None,
+        on_request: Callable[[dict[str, Any]], None] | None = None,
+    ) -> None:
+        import os
+
+        from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM
+
+        if client is None:
+            import openai
+
+            client = openai.OpenAI(
+                base_url=os.environ["OPENSCRIPT_OPEN_MODEL_URL"],
+                api_key=os.environ["OPENSCRIPT_OPEN_MODEL_KEY"],
+                max_retries=8,
+                timeout=300,
+            )
+        self.name = f"local/{profile.model}"
+        self.profile = profile
+        self.meter = meter
+        self._inner = OpenAILLM(_Metered(client, meter, on_request), profile.model)  # type: ignore[arg-type]
+
+    def query(
+        self,
+        query: str,
+        runtime: FunctionsRuntime,
+        env: Env = _NO_ENV,
+        messages: Sequence[ChatMessage] = [],
+        extra_args: dict[str, Any] = {},  # noqa: B006 -- AgentDojo's own signature
+    ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict[str, Any]]:
+        return self._inner.query(query, runtime, env, messages, extra_args)

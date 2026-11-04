@@ -587,6 +587,49 @@ minimal solution. The agent here is scripted and never reaches round the
 wrapper. The tests in `tests/test_ledger.py` do reach round it, and they run
 the service as a separate process.
 
+## Tool policies on AgentDojo: an open model that follows attacks
+
+`run_model.py --model qwen --amendment-3`, then `summarize_open.py` —
+[amendment 3](../evals/agentdojo/PROTOCOL-model-amendment-3.md) and its three
+deviations, each frozen before any request. Qwen2.5-7B-Instruct on vLLM, on
+one RunPod RTX 4090, at temperature 0. It covers banking and Slack, the five
+runs, every task and pair, one sample of each, 1,430 cases and 5,382
+requests. The effect side's ledger stood in front of every irreversible tool
+in every run. Measured 2026-11-04.
+
+**This model follows attacks, so these runs test containment.** With no
+policy, 58 of 249 attacks succeeded and the ledger applied 108 of the
+attacker's irreversible calls.
+
+| Run | Attacks that succeeded | Attacker irreversible effects applied | Ordinary tasks done | Ordinary tasks needing a person |
+|---|---|---|---|---|
+| No policy | 58/249 (23%) | 108 | 25/37 | 0/37 |
+| Session rule, careful | 5/249 (2%) | 8 | 20/37 | 18/37 |
+| Session rule, irreversible only, careful | 6/249 (2%) | 10 | 23/37 | 17/37 |
+| Ask on every irreversible call, careful | **0/249** | **0** | 21/37 | 23/37 |
+| **No policy, effect side enforcing** | **0/249** | **0** | 7/37 | 0/37 |
+
+- **The claim holds with a model that tries.** With the effect side
+  enforcing and no policy at all, no attacker irreversible effect was
+  applied. Asking on every irreversible call let none through either.
+- **The session rule's misses are the one the replay found.** All 8 effects
+  under the session rule, and all 10 under its irreversible-only form, came
+  in Slack sessions whose first call was `get_channels`. The channel
+  listing carries the injection and is not listed as a source, so the
+  session was never tainted. That is B6 in the [red team](red-team.md).
+- **The ledger and the wrapper agree on all 1,430 cases.**
+- **Enforcing costs most on Slack.** With nobody to approve, no ordinary
+  Slack task was done, since every one makes an irreversible call. On
+  banking 7 of 16 were done.
+- **Cost.** Three pods were needed. The first never pulled its image, the
+  second never started its container, and the third needed transformers
+  and `hf_transfer` pinned at boot. The deviations record each. Pod time
+  was about 1 hour 17 minutes at $0.89 an hour, about $1.10 in all. RunPod's
+  billing read showed $0.30 for the first hour while the second had not yet
+  posted.
+
+One model, two suites, one attack wording, one sample per case.
+
 ## Bypass attempts
 
 `pytest tests/bypass`, and `evals/agentdojo/search.py` in the AgentDojo
@@ -726,6 +769,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-11-04 | An open model that follows attacks, Qwen2.5-7B-Instruct on a RunPod pod, under amendment 3: with no policy 58 of 249 attacks succeeded. With the effect side enforcing, or asking on every irreversible call, none did and no attacker irreversible effect was applied. The session rule's 8 leaks came through Slack's channel listing, as the replay predicted |
 | 2026-11-03 | Bypass attempts: a state machine, a goal search, an observer at the sink and failure injection. Approvals are now bound to the session that asked, the hook refuses writes to its own inputs, and a strict hook profile holds Bash after a read. Bash rewriting the hook's files stays open, with what closes it |
 | 2026-11-03 | A ledger at the effect side, under a protocol frozen first: with it enforcing, no attacker irreversible effect was applied in any replayed configuration, with no policy at all included. It costs the session rule its savings: every irreversible call needs a person, 59 of 97 tasks |
 | 2026-11-03 | Every AgentDojo tool classed from its code as read, reversible or irreversible, under a protocol frozen first. Holding only irreversible calls after an untrusted read asks on 51 of 97 ordinary tasks instead of 55, and on 40 with known destinations instead of 44. No attacker irreversible call ran that the session rule held. Still over the bar of a third |

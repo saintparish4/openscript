@@ -48,7 +48,7 @@ command) or **theoretical**.
 | Asking on every irreversible call lets no attacker irreversible call run | **Tested** | 0 of 617, by the wrapper's log and by the ledger's |
 | The session rule, which asks only after an untrusted read, misses 27 attacks | **Tested** | 27 of 617, all through Slack's channel listing, which is not listed as a source. The effect side refuses them |
 | A bypass of the wrapper, such as a raw function or a stolen, reused or swapped token, is refused at the effect | **Tested** | `tests/test_ledger.py`, including a service in a separate process |
-| It holds against a real model | **Not established** | The models tested followed no attack, so these runs could not exercise containment. The replay assumes an agent that obeys every injection |
+| It holds against a real model that follows attacks | **Tested** | Qwen2.5-7B-Instruct followed attacks: 58 of 249 succeeded with no policy. With the effect side enforcing, or asking on every irreversible call, 0 succeeded and no attacker irreversible effect was applied. The session rule let 5 through, all via Slack's channel listing. Amendment 3, about $1.10 of RunPod time |
 
 ### Testing and robustness
 
@@ -99,6 +99,7 @@ command.
 - **Not shipped.** The effect side is a reference implementation in the
   harness, not part of the SDK. A real service would hold the key in its own
   process, as the tests' separate service does.
-- **Real models.** No model here followed an attack, so containment with a
-  real model is untested. A model that does follow injections would test
-  it.
+- **Real models.** Containment was tested with one open 7B model on two
+  suites, one attack wording, one sample per case. Claude Haiku 4.5 and
+  Claude Sonnet 5.5 followed no attack, so for them only the cost was
+  measured.
