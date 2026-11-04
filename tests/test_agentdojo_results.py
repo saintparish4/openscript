@@ -47,6 +47,8 @@ FROZEN = {
     "irreversible.yaml": "46fdf2b6c69c504181f719383a19382a0176418f55b5bdb6d035688ac17fa58e",
     # The effect side keeps the record, frozen before the ledger existed in code.
     "PROTOCOL-ledger.md": "e23eba7478771ce8ac051f910e4459cb9743241c162d8d8c6e932364d5179678",
+    # An open model that can be fooled, frozen before the pod or any request.
+    "PROTOCOL-model-amendment-3.md": "a110dd5f5d3de6b35518ab26ccad3fe59743960dc7f2ae071bd57f2cfbbc12aa",
 }
 
 
