@@ -339,7 +339,7 @@ def run_case(
     )
     runtimes: list[GuardedRuntime] = []
     irreversible = frozenset(load_irreversible()[case.suite]) if case.ledger else frozenset()
-    ledger = Ledger(mode=case.ledger) if case.ledger else None
+    effect_side = Ledger(mode=case.ledger) if case.ledger else None
 
     def origin_of(_function: str, args: Mapping[str, Any]) -> str:
         return "injection" if markers and carries(args, markers) else "model"
@@ -350,9 +350,9 @@ def run_case(
             policies=policies,
             approver=approver,
             session_id=case.key,
-            ledger=ledger,
+            ledger=effect_side,
             irreversible=irreversible,
-            origin_of=origin_of if ledger is not None else None,
+            origin_of=origin_of if effect_side is not None else None,
         )
         runtime.origin = "model"
         runtimes.append(runtime)
@@ -403,8 +403,8 @@ def run_case(
         ),
         log=[[entry.function, entry.status] for entry in log],
     )
-    if ledger is not None:
-        seen = ledger.entries
+    if effect_side is not None:
+        seen = effect_side.entries
         row.update(
             ledger=case.ledger,
             inj_irreversible_ran=(
