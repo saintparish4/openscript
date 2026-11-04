@@ -49,6 +49,7 @@ FROZEN = {
     "PROTOCOL-ledger.md": "e23eba7478771ce8ac051f910e4459cb9743241c162d8d8c6e932364d5179678",
     # An open model that can be fooled, frozen before the pod or any request.
     "PROTOCOL-model-amendment-3.md": "a110dd5f5d3de6b35518ab26ccad3fe59743960dc7f2ae071bd57f2cfbbc12aa",
+    "PROTOCOL-model-amendment-3-deviation-1.md": "23b209290c8a3f40c2fa435b57affd5d59b2890104c5d4689dcd0f6821c8a283",
 }
 
 
