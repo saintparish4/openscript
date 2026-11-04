@@ -50,6 +50,7 @@ FROZEN = {
     # An open model that can be fooled, frozen before the pod or any request.
     "PROTOCOL-model-amendment-3.md": "a110dd5f5d3de6b35518ab26ccad3fe59743960dc7f2ae071bd57f2cfbbc12aa",
     "PROTOCOL-model-amendment-3-deviation-1.md": "23b209290c8a3f40c2fa435b57affd5d59b2890104c5d4689dcd0f6821c8a283",
+    "PROTOCOL-model-amendment-3-deviation-2.md": "2dbcf5a688b33fe5ecd68532e2d38b3c6bf1e8cb44d277ce4693c34df41fdb4b",
 }
 
 
