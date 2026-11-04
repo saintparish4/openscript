@@ -58,6 +58,13 @@ SHIPPED_UPDATES = {"banking": ["update_scheduled_transaction"]}
 #: The configuration PROTOCOL-named.md adds: destinations the user named count
 #: as known too, with a check on links (named.py, a candidate not in sdk/).
 NAMED_CONFIGURATIONS = ("taint_named",)
+#: The configurations PROTOCOL-irreversible.md adds: only a tool that cannot be
+#: undone (irreversible.yaml) is held, every time or after an untrusted read.
+IRREVERSIBLE_CONFIGURATIONS = (
+    "approve_irreversible",
+    "taint_irreversible",
+    "taint_irreversible_known",
+)
 
 #: (tool, arguments, who made the call) -> whether a person approves it.
 Approver = Callable[[str, Mapping[str, Any], str], bool]
@@ -78,6 +85,12 @@ def load_classification() -> dict[str, dict[str, list[str]]]:
     return suites
 
 
+def load_irreversible() -> dict[str, list[str]]:
+    """The frozen irreversible tools, by suite (irreversible.yaml)."""
+    data = yaml.safe_load((HERE / "irreversible.yaml").read_text())
+    return {suite: list(classes["irreversible"]) for suite, classes in data["suites"].items()}
+
+
 def load_known() -> dict[str, Any]:
     """The frozen known destinations (known.yaml, written by known.py)."""
     known: dict[str, Any] = yaml.safe_load((HERE / "known.yaml").read_text())
@@ -87,7 +100,12 @@ def load_known() -> dict[str, Any]:
 def known_for(configuration: str, suite: str) -> dict[str, Any] | None:
     """The known destinations a configuration uses on *suite*: None when it
     knows none, which leaves the session rule as taint_text."""
-    if configuration in ("taint_known", "taint_named", SHIPPED_CONFIGURATION):
+    if configuration in (
+        "taint_known",
+        "taint_named",
+        SHIPPED_CONFIGURATION,
+        "taint_irreversible_known",
+    ):
         return load_known()["suites"].get(suite) or None
     if configuration == "taint_directory":
         return load_known()["directory"][suite]  # Slack only: anything else is a mistake
@@ -132,6 +150,26 @@ def policies_for(
         return [
             SessionTaintPolicy(
                 sources=list(lists["sources"]), sinks=sinks, known=known, updates=updates or None
+            )
+        ]
+    if configuration in IRREVERSIBLE_CONFIGURATIONS:
+        irreversible = load_irreversible()[suite]
+        if configuration == "approve_irreversible":
+            rules = ToolRules.model_validate(
+                {"rules": {tool: {"requires_approval": True} for tool in irreversible}}
+            )
+            return [ToolFirewallPolicy(rules=rules)]
+        if configuration == "taint_irreversible":
+            return [SessionTaintPolicy(sources=list(lists["sources"]), sinks=irreversible)]
+        # As taint_known_shipped uses known.yaml, restricted to what is held here.
+        known_here = {tool: args for tool, args in (known or {}).items() if tool in irreversible}
+        updates = [tool for tool in SHIPPED_UPDATES.get(suite, []) if tool in known_here]
+        return [
+            SessionTaintPolicy(
+                sources=list(lists["sources"]),
+                sinks=irreversible,
+                known=known_here or None,
+                updates=updates or None,
             )
         ]
     if configuration in NAMED_CONFIGURATIONS:
