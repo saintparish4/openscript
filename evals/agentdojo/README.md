@@ -70,6 +70,8 @@ uv pip install --python .venv/bin/python -r requirements.txt -e ../..
 | `summarize_named.py`, `results/named/` | Its tables, rows and the re-score of the model runs |
 | `PROTOCOL-irreversible.md`, `irreversible.yaml` | Holding only what cannot be undone: the criterion, and every tool classed from its code. Frozen |
 | `summarize_irreversible.py`, `results/irreversible/` | Its tables and rows |
+| `PROTOCOL-ledger.md`, `../ledger.py` | The effect side: a token from a person's approval, checked where the effect happens, and a ledger of every irreversible call. Frozen before the code |
+| `summarize_ledger.py`, `results/ledger/` | Its tables and rows, counted from the ledger |
 | `read_transcripts.py` | What the model transcripts show beyond attack success, quoted in `docs/raw-material.md` |
 | `results/benign.csv` | 97 tasks x 8 runs |
 | `results/attack.csv` | 949 pairs x 9 runs, plus the detector against four more attack wordings |
@@ -178,6 +180,8 @@ contained nothing here.
 **Destinations the user named, 2026-10-15** (`PROTOCOL-named.md`, `results/named/`, free): a candidate rule, kept in the harness. It reached 30 of 97 ordinary tasks needing a person, under a third, but Slack stayed at 14 of 21 and 21 travel attacks got through, so it was not adopted, as decided before the run.
 
 **Holding only what cannot be undone, 2026-11-03** (`PROTOCOL-irreversible.md`, `results/irreversible/`, free): 26 of the 74 tools are irreversible by their code. Holding only those after an untrusted read asks on 51 of 97 ordinary tasks instead of 55, and lets no attacker irreversible call run that the session rule held. It is recommended over the session rule as it stands, by the rule set beforehand, and is still over a third.
+
+**Counted at the effect, 2026-11-03** (`PROTOCOL-ledger.md`, `results/ledger/`, free): with a ledger in front of every irreversible tool that accepts only a person's token, no attacker irreversible effect was applied in any configuration, with no policy at all included. In record mode the ledger and the wrapper agree on every pair. Enforcing costs the session rule its savings: 13 tasks it let act without a person fail.
 
 **Exploratory, not a result:** [`exploratory/`](exploratory/README.md) counts
 what the session rule would have asked if it held only payments to accounts

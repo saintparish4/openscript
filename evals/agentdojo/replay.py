@@ -10,6 +10,7 @@ the numbers do and do not mean; it was committed before this file produced any.
     .venv/bin/python replay.py                # everything, into results/
     .venv/bin/python replay.py --known        # PROTOCOL-known.md's runs, into results/known/
     .venv/bin/python replay.py --irreversible # PROTOCOL-irreversible.md's runs, into results/irreversible/
+    .venv/bin/python replay.py --ledger       # PROTOCOL-ledger.md's runs, into results/ledger/
 
 Run from this directory, in the environment README.md describes.
 """
@@ -52,6 +53,7 @@ from guard import (  # noqa: E402
     policies_for,
 )
 
+from evals.ledger import Ledger, TokenClass  # noqa: E402
 from sdk import SessionTaintPolicy  # noqa: E402
 
 BENCHMARK = "v1.2.2"
@@ -88,6 +90,26 @@ IRREVERSIBLE_RUNS = tuple(
 #: irreversible calls that ran, which is what the claim is about.
 IRREVERSIBLE_BENIGN_FIELDS = ["irreversible_calls", "held_unread"]
 IRREVERSIBLE_ATTACK_FIELDS = ["inj_irreversible", "inj_irreversible_ran"]
+#: PROTOCOL-ledger.md's runs: (configuration, approver, ledger mode).
+LEDGER_RUNS = (
+    ("taint_text", "careful", "record"),
+    ("taint_irreversible", "careful", "record"),
+    ("approve_irreversible", "careful", "record"),
+    ("approve_irreversible", "careful", "enforce"),
+    ("taint_irreversible", "careful", "enforce"),
+    ("none", "nobody", "enforce"),
+)
+#: What the ledger saw, by who made the call. "untokened" is applied without a
+#: valid token: in record mode that is what a configuration let happen
+#: without a person; in enforce mode it is always 0, or the ledger failed.
+LEDGER_FIELDS = [
+    "ledger",
+    "ledger_user_applied",
+    "ledger_user_untokened",
+    "ledger_inj_applied",
+    "ledger_inj_untokened",
+    "ledger_refused",
+]
 
 BENIGN_FIELDS = [
     "suite",
@@ -179,8 +201,10 @@ def replay(
     approver: str,
     lists: Mapping[str, list[str]],
     known: Mapping[str, Any] | None = None,
+    ledger_mode: str = "",
 ) -> dict[str, Any]:
-    """One task, with or without an attack, under one configuration."""
+    """One task, with or without an attack, under one configuration, and with
+    the effect side in *ledger_mode* when one is given."""
     env = user_task.init_environment(environment(suite, injections))
     before = env.model_copy(deep=True)
     user_calls = user_task.ground_truth(before)
@@ -188,9 +212,16 @@ def replay(
     exposed = set(exposures(suite, user_task)) if injection_task else set()
 
     policies = policies_for(configuration, lists, known, user_task.PROMPT, suite.name)
-    runtime = GuardedRuntime(suite.tools, policies=policies, approver=APPROVERS[approver])
-    taint = next((p for p in policies if isinstance(p, SessionTaintPolicy)), None)
     irreversible = set(_irreversible()[suite.name])
+    ledger = Ledger(mode=ledger_mode) if ledger_mode else None
+    runtime = GuardedRuntime(
+        suite.tools,
+        policies=policies,
+        approver=APPROVERS[approver],
+        ledger=ledger,
+        irreversible=frozenset(irreversible),
+    )
+    taint = next((p for p in policies if isinstance(p, SessionTaintPolicy)), None)
 
     compromised = False
     delivered_by = ""
@@ -230,6 +261,21 @@ def replay(
         # Done only if every one of the task's own calls ran and returned.
         "utility": int(solved and all(entry.delivered for entry in mine)),
     }
+    if ledger is not None:
+        seen = ledger.entries
+        row.update(
+            ledger=ledger_mode,
+            ledger_user_applied=sum(e.applied and e.origin == "user" for e in seen),
+            ledger_user_untokened=sum(
+                e.applied and e.origin == "user" and e.token is not TokenClass.VALID for e in seen
+            ),
+            ledger_inj_applied=sum(e.applied and e.origin == "injection" for e in seen),
+            ledger_inj_untokened=sum(
+                e.applied and e.origin == "injection" and e.token is not TokenClass.VALID
+                for e in seen
+            ),
+            ledger_refused=sum(not e.applied for e in seen),
+        )
     if injection_task is None:
         row["sink_calls"] = sum(entry.function in lists["sinks"] for entry in mine)
         row["irreversible_calls"] = sum(call.function in irreversible for call in user_calls)
@@ -301,6 +347,8 @@ def task_rows(job: tuple[str, str, str]) -> tuple[list[dict[str, Any]], list[dic
         runs = SHIPPED_RUNS
     elif mode == "irreversible":
         runs = IRREVERSIBLE_RUNS
+    elif mode == "ledger":
+        runs = LEDGER_RUNS
     else:
         runs = RUNS
 
@@ -314,8 +362,9 @@ def task_rows(job: tuple[str, str, str]) -> tuple[list[dict[str, Any]], list[dic
             approver,
             lists,
             known_for(configuration, suite_name),
+            *ledger_mode,
         )
-        for configuration, approver in runs
+        for configuration, approver, *ledger_mode in runs
         # An approval nobody reads changes nothing when there is no attack.
         if approver != "rubber_stamp"
     ]
@@ -323,7 +372,7 @@ def task_rows(job: tuple[str, str, str]) -> tuple[list[dict[str, Any]], list[dic
     for injection_task in suite.injection_tasks.values():
         for attack_name, attacker in _attacks(suite_name).items():
             injections = attacker.attack(user_task, injection_task)
-            for configuration, approver in runs:
+            for configuration, approver, *ledger_mode in runs:
                 if attack_name != MAIN_ATTACK and configuration != "detector":
                     continue  # no other configuration reads the text
                 row = replay(
@@ -335,6 +384,7 @@ def task_rows(job: tuple[str, str, str]) -> tuple[list[dict[str, Any]], list[dic
                     approver,
                     lists,
                     known_for(configuration, suite_name),
+                    *ledger_mode,
                 )
                 attack.append({**row, "attack": attack_name})
     return benign, attack
@@ -357,16 +407,17 @@ def run(suites: list[str], out: Path, mode: str, limit: int | None, jobs: int) -
         (out / f"attack{suffix}.csv").open("w", newline="") as attack_file,
         ProcessPoolExecutor(max_workers=jobs) as pool,
     ):
-        extra = mode == "irreversible"
+        extra = mode in ("irreversible", "ledger")
+        ledgered = LEDGER_FIELDS if mode == "ledger" else []
         benign = csv.DictWriter(
             benign_file,
-            BENIGN_FIELDS + (IRREVERSIBLE_BENIGN_FIELDS if extra else []),
+            BENIGN_FIELDS + (IRREVERSIBLE_BENIGN_FIELDS if extra else []) + ledgered,
             lineterminator="\n",
             extrasaction="ignore",
         )
         attack = csv.DictWriter(
             attack_file,
-            ATTACK_FIELDS + (IRREVERSIBLE_ATTACK_FIELDS if extra else []),
+            ATTACK_FIELDS + (IRREVERSIBLE_ATTACK_FIELDS if extra else []) + ledgered,
             lineterminator="\n",
             extrasaction="ignore",
         )
@@ -393,6 +444,7 @@ def main() -> int:
     parser.add_argument(
         "--irreversible", action="store_true", help="PROTOCOL-irreversible.md's runs"
     )
+    parser.add_argument("--ledger", action="store_true", help="PROTOCOL-ledger.md's runs")
     parser.add_argument("--limit", type=int, default=None, help="user tasks per suite (debugging)")
     parser.add_argument("--jobs", type=int, default=os.cpu_count() or 1, help="worker processes")
     args = parser.parse_args()
@@ -401,10 +453,11 @@ def main() -> int:
         "known": args.known,
         "named": args.named,
         "irreversible": args.irreversible,
+        "ledger": args.ledger,
     }
     mode = next((m for m, on in modes.items() if on), "shipped" if args.shipped else "all")
     out = args.out
-    if out == HERE / "results" and mode in ("known", "named", "shipped", "irreversible"):
+    if out == HERE / "results" and mode in ("known", "named", "shipped", "irreversible", "ledger"):
         # The committed rows are never overwritten.
         out = HERE / "results" / ("known-shipped" if mode == "shipped" else mode)
     run(args.suites, out, mode, args.limit, args.jobs)

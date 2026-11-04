@@ -28,6 +28,7 @@ from agentdojo.functions_runtime import Function, FunctionsRuntime, TaskEnvironm
 
 from contracts.interceptor import Policy
 from contracts.types import ActionBlockedError
+from evals.ledger import Ledger, call_hash
 from events.approvals import InMemoryApprovalStore
 from sdk import (
     PromptInjectionPolicy,
@@ -237,6 +238,8 @@ class GuardedRuntime(FunctionsRuntime):
         policies: Sequence[Policy] = (),
         approver: Approver | None = None,
         session_id: str = "replay",
+        ledger: Ledger | None = None,
+        irreversible: frozenset[str] = frozenset(),
     ) -> None:
         super().__init__(functions)
         self._session = _Session(list(policies), approver)
@@ -244,6 +247,21 @@ class GuardedRuntime(FunctionsRuntime):
         self.origin = "user"
         self.log: list[Outcome] = []
         self.approvals_asked = 0
+        # The effect side (PROTOCOL-ledger.md). It stands in front of every
+        # irreversible tool, wrapped or not. The tokens a person's approval
+        # mints wait here, keyed by the call they are for.
+        self._ledger = ledger
+        self._irreversible = irreversible if ledger is not None else frozenset()
+        self._tokens: dict[str, str] = {}
+
+    def _at_the_effect(self, function: str, arguments: Mapping[str, Any]) -> str | None:
+        """Why the effect side refuses this call, or None to let it happen."""
+        if function not in self._irreversible:
+            return None
+        assert self._ledger is not None
+        token = self._tokens.pop(call_hash(function, arguments), None)
+        entry = self._ledger.check(function, arguments, token, origin=self.origin)
+        return None if entry.applied else f"LedgerRefused: token {entry.token.value}"
 
     @classmethod
     def _run(cls, coroutine: Any) -> Any:
@@ -261,6 +279,10 @@ class GuardedRuntime(FunctionsRuntime):
         args = dict(kwargs)
         if not self._session.policies or function not in self.functions:
             # Unguarded, or a tool that does not exist and so cannot run.
+            refused = self._at_the_effect(function, args) if function in self.functions else None
+            if refused is not None:
+                self.log.append(Outcome(function, args, self.origin, "refused", refused))
+                return "", refused
             result, error = super().run_function(env, function, args, raise_on_error=False)
             self.log.append(Outcome(function, args, self.origin, "ran", error=error))
             return result, error
@@ -268,6 +290,10 @@ class GuardedRuntime(FunctionsRuntime):
         ran: dict[str, Any] = {}
 
         async def tool(**arguments: Any) -> str:
+            refused = self._at_the_effect(function, arguments)
+            if refused is not None:
+                ran["refused_at_effect"] = refused
+                return refused
             result, error = FunctionsRuntime.run_function(
                 self, env, function, arguments, raise_on_error=False
             )
@@ -284,6 +310,9 @@ class GuardedRuntime(FunctionsRuntime):
             session_id=self._session_id,
         )
         status, reason = self._call(secure, function, args, ran)
+        if "refused_at_effect" in ran:
+            # The wrapper let it through; the effect side did not.
+            status, reason = "refused", ran["refused_at_effect"]
         self.log.append(Outcome(function, args, self.origin, status, reason, ran.get("error")))
         if status in ("ran", "approved"):
             return ran["result"], ran["error"]
@@ -310,6 +339,13 @@ class GuardedRuntime(FunctionsRuntime):
             self._run(self._session.store.decide(held.approval_id, approved, "approver", ""))
         if not approved:
             return "held", held.reason
+        if self._ledger is not None:
+            # The person's yes, as the effect side will see it.
+            record = self._run(self._session.store.get(held.approval_id))
+            assert record is not None
+            self._tokens[record.action_hash] = self._ledger.mint(
+                held.approval_id, record.action_hash
+            )
         try:
             self._run(secure.call(args, approval_id=held.approval_id))
             return "approved", held.reason
