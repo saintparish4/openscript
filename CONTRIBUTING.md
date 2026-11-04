@@ -58,3 +58,45 @@ Follow the existing pattern (see `PIIInterceptor` → `PIIPolicy`, `OpenScriptMi
 ## Commit messages
 
 Plain, descriptive commit messages about what changed. No phase numbers or references to internal planning docs — those don't mean anything to someone reading `git log` outside the project.
+
+## The stack and the layout
+
+Moved here from the README on 2026-11-04, unchanged.
+
+#### Technologies
+
+| Layer | Built with |
+|---|---|
+| Core SDK | Python 3.11+, with three runtime dependencies: pydantic 2 (≥ 2.10), structlog, PyYAML |
+| In the browser | Pyodide 0.28.3 (CPython on WebAssembly), Next.js 16 static export, React 19, TypeScript |
+| Browser extension | Chrome Manifest V3, with Pyodide running in the side panel |
+| Optional server | FastAPI, SQLAlchemy with asyncpg on Postgres, Alembic, Redis, Prometheus, OpenTelemetry |
+| Java client | Java 17, the JDK's `HttpClient`, Maven; JUnit 5 for its tests |
+| Evaluation | Labelled corpora (1,799 prompts, 1,451 of them public), AgentDojo 0.1.35, the Anthropic Python SDK for runs with a model |
+| Quality | pytest, mypy `--strict`, ruff, black, GitHub Actions, a daily check of the deployed demo |
+
+#### Repository layout
+
+```
+openscript/
+├── sdk/                      the package (there is no `import openscript`: it is `import sdk`)
+│   ├── middleware/           SecureAgent (middleware.py) and SecureTool (tool.py)
+│   ├── policies/             the built-in policies, the YAML loader, example configs
+│   ├── interceptors/         PII, threat scoring and the event writer (the pre-1.0 names)
+│   ├── hooks/                openscript-hook for Claude Code, its config model and examples
+│   ├── integrations/         wrap_agent / wrap_graph_agent for LangChain and LangGraph
+│   └── observability/        risk scoring, Prometheus metrics, OpenTelemetry tracing
+├── contracts/                the Policy protocol, ActionContext, decisions, failure modes
+├── events/                   event writer and store; approval stores (in-memory, Redis)
+├── server/                   optional FastAPI server: events, SSE, dashboard, approvals, /v1/guard, /metrics
+├── clients/java/             a Java client: SecureAgent and SecureTool over /v1/guard
+├── site/                     the live demo: a Next.js static export that runs the package via Pyodide
+├── extension/                a Chrome extension: the package around a scripted browsing agent
+├── web/                      a bare Pyodide probe page and its headless check
+├── evals/                    labelled corpora and run.py; agentdojo/ is the benchmark harness; ledger.py is the effect side
+├── demo/                     a terminal walkthrough of the pipeline
+├── tools/                    policy audit, browser wheel builds, hook latency, the Java client's live check
+├── tests/                    the test suite; bypass/ holds the red team's searches
+└── docs/                     guide.md (the full reference), metrics.md (every number), threat-model.md,
+                              red-team.md, raw-material.md, submission.md, the demo recording
+```
