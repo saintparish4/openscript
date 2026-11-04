@@ -240,6 +240,7 @@ class GuardedRuntime(FunctionsRuntime):
         session_id: str = "replay",
         ledger: Ledger | None = None,
         irreversible: frozenset[str] = frozenset(),
+        origin_of: Callable[[str, Mapping[str, Any]], str] | None = None,
     ) -> None:
         super().__init__(functions)
         self._session = _Session(list(policies), approver)
@@ -253,6 +254,10 @@ class GuardedRuntime(FunctionsRuntime):
         self._ledger = ledger
         self._irreversible = irreversible if ledger is not None else frozenset()
         self._tokens: dict[str, str] = {}
+        # With a model nothing says whose a call is. A run with markers labels
+        # one as the attacker's when it carries their value; the label is
+        # counted, never used to decide.
+        self._origin_of = origin_of
 
     def _at_the_effect(self, function: str, arguments: Mapping[str, Any]) -> str | None:
         """Why the effect side refuses this call, or None to let it happen."""
@@ -277,6 +282,8 @@ class GuardedRuntime(FunctionsRuntime):
         raise_on_error: bool = False,
     ) -> tuple[Any, str | None]:
         args = dict(kwargs)
+        if self._origin_of is not None:
+            self.origin = self._origin_of(function, args)
         if not self._session.policies or function not in self.functions:
             # Unguarded, or a tool that does not exist and so cannot run.
             refused = self._at_the_effect(function, args) if function in self.functions else None
