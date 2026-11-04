@@ -8,7 +8,7 @@
 
 **Hard limits and a record for LLM agents, for when the model gets it wrong.**
 
-OpenScript is a Python security gateway between an AI agent and the tools it calls. It refuses calls outside rules you write in advance (which tools, which arguments, which recipients, how much), holds the ones you choose for a person to approve, masks secrets and PII, and records every decision. Current models already resist most prompt injection, and OpenScript does not replace that judgement. It is the boundary that still holds when the model is fooled, wrong, or swapped for another, and none of it depends on recognising an attack.
+OpenScript is a Python security gateway between an AI agent and the tools it calls. It refuses calls outside rules you write in advance (which tools, which arguments, which recipients, how much), holds the ones you choose for a person to approve, masks secrets and PII, and records every decision. Current models already resist most prompt injection, and OpenScript does not replace that judgement. It is the boundary that still holds when the model is fooled, wrong, or swapped for another, and none of it depends on recognising an attack. Its central claim is about irreversible actions: none happens without a person's single-use approval of that exact call. [The threat model](docs/threat-model.md) says what that means and [the red team](docs/red-team.md) tries to break it.
 
 **[Try the live demo →](https://openscript-demo.vercel.app/)** It is this package compiled to WebAssembly and running in your tab, with no backend, so the prompts never leave the page.
 
@@ -22,7 +22,8 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
 - **Redaction in both directions.** Secrets are masked before the model sees them, and PII is masked before the caller gets it back. The same masking applies to what a tool returns.
 - **Input screening.** Prompt injection, toxicity and harmful requests are scored against pattern banks. A disguised prompt is scored again with the disguise undone: zero-width characters, look-alike letters, leetspeak, spaced-out letters, base64.
 - **An audit trail.** With `AuditPolicy` in the list, every action and every refusal becomes an event with an aggregated risk score, including calls stopped before anything ran.
-- **A Claude Code hook.** `openscript-hook` gives Claude Code argument rules, the session memory, secret masking and an audit log. It only ever makes Claude Code stricter.
+- **A Claude Code hook.** `openscript-hook` gives Claude Code argument rules, the session memory, secret masking and an audit log. It only ever makes Claude Code stricter. It refuses a write by Write or Edit to its own config, state and Claude Code's settings. A strict profile also holds Bash, Write and Edit after an untrusted read.
+- **A check at the effect side.** [`evals/ledger.py`](evals/ledger.py) is a reference service for the far end of an irreversible call. It applies the call only with an HMAC token minted when a person approves, under a key the agent never holds. It keeps a ledger of every call it saw. A call that went round the wrapper arrives and changes nothing. It is standard library only, and it lives in the harness, not the SDK.
 - **Any agent framework.** Anything with `ainvoke`/`invoke` (or `astream`/`stream`) can be wrapped. Streaming has a guarded mode that scans as it goes, and an optional FastAPI server adds an event store, a dashboard, an approval queue, Prometheus and OpenTelemetry.
 - **A Java client.** `clients/java` puts a Java agent and its tools behind the same Python policies, run by the server. Nothing is reimplemented in Java, and it has no dependencies beyond the JDK.
 
@@ -33,6 +34,8 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
   - In a replay of [AgentDojo](https://github.com/ethz-spylab/agentdojo) with no model, the session rule stopped 570 of 617 attacks with an approver who refused the attacker's calls.
   - Its cost is published alongside: it asked a person on 55 of 97 ordinary tasks. Every one of those tasks is built to read something an attacker can write, the worst case for this rule. With Sonnet doing the work, it asked on 11 of 16 banking tasks, as often as asking every time, and on 16 of 21 Slack tasks.
   - Holding only calls to new destinations cut that to 44 of 97 and let no attacker call through. It helps only where there is a sending history to know, and over all four suites it is still over the one-third bar set beforehand. Run live with Sonnet on banking, where the user has a payment history, it asked on 4 of 16 tasks. It does not make approvals rare.
+  - Every one of AgentDojo's 74 tools was classed from its code as read, reversible or irreversible: 26 are irreversible. Holding only those asks on 51 of 97 tasks instead of 55, and on 40 with known destinations, with no new attack let through.
+- **Counted where the effect happens.** With the effect side enforcing, no attacker irreversible effect was applied in any of 617 replayed attacks, under each of three configurations, including no policy at all. The count is the ledger's, not the wrapper's. The price is a person on every irreversible call: 59 of 97 ordinary tasks ask.
 - **Pure local, enforced in CI.** All ten built-in policies are regexes, heuristics, checksums or declarative rules, with no network or LLM call. `tests/test_audit.py` fails the build if one grows a network import, which is why the same code runs in a browser with nothing behind it.
 - **Fast enough to sit in the loop.**
   - The input policies take 0.05 to 0.7 ms per prompt (p50, native).
@@ -42,7 +45,8 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
   - Security policies block when they error.
   - Rule files reject misspelt keys, and a value a rule cannot evaluate is refused.
   - The Claude Code hook blocks the call if anything goes wrong while it is deciding.
-- **Tested like a security tool.** 908 tests, `mypy --strict` on the SDK, and six CI jobs. A [red team](docs/red-team.md) searched for bypasses with a state machine, a goal search and an observer at the sink, and every finding was committed open before its fix. One job boots the package under Pyodide headless, and another runs every demo prompt through the exported site.
+- **Tested like a security tool.** 908 tests, `mypy --strict` on the SDK, and six CI jobs. One job boots the package under Pyodide headless, and another runs every demo prompt through the exported site.
+- **Attacked, with the findings published.** A [red team](docs/red-team.md) searched for bypasses with a Hypothesis state machine, a goal search over AgentDojo's injection goals, an observer at the sink and failure injection. Every finding was committed as a failing test before its fix. It found 7. One was an approval redeemable in another session, now fixed. Another was the hook's own cache rewritable with Write, now refused. One stays open: Bash can rewrite the hook's files, and the answer is a boundary the agent does not own.
 
 Every number above, with its date, command and caveats, is in [`docs/metrics.md`](docs/metrics.md).
 
@@ -114,11 +118,12 @@ openscript/
 ├── site/                     the live demo: a Next.js static export that runs the package via Pyodide
 ├── extension/                a Chrome extension: the package around a scripted browsing agent
 ├── web/                      a bare Pyodide probe page and its headless check
-├── evals/                    labelled corpora and run.py; agentdojo/ is the benchmark harness
+├── evals/                    labelled corpora and run.py; agentdojo/ is the benchmark harness; ledger.py is the effect side
 ├── demo/                     a terminal walkthrough of the pipeline
 ├── tools/                    policy audit, browser wheel builds, hook latency, the Java client's live check
-├── tests/                    the test suite
-└── docs/                     guide.md (the full reference), metrics.md (every number), the demo recording
+├── tests/                    the test suite; bypass/ holds the red team's searches
+└── docs/                     guide.md (the full reference), metrics.md (every number), threat-model.md,
+                              red-team.md, raw-material.md, submission.md, the demo recording
 ```
 
 ## Getting Started
@@ -325,6 +330,8 @@ It was tried in a real Claude Code session with a small MCP issue tracker:
 
 The payloads from that session are replayed in the tests. The guide covers [its limits](docs/guide.md#the-claude-code-hook-what-it-adds-and-what-it-does-not-do): Bash is not held by default, and the transcript keeps the unmasked output.
 
+To hold Bash, Write and Edit after an untrusted read as well, start from the strict profile instead. That is [`claude_code_strict_example.yaml`](sdk/hooks/claude_code_strict_example.yaml) with [`settings_strict_example.json`](sdk/hooks/settings_strict_example.json). Expect a prompt on most commands after any web read. Under it, the red team saw nothing reach a sink after a web read. A shell can still rewrite the hook's files, so keep the config outside the project with `OPENSCRIPT_HOOK_CONFIG` and the shell's writes inside it with Claude Code's sandbox.
+
 ### 7. Guard a Java Agent
 
 The policies run in Python. A Java program reaches them through the server, which runs one phase of the pipeline per request: the client asks about the input, runs its agent or tool on what came back, then asks about the output. The two lists are configured on the server, as a Python program would build them for `SecureAgent` and `SecureTool`:
@@ -392,6 +399,7 @@ For the server, `cp .env.example .env` (or `make env`) gives a working starting 
 | `tools.yaml` | Tool and argument rules, via `ToolFirewallPolicy(rules_path=...)` | [`sdk/policies/tools_example.yaml`](sdk/policies/tools_example.yaml) |
 | `.claude/openscript.yaml` | The Claude Code hook: rules, session sources and sinks, redaction, audit | [`sdk/hooks/claude_code_example.yaml`](sdk/hooks/claude_code_example.yaml) |
 | `.claude/settings.json` | Which Claude Code tool calls go through the hook | [`sdk/hooks/settings_example.json`](sdk/hooks/settings_example.json) |
+| The strict profile | The same two files, holding Bash, Write and Edit after an untrusted read | [`claude_code_strict_example.yaml`](sdk/hooks/claude_code_strict_example.yaml), [`settings_strict_example.json`](sdk/hooks/settings_strict_example.json) |
 | `.env` | The server | [`.env.example`](.env.example) |
 | `guard.yaml`, named by `OPENSCRIPT_GUARD_CONFIG` | The policies `/v1/guard` runs for the Java client: an `agent` list and a `tool` list | [`server/guard_example.yaml`](server/guard_example.yaml) |
 
@@ -421,7 +429,7 @@ ruff check . && black --check .   # lint and format
 mypy --strict sdk/ contracts/     # type-check
 ```
 
-If you touch `sdk/policies/` or `sdk/interceptors/`, also run `pytest tests/test_audit.py tests/test_pyodide_compat.py`. Every built-in policy must stay pure local and importable under Pyodide, because the browser demo runs it with no backend. If you touch `clients/java/` or the server's `/v1/guard`, run `make java-test`, and `make java-live` with Postgres up: CI runs the Java client against the real server and fails if those tests were skipped. [CONTRIBUTING.md](CONTRIBUTING.md) has the full checklist, including how to add a policy.
+If you touch the approvals, the session rule or the hook, also run `pytest tests/bypass`, the red team's searches: a new bypass is committed as a failing test, and listed in [`docs/red-team.md`](docs/red-team.md), before its fix. A new benchmark result needs its protocol frozen in a commit of its own first, pinned by its hash in `tests/test_agentdojo_results.py`. If you touch `sdk/policies/` or `sdk/interceptors/`, also run `pytest tests/test_audit.py tests/test_pyodide_compat.py`. Every built-in policy must stay pure local and importable under Pyodide, because the browser demo runs it with no backend. If you touch `clients/java/` or the server's `/v1/guard`, run `make java-test`, and `make java-live` with Postgres up: CI runs the Java client against the real server and fails if those tests were skipped. [CONTRIBUTING.md](CONTRIBUTING.md) has the full checklist, including how to add a policy.
 
 Report bugs through [GitHub Issues](https://github.com/saintparish4/openscript/issues), with the policy, the input that misbehaved, and what you expected instead.
 
