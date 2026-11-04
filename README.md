@@ -17,7 +17,7 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
 ### What it does
 
 - **Tool firewall.** Per-tool, per-argument rules in YAML: bounds, allowlists, full-match patterns, path prefixes and roles. A call the rules refuse never runs.
-- **Approvals bound to the exact call.** A held call waits for a person. The approval is single-use, expires after an hour, and is bound to the tool and its exact arguments, so a yes for $500 to one account cannot be spent on another account or a larger amount.
+- **Approvals bound to the exact call.** A held call waits for a person. The approval is single-use, expires after an hour, and is bound to the tool, its exact arguments and the session that asked, so a yes for $500 to one account cannot be spent on another account, a larger amount or another session.
 - **A memory of what the session has read.** Once an agent has read something a stranger could have written, such as a web page, an issue or an email, the state-changing calls you list wait for a person. It reads no text, so the wording of an attack cannot talk it round. It can also let a call through when it only sends somewhere the user has sent before.
 - **Redaction in both directions.** Secrets are masked before the model sees them, and PII is masked before the caller gets it back. The same masking applies to what a tool returns.
 - **Input screening.** Prompt injection, toxicity and harmful requests are scored against pattern banks. A disguised prompt is scored again with the disguise undone: zero-width characters, look-alike letters, leetspeak, spaced-out letters, base64.
@@ -42,7 +42,7 @@ OpenScript is a Python security gateway between an AI agent and the tools it cal
   - Security policies block when they error.
   - Rule files reject misspelt keys, and a value a rule cannot evaluate is refused.
   - The Claude Code hook blocks the call if anything goes wrong while it is deciding.
-- **Tested like a security tool.** 844 tests, `mypy --strict` on the SDK, and six CI jobs. One job boots the package under Pyodide headless, and another runs every demo prompt through the exported site.
+- **Tested like a security tool.** 908 tests, `mypy --strict` on the SDK, and six CI jobs. A [red team](docs/red-team.md) searched for bypasses with a state machine, a goal search and an observer at the sink, and every finding was committed open before its fix. One job boots the package under Pyodide headless, and another runs every demo prompt through the exported site.
 
 Every number above, with its date, command and caveats, is in [`docs/metrics.md`](docs/metrics.md).
 

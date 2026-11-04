@@ -96,7 +96,16 @@ def main(argv: list[str] | None = None) -> int:
 
 def _pre_tool_use(payload: dict[str, Any], config_path: Path | None, out: IO[str]) -> int:
     name, args, session_id = _call(payload)
-    config = _settings(_config_path(config_path, payload))
+    path = _config_path(config_path, payload)
+    guarded = _guarded_target(name, args, payload, path)
+    if guarded is not None:
+        # Before the config is read: a hook whose inputs the agent can rewrite
+        # guards nothing (docs/red-team.md, B5).
+        return _block(
+            f"{name} would change {guarded}, which decides what this hook does. "
+            "Change it yourself, outside the agent"
+        )
+    config = _settings(path)
     asks: list[tuple[str, str]] = []
 
     if config["rules"] is not None:
@@ -266,6 +275,52 @@ def _settings(path: Path) -> dict[str, Any]:
     )
     os.replace(partial, cache)  # whole or not at all, for a hook running alongside
     return settings
+
+
+#: The built-in tools that write a file, and the argument that names it.
+_WRITERS = {
+    "Write": "file_path",
+    "Edit": "file_path",
+    "MultiEdit": "file_path",
+    "NotebookEdit": "notebook_path",
+}
+
+
+def _guarded_target(
+    name: str, args: dict[str, Any], payload: dict[str, Any], config: Path
+) -> str | None:
+    """The file this call would write that decides what the hook does, if any.
+
+    That is the config, a firewall rules file it names, Claude Code's settings
+    files beside it, in the project and in the home directory, and the
+    hook's state: what sessions have read, the config cache, the audit log.
+    Paths are resolved, so a symlink or ".." does not get round it. Bash is
+    not looked at: a shell command's targets cannot be read off its text.
+    """
+    key = _WRITERS.get(name)
+    target = args.get(key) if key else None
+    if not isinstance(target, str) or not target:
+        return None
+    resolved = (Path(payload.get("cwd") or os.getcwd()) / target).resolve()
+    config = config.resolve()
+    guarded = [config, _state().resolve()]
+    project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or payload.get("cwd") or os.getcwd())
+    for directory in {config.parent, project / ".claude", Path.home() / ".claude"}:
+        guarded += [directory / "settings.json", directory / "settings.local.json"]
+    try:
+        import yaml
+
+        raw = yaml.safe_load(config.read_text(encoding="utf-8"))
+        rules_path = raw.get("firewall", {}).get("rules_path") if isinstance(raw, dict) else None
+        if isinstance(rules_path, str) and rules_path:
+            guarded.append(config.parent / rules_path)
+    except (OSError, ValueError, AttributeError):
+        pass  # no config to read: every call is blocked further on anyway
+    for path in guarded:
+        path = path.resolve()
+        if resolved == path or path in resolved.parents:
+            return str(path)
+    return None
 
 
 def _digest(path: Path) -> str:

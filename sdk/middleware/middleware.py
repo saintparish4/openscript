@@ -396,6 +396,16 @@ class SecureAgent:
     async def _redeem_approval(self, approval_id: str, context: ActionContext) -> bool:
         if not approval_id:
             return False
+        # A person's yes is to one call in one session. The hash binds the
+        # call; this binds where it was asked. Without it, an approval given
+        # for a call in one session ran the identical call in another,
+        # tainted one (docs/red-team.md, B1).
+        record = await self._approval_store.get(approval_id)
+        if record is None or (record.session_id, record.agent_id) != (
+            context.session_id,
+            context.agent_id,
+        ):
+            return False
         return await self._approval_store.consume(
             approval_id, action_hash(context.action, context.input_data)
         )

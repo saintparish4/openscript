@@ -587,6 +587,19 @@ minimal solution. The agent here is scripted and never reaches round the
 wrapper. The tests in `tests/test_ledger.py` do reach round it, and they run
 the service as a separate process.
 
+## Bypass attempts
+
+`pytest tests/bypass`, and `evals/agentdojo/search.py` in the AgentDojo
+environment. Every finding, with its status, is in
+[`docs/red-team.md`](red-team.md). Measured 2026-11-03.
+
+| Search | What it tried | Found |
+|---|---|---|
+| Hypothesis state machine | 300 runs of up to 25 steps: reads, acts, approvals, redemptions in any session, resets and restarts | B1, an approval redeemable in another session, now fixed. B2, memory lost on restart with the default store |
+| Goal search | AgentDojo's 26 injection goals that ship calls, each attacker call mutated against the known lists, and subsequences of what the policies let through | No goal reached under 6 policy configurations. All 26 reached with no policy |
+| Observer at the sink | A compromised turn in the SDK and under the Claude Code hook, watched by the sink and by an audit hook | B3, a code tool not listed as a sink. B4, Bash under the default hook profile. B5, the hook's own cache rewritten with Write, now refused |
+| Failure injection | Redis down, expiry, two workers, the hook killed or its state unwritable, the effect side down or restarted | 11 rows closed. 2 open by configuration, each with the setting that closes it |
+
 ## Speed
 
 Measured inside Python, around the pipeline call only. Re-measured
@@ -701,7 +714,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | What | Number |
 |---|---|
-| Tests | 844 |
+| Tests | 908 |
 | Labelled eval prompts | 1,799 across 8 corpora (348 written here, 1,451 public) |
 | Built-in policies | 10, all pure-local |
 | Opt-in policies | 1 (`SemanticPolicy`), head not trained, no number claimed |
@@ -713,6 +726,7 @@ section scrolls into view — which on the current layout is immediately.
 
 | Date | Change |
 |---|---|
+| 2026-11-03 | Bypass attempts: a state machine, a goal search, an observer at the sink and failure injection. Approvals are now bound to the session that asked, the hook refuses writes to its own inputs, and a strict hook profile holds Bash after a read. Bash rewriting the hook's files stays open, with what closes it |
 | 2026-11-03 | A ledger at the effect side, under a protocol frozen first: with it enforcing, no attacker irreversible effect was applied in any replayed configuration, with no policy at all included. It costs the session rule its savings: every irreversible call needs a person, 59 of 97 tasks |
 | 2026-11-03 | Every AgentDojo tool classed from its code as read, reversible or irreversible, under a protocol frozen first. Holding only irreversible calls after an untrusted read asks on 51 of 97 ordinary tasks instead of 55, and on 40 with known destinations instead of 44. No attacker irreversible call ran that the session rule held. Still over the bar of a third |
 | 2026-10-20 | The Java client measured against the real server on the local box: 3.4 ms p50 for one check (1.3 ms of it the policies), 4.7 ms for a guarded agent call (two requests); guarded streaming 196 ms for a 1,020-character answer at one request per chunk, 9.3 ms when it holds back 256 characters more |

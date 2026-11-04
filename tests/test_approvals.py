@@ -427,3 +427,38 @@ def test_decide_twice_returns_409(api):
 
     second = api.post(f"/v1/approvals/{record.approval_id}/decide", json={"approved": False})
     assert second.status_code == 409
+
+
+async def test_an_approval_is_redeemed_only_in_the_session_and_by_the_agent_it_was_asked_for():
+    """B1 in docs/red-team.md: the hash binds the call, not where it was asked."""
+    from contracts.types import ActionBlockedError
+    from events.approvals import InMemoryApprovalStore
+    from sdk import SecureTool, ToolFirewallPolicy, ToolRules
+
+    ran: list[int] = []
+
+    def pay(amount: int) -> str:
+        ran.append(amount)
+        return "paid"
+
+    store = InMemoryApprovalStore()
+    rules = ToolRules.model_validate({"rules": {"pay": {"requires_approval": True}}})
+    tool = SecureTool(pay, [ToolFirewallPolicy(rules=rules)], approval_store=store)
+    with pytest.raises(ActionBlockedError) as held:
+        await tool.call({"amount": 5}, session_id="s1", agent_id="a1")
+    await store.decide(held.value.approval_id, approved=True)
+    for elsewhere in (
+        {"session_id": "s2", "agent_id": "a1"},
+        {"session_id": "s1", "agent_id": "a2"},
+    ):
+        with pytest.raises(ActionBlockedError):
+            await tool.call({"amount": 5}, approval_id=held.value.approval_id, **elsewhere)
+    assert ran == []
+    # Refused elsewhere, it is not spent: it still buys the call where it was asked.
+    assert (
+        await tool.call(
+            {"amount": 5}, approval_id=held.value.approval_id, session_id="s1", agent_id="a1"
+        )
+        == "paid"
+    )
+    assert ran == [5]
