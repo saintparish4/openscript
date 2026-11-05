@@ -52,9 +52,10 @@ injections. The protocol was frozen before the run.
 - **The effect side is the boundary.** A ledger in front of each irreversible
   tool applies a call only with a token minted when a person approves it. A
   call that goes round the wrapper changes nothing.
-- **Safety has a price, and it is published.** Asking on every irreversible
-  call means a person on 59 of AgentDojo's 97 ordinary tasks. The session
-  rule asks less and misses the attacks that arrive through Slack's channel
+- **Safety has a price, and it is published.** In the run above, asking on
+  every irreversible call meant a person on 23 of the 37 ordinary tasks. In
+  the no-model replay of all four suites it is 59 of 97. The session rule
+  asks less and misses the attacks that arrive through Slack's channel
   listing.
 - **It was attacked before it was trusted.** A [red team](docs/red-team.md)
   searched for bypasses and published 7 findings, each committed as a
