@@ -42,7 +42,11 @@ out = Path(sys.argv[1])
 manifest = {}
 for whl in out.glob("*.whl"):
     dist = whl.name.split("-")[0].replace("_", "-").lower()
-    manifest[dist] = f"./wheels/{whl.name}"
+    # The pages, the extension and the deployed demo's daily check read the
+    # package's wheel as `openscript`. The distribution is openscript-sdk on
+    # PyPI; the key stays, so no consumer has to change with it.
+    key = {"openscript-sdk": "openscript"}.get(dist, dist)
+    manifest[key] = f"./wheels/{whl.name}"
 
 missing = {"openscript", "structlog"} - set(manifest)
 if missing:

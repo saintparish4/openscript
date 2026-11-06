@@ -13,7 +13,7 @@ OUT="$ROOT/extension/vendor"
 PIN="0.28.3"
 
 [ -f "$PYODIDE/pyodide.mjs" ] || { echo "no $PYODIDE — run \`make demo-install\` first"; exit 1; }
-ls "$WHEELS"/openscript-*.whl >/dev/null 2>&1 || { echo "no $WHEELS — run \`make browser-wheels\` first"; exit 1; }
+ls "$WHEELS"/openscript_sdk-*.whl >/dev/null 2>&1 || { echo "no $WHEELS — run \`make browser-wheels\` first"; exit 1; }
 
 have="$(node -p "require('$PYODIDE/package.json').version")"
 if [ "$have" != "$PIN" ]; then
@@ -31,6 +31,6 @@ echo "==> project wheels"
 cp "$WHEELS"/*.whl "$OUT/"
 
 structlog="$(basename "$(ls "$WHEELS"/structlog-*.whl)")"
-openscript="$(basename "$(ls "$WHEELS"/openscript-*.whl)")"
+openscript="$(basename "$(ls "$WHEELS"/openscript_sdk-*.whl)")"
 printf '{\n  "structlog": "%s",\n  "openscript": "%s"\n}\n' "$structlog" "$openscript" > "$OUT/manifest.json"
 du -sh "$OUT"

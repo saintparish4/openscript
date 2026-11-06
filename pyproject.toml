@@ -3,15 +3,23 @@ requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "openscript"
-version = "0.1.0" 
-description = "Python SDK for building prompt-secured LLM/agent workflows"
+# The distribution is openscript-sdk because "openscript" on PyPI is an
+# unrelated project. The import name matches it: `import openscript_sdk`.
+name = "openscript-sdk"
+version = "0.1.0"
+description = "Hold an AI agent's irreversible tool calls until a person approves that exact call"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Sharif Parish" }]
+keywords = [
+    "ai-agents", "agent-security", "prompt-injection", "human-in-the-loop",
+    "tool-calling", "llm", "guardrails", "claude-code",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -29,6 +37,13 @@ dependencies = [
     "structlog>=25.5.0",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/saintparish4/openscript"
+Documentation = "https://github.com/saintparish4/openscript/blob/master/docs/guide.md"
+Source = "https://github.com/saintparish4/openscript"
+Issues = "https://github.com/saintparish4/openscript/issues"
+Demo = "https://openscript-demo.vercel.app/"
 
 [project.scripts]
 # The Claude Code hook: openscript_sdk/hooks/claude_code.py, configured by a YAML file
@@ -49,11 +64,22 @@ otel = [
     "opentelemetry-sdk>=1.27",
     "opentelemetry-exporter-otlp>=1.27",
 ]
+# The FastAPI server (openscript_sdk.server.app): the event store, SSE, the
+# dashboard, the approval queue, /v1/guard for the Java client, /metrics.
+# Its database migrations live in the repository's alembic/, not the wheel.
+server = [
+    "openscript-sdk[metrics,redis]",
+    "fastapi>=0.128.0",
+    "uvicorn>=0.42.0",
+    "sqlalchemy[asyncio]>=2.0.48",
+    "asyncpg>=0.31.0",
+    "python-dotenv>=1.0.0",
+]
 # Everything demo/injection_demo.py imports unconditionally. It also prints
 # Prometheus metrics, hence the self-reference onto [metrics] rather than
 # duplicating prometheus-client's pin here.
 demo = [
-    "openscript[metrics]",
+    "openscript-sdk[metrics]",
     "rich>=13.0.0",
     "python-dotenv>=1.0.0",
 ]
@@ -74,6 +100,20 @@ where = ["."]
 # "openscript_sdk" without the wildcard matches ONLY openscript_sdk/__init__.py and
 # logging.py: every policy subpackage is an implicit namespace package underneath it.
 include = ["openscript_sdk*"]
+
+# Not Python, but read at runtime or copied by users: the server's dashboard
+# (served at /dashboard/; without these files the server starts and silently
+# serves none), the example configs the guide tells people to copy, and the
+# PEP 561 marker that the Typing :: Typed classifier promises.
+[tool.setuptools.package-data]
+openscript_sdk = [
+    "py.typed",
+    "hooks/*.yaml",
+    "hooks/*.json",
+    "policies/*.yaml",
+    "server/*.yaml",
+    "server/static/dashboard/*.html",
+]
 
 [tool.pytest.ini_options]
 # Repo root must be on path so `openscript_sdk` and `evals` resolve when collecting tests.

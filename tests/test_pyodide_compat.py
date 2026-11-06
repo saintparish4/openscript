@@ -194,7 +194,7 @@ def test_committed_browser_wheel_matches_source(wheel: Path):
     bundle before exporting, so it verifies fresh wheels while visitors keep
     running whatever was committed last.
     """
-    committed = sorted((REPO_ROOT / "site/public/wheels").glob("openscript-*.whl"))
+    committed = sorted((REPO_ROOT / "site/public/wheels").glob("openscript_sdk-*.whl"))
     assert len(committed) == 1, (
         f"expected exactly one committed openscript wheel, found {[p.name for p in committed]}. "
         "Run `make browser-wheels` and commit site/public/wheels/."
