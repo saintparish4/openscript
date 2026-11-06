@@ -1,6 +1,7 @@
 # OpenScript
 
 [![CI](https://github.com/saintparish4/openscript/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/saintparish4/openscript/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/openscript-sdk?label=pypi)](https://pypi.org/project/openscript-sdk/)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/saintparish4/openscript/blob/master/LICENSE)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20your%20browser-22c55e)](https://openscript-demo.vercel.app/)
 
