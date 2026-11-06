@@ -239,5 +239,5 @@ jobs:
       - name: Verify wheel
         run: |
           pip install dist/*.whl
-          python -c "from contracts import Interceptor, FailureMode, AgentCapabilities; print('contracts OK')"
+          python -c "from openscript_sdk.contracts import Interceptor, FailureMode, AgentCapabilities; print('contracts OK')"
           python -c "from openscript_sdk import OpenScriptMiddleware, NoopInterceptor; print('openscript_sdk OK')"
