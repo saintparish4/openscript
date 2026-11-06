@@ -13,7 +13,7 @@ import java.util.stream.Stream;
 
 /**
  * What a guarded call costs from Java, against a real server. Not a test: {@code make java-latency}
- * starts the server with {@code server/guard_example.yaml} and runs this.
+ * starts the server with {@code openscript_sdk/server/guard_example.yaml} and runs this.
  *
  * <p>Every timing is wall clock on the client ({@code System.nanoTime()}) around the whole call,
  * with the agent or tool returning at once, so what is measured is the guard. The server's own

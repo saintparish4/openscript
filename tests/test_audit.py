@@ -29,9 +29,9 @@ from policy_audit import (  # noqa: E402
 # Helper modules a policy imports. The audit table walks policy modules only,
 # so anything shared between them has to be named here or it is unchecked.
 SHARED_POLICY_HELPERS = [
-    "sdk/policies/normalize.py",
-    "sdk/policies/redaction.py",
-    "sdk/policies/taint_store.py",
+    "openscript_sdk/policies/normalize.py",
+    "openscript_sdk/policies/redaction.py",
+    "openscript_sdk/policies/taint_store.py",
 ]
 
 # The exact set of policies the demo claims to run in the browser.
@@ -48,7 +48,7 @@ EXPECTED_POLICIES = {
     "audit",
 }
 
-# Everything `import sdk` must survive without. If one of these becomes a real
+# Everything `import openscript_sdk` must survive without. If one of these becomes a real
 # import-time dependency, the Pyodide build breaks.
 FORBIDDEN_AT_IMPORT = [
     "sqlalchemy",
@@ -74,7 +74,7 @@ def test_registry_has_exactly_the_ten_audited_policies():
 
 def test_every_registered_policy_is_either_pure_local_or_declared_opt_in():
     """A policy cannot join the registry without landing in one list or the other."""
-    from sdk.policies.config import _REGISTRY
+    from openscript_sdk.policies.config import _REGISTRY
 
     registered = set(_REGISTRY) - {"noop"}
     assert registered == EXPECTED_POLICIES | set(OPT_IN_POLICIES), (
@@ -87,7 +87,7 @@ def test_every_registered_policy_is_either_pure_local_or_declared_opt_in():
 
 @pytest.mark.parametrize("row", audit(opt_in=True), ids=lambda r: r["policy"])
 def test_opt_in_policy_keeps_its_model_out_of_import_time(row):
-    """An opt-in policy may need a model. `import sdk` may not."""
+    """An opt-in policy may need a model. `import openscript_sdk` may not."""
     assert not row["disallowed_top_level"], (
         f"{row['policy']} imports {row['disallowed_top_level']} at module scope; "
         "heavy dependencies go inside the function that needs them."
@@ -132,10 +132,10 @@ def guard(name, *a, **k):
     return _real(name, *a, **k)
 builtins.__import__ = guard
 
-import sdk
-# sdk exports lazily, so importing it alone proves nothing: resolve every
+import openscript_sdk
+# openscript_sdk exports lazily, so importing it alone proves nothing: resolve every
 # exported name, which imports every module behind them.
-missing = [n for n in sdk.__all__ if not hasattr(sdk, n)]
+missing = [n for n in openscript_sdk.__all__ if not hasattr(openscript_sdk, n)]
 assert not missing, missing
 print("OK")
 """
@@ -146,7 +146,7 @@ print("OK")
         text=True,
     )
     assert proc.returncode == 0, (
-        "`import sdk` pulled in a dependency Pyodide cannot provide:\n" + proc.stderr
+        "`import openscript_sdk` pulled in a dependency Pyodide cannot provide:\n" + proc.stderr
     )
     assert "OK" in proc.stdout
 
@@ -158,11 +158,7 @@ def test_shared_helpers_are_stdlib_only(module: str):
     top = top_level_imports(path)
     lazy = lazy_imports(path)
 
-    external = {
-        m
-        for m in top
-        if m not in sys.stdlib_module_names and m not in {"sdk", "contracts", "events"}
-    }
+    external = {m for m in top if m not in sys.stdlib_module_names and m != "openscript_sdk"}
     assert not external - ALLOWED_RUNTIME_DEPS, (
         f"{module} imports {sorted(external - ALLOWED_RUNTIME_DEPS)} at module scope; "
         "the browser build only has the pure-local set."

@@ -23,14 +23,14 @@ from typing import Any
 import pytest
 import yaml
 
-from contracts.types import ActionBlockedError
 from evals.ledger import Ledger, TokenClass
-from sdk import SecureTool, SessionTaintPolicy
+from openscript_sdk import SecureTool, SessionTaintPolicy
+from openscript_sdk.contracts.types import ActionBlockedError
 
 from .observer import IN_GATED_TOOL, Sink, observing
 
 ROOT = Path(__file__).resolve().parents[2]
-HOOKS = ROOT / "sdk" / "hooks"
+HOOKS = ROOT / "openscript_sdk" / "hooks"
 
 
 @pytest.fixture
@@ -135,7 +135,14 @@ class ClaudeCode:
         }
         command = "pre-tool-use" if event == "PreToolUse" else "post-tool-use"
         return subprocess.run(
-            [sys.executable, "-m", "sdk.hooks.claude_code", "--config", str(self.config), command],
+            [
+                sys.executable,
+                "-m",
+                "openscript_sdk.hooks.claude_code",
+                "--config",
+                str(self.config),
+                command,
+            ],
             input=json.dumps(payload),
             capture_output=True,
             text=True,
@@ -228,7 +235,14 @@ def test_the_strict_profile_is_valid_and_its_matcher_sends_every_tool_it_names(t
     config = tmp_path / "strict.yaml"
     config.write_text((HOOKS / "claude_code_strict_example.yaml").read_text())
     check = subprocess.run(
-        [sys.executable, "-m", "sdk.hooks.claude_code", "--config", str(config), "check"],
+        [
+            sys.executable,
+            "-m",
+            "openscript_sdk.hooks.claude_code",
+            "--config",
+            str(config),
+            "check",
+        ],
         capture_output=True,
         text=True,
         cwd=ROOT,

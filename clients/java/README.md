@@ -16,12 +16,12 @@ In Python, `SecureAgent` runs the policies' before phase, the agent, then the af
 2. The client runs the agent or tool on the input **as the server returned it**, so a masked secret never reaches the model.
 3. `POST /v1/guard` with `phase: "output"`: the policies check (and may redact) what came back.
 
-The server holds two lists, as a Python program builds two: `agent` (what `SecureAgent` would run, action `invoke`) and `tool` (what each `SecureTool` would run, action `tool_call`). See [`server/guard_example.yaml`](../../server/guard_example.yaml). Start the server with it:
+The server holds two lists, as a Python program builds two: `agent` (what `SecureAgent` would run, action `invoke`) and `tool` (what each `SecureTool` would run, action `tool_call`). See [`openscript_sdk/server/guard_example.yaml`](../../openscript_sdk/server/guard_example.yaml). Start the server with it:
 
 ```bash
 docker compose up -d && alembic upgrade head
 export OPENSCRIPT_API_KEY=change-me
-OPENSCRIPT_GUARD_CONFIG=server/guard_example.yaml uvicorn server.app:app
+OPENSCRIPT_GUARD_CONFIG=openscript_sdk/server/guard_example.yaml uvicorn openscript_sdk.server.app:app
 ```
 
 ## Use

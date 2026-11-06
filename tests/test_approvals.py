@@ -7,17 +7,17 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from contracts.interceptor import BasePolicy
-from contracts.server_types import Event, EventType
-from contracts.types import ActionBlockedError, ActionContext, InterceptorDecision
-from events.approvals import (
+from openscript_sdk.contracts.interceptor import BasePolicy
+from openscript_sdk.contracts.server_types import Event, EventType
+from openscript_sdk.contracts.types import ActionBlockedError, ActionContext, InterceptorDecision
+from openscript_sdk.events.approvals import (
     ApprovalRecord,
     ApprovalStatus,
     InMemoryApprovalStore,
     action_hash,
 )
-from sdk.middleware.middleware import SecureAgent
-from server.routers import approvals as approvals_router
+from openscript_sdk.middleware.middleware import SecureAgent
+from openscript_sdk.server.routers import approvals as approvals_router
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -245,7 +245,7 @@ async def test_a_denial_carries_the_reason_and_never_redeems():
 
 
 def test_a_record_written_before_the_note_existed_still_loads():
-    from events.approvals import ApprovalRecord
+    from openscript_sdk.events.approvals import ApprovalRecord
 
     data = ApprovalRecord(
         session_id="s", agent_id="a", action="invoke", reason="r", action_hash="h"
@@ -431,9 +431,9 @@ def test_decide_twice_returns_409(api):
 
 async def test_an_approval_is_redeemed_only_in_the_session_and_by_the_agent_it_was_asked_for():
     """B1 in docs/red-team.md: the hash binds the call, not where it was asked."""
-    from contracts.types import ActionBlockedError
-    from events.approvals import InMemoryApprovalStore
-    from sdk import SecureTool, ToolFirewallPolicy, ToolRules
+    from openscript_sdk import SecureTool, ToolFirewallPolicy, ToolRules
+    from openscript_sdk.contracts.types import ActionBlockedError
+    from openscript_sdk.events.approvals import InMemoryApprovalStore
 
     ran: list[int] = []
 

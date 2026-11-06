@@ -17,7 +17,6 @@ from typing import Any
 
 import pytest
 
-from contracts.types import ActionBlockedError
 from evals.ledger import (
     DOMAIN,
     Ledger,
@@ -26,8 +25,9 @@ from evals.ledger import (
     TokenClass,
     call_hash,
 )
-from events.approvals import InMemoryApprovalStore
-from sdk import SecureTool, ToolFirewallPolicy, ToolRules
+from openscript_sdk import SecureTool, ToolFirewallPolicy, ToolRules
+from openscript_sdk.contracts.types import ActionBlockedError
+from openscript_sdk.events.approvals import InMemoryApprovalStore
 
 PAY = {"recipient": "acct-7", "amount": 500}
 

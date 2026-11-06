@@ -24,9 +24,14 @@ from typing import Any
 
 import pytest
 
-from contracts.types import ActionBlockedError
-from events.approvals import ApprovalRecord, ApprovalStatus, RedisApprovalStore, action_hash
-from sdk import SecureTool, ToolFirewallPolicy, ToolRules
+from openscript_sdk import SecureTool, ToolFirewallPolicy, ToolRules
+from openscript_sdk.contracts.types import ActionBlockedError
+from openscript_sdk.events.approvals import (
+    ApprovalRecord,
+    ApprovalStatus,
+    RedisApprovalStore,
+    action_hash,
+)
 
 URL = os.environ.get("OPENSCRIPT_TEST_REDIS_URL", "")
 HASH = action_hash("tool_call", {"name": "send", "args": {"to": "alice"}})

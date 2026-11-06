@@ -6,10 +6,10 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from contracts.server_types import Event, EventType
-from contracts.types import ActionContext, InterceptorDecision
-from sdk.policies.config import load_policies
-from sdk.policies.output_schema import (
+from openscript_sdk.contracts.server_types import Event, EventType
+from openscript_sdk.contracts.types import ActionContext, InterceptorDecision
+from openscript_sdk.policies.config import load_policies
+from openscript_sdk.policies.output_schema import (
     HallucinationMode,
     OnInvalid,
     OutputSchemaPolicy,
@@ -272,12 +272,12 @@ async def test_no_event_when_valid():
 
 
 def test_load_policies_builds_output_schema_from_dotted_path():
-    from sdk.policies.tool_firewall import ToolRule
+    from openscript_sdk.policies.tool_firewall import ToolRule
 
     (policy,) = load_policies(
         {
             "output_schema": {
-                "model": "sdk.policies.tool_firewall:ToolRule",
+                "model": "openscript_sdk.policies.tool_firewall:ToolRule",
                 "on_invalid": "annotate",
                 "hallucination_threshold": 0.7,
             }
@@ -291,7 +291,9 @@ def test_load_policies_builds_output_schema_from_dotted_path():
 
 def test_load_policies_rejects_non_model_path():
     with pytest.raises(ValueError, match="not a pydantic BaseModel"):
-        load_policies({"output_schema": {"model": "sdk.policies.tool_firewall:validate_tool_call"}})
+        load_policies(
+            {"output_schema": {"model": "openscript_sdk.policies.tool_firewall:validate_tool_call"}}
+        )
 
 
 def test_load_policies_rejects_bad_model_path():

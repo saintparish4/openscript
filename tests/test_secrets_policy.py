@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from contracts.server_types import Event, EventType
-from contracts.types import ActionContext, InterceptorDecision
-from sdk.interceptors.pii import PIIMode
-from sdk.policies.secrets import InternalURLMode, SecretsPolicy, find_secrets
+from openscript_sdk.contracts.server_types import Event, EventType
+from openscript_sdk.contracts.types import ActionContext, InterceptorDecision
+from openscript_sdk.interceptors.pii import PIIMode
+from openscript_sdk.policies.secrets import InternalURLMode, SecretsPolicy, find_secrets
 
 # ---------------------------------------------------------------------------
 # Helpers

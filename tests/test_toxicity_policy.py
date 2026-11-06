@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from contracts.server_types import Event, EventType
-from contracts.types import ActionContext, FailureMode, InterceptorDecision
-from sdk.policies.toxicity import ToxicityPolicy, score_toxicity
+from openscript_sdk.contracts.server_types import Event, EventType
+from openscript_sdk.contracts.types import ActionContext, FailureMode, InterceptorDecision
+from openscript_sdk.policies.toxicity import ToxicityPolicy, score_toxicity
 
 # ---------------------------------------------------------------------------
 # Helpers

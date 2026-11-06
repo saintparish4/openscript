@@ -24,7 +24,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-HOOKS = ROOT / "sdk" / "hooks"
+HOOKS = ROOT / "openscript_sdk" / "hooks"
 SESSION = "3f2b9c1e-7d4a-4b8e-9a51-0c6d2e8f4b17"
 AWS = "AKIAIOSFODNN7EXAMPLE"
 
@@ -66,7 +66,7 @@ class Hook:
             [
                 sys.executable,
                 "-m",
-                "sdk.hooks.claude_code",
+                "openscript_sdk.hooks.claude_code",
                 "--config",
                 str(self.config),
                 command,
@@ -260,14 +260,14 @@ def test_stdout_holds_only_the_decision_whatever_a_library_prints(tmp_path):
     hook = Hook(tmp_path)
     wrapper = (
         "import sys, structlog\n"
-        "import sdk.policies.session_taint as taint\n"
+        "import openscript_sdk.policies.session_taint as taint\n"
         "real = taint.SessionTaintPolicy.check\n"
         "def noisy(self, *a, **k):\n"
         "    print('noise from a policy')\n"
         "    structlog.get_logger().warning('noise from structlog')\n"
         "    return real(self, *a, **k)\n"
         "taint.SessionTaintPolicy.check = noisy\n"
-        "from sdk.hooks.claude_code import main\n"
+        "from openscript_sdk.hooks.claude_code import main\n"
         "raise SystemExit(main(sys.argv[1:]))\n"
     )
 
@@ -424,7 +424,7 @@ def test_the_console_script_points_at_main():
         ]
     except ValueError:
         pytest.skip("the package is not installed with its entry points here")
-    assert entry.value == "sdk.hooks.claude_code:main"
+    assert entry.value == "openscript_sdk.hooks.claude_code:main"
 
 
 # -- the validated config, kept between calls ------------------------------------------
@@ -470,7 +470,7 @@ def test_with_the_config_cached_a_post_call_imports_no_pydantic(tmp_path):
     hook.post("Bash", {"stdout": "x", "stderr": ""}, command="ls")  # validates and caches
     probe = (
         "import sys\n"
-        "from sdk.hooks.claude_code import main\n"
+        "from openscript_sdk.hooks.claude_code import main\n"
         "code = main(sys.argv[1:])\n"
         "sys.stderr.write('PYDANTIC=%s\\n' % ('pydantic' in sys.modules))\n"
         "raise SystemExit(code)\n"

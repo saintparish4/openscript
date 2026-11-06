@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from contracts.types import ActionContext, InterceptorDecision
-from sdk.policies.tool_firewall import (
+from openscript_sdk.contracts.types import ActionContext, InterceptorDecision
+from openscript_sdk.policies.tool_firewall import (
     ToolFirewallPolicy,
     ToolRule,
     ToolRules,
@@ -486,7 +486,12 @@ def test_empty_rules_file_is_an_error(tmp_path: Path):
 
 
 def test_example_rules_file_loads():
-    example = Path(__file__).resolve().parent.parent / "sdk" / "policies" / "tools_example.yaml"
+    example = (
+        Path(__file__).resolve().parent.parent
+        / "openscript_sdk"
+        / "policies"
+        / "tools_example.yaml"
+    )
     rules = load_rules(example)
     assert rules.rules["delete_record"].deny is True
 
@@ -494,7 +499,7 @@ def test_example_rules_file_loads():
 def test_rules_rebuilt_from_their_validated_dump_decide_exactly_as_the_originals():
     """ToolRules.from_validated skips validation, for a hook that validated the
     rules once and kept them. It has to give the same verdict on every call."""
-    from sdk.policies.tool_firewall import ToolRules, validate_tool_call
+    from openscript_sdk.policies.tool_firewall import ToolRules, validate_tool_call
 
     rules = ToolRules.model_validate(
         {

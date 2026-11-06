@@ -25,14 +25,14 @@ logging.disable(logging.CRITICAL)  # the policies log every finding; the panel i
 
 import yaml
 
-from events.approvals import InMemoryApprovalStore
-from sdk import (
+from openscript_sdk import (
     ActionBlockedError,
     PromptInjectionPolicy,
     SecureTool,
     ToolFirewallPolicy,
     ToolRules,
 )
+from openscript_sdk.events.approvals import InMemoryApprovalStore
 
 # The names of the tools whose bodies ran, in order. "Refused" and "held" are
 # only worth saying if this list did not grow, so it is read, not inferred.

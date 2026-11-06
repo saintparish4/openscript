@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from contracts.types import ActionContext
-from sdk import find_pii, find_secrets, redact_data, redact_pii, redact_secrets
-from sdk.interceptors.pii import PIIMode, PIIPolicy
-from sdk.policies.secrets import SecretsPolicy
+from openscript_sdk import find_pii, find_secrets, redact_data, redact_pii, redact_secrets
+from openscript_sdk.contracts.types import ActionContext
+from openscript_sdk.interceptors.pii import PIIMode, PIIPolicy
+from openscript_sdk.policies.secrets import SecretsPolicy
 
 AWS = "AKIAIOSFODNN7EXAMPLE"
 GITHUB = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
@@ -92,7 +92,7 @@ def test_the_finders_report_what_the_redactors_remove():
     assert not any(label == "credit_card" for _, label in find_pii("card 1234 5678 9012 3456"))
 
 
-@pytest.mark.parametrize("path", ["sdk/policies/redaction.py"])
+@pytest.mark.parametrize("path", ["openscript_sdk/policies/redaction.py"])
 def test_the_module_imports_nothing_outside_the_standard_library(path):
     """Cheap to import on purpose: a hook pays for it on every tool call."""
     tree = ast.parse((Path(__file__).resolve().parents[1] / path).read_text())

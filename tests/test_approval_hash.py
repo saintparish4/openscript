@@ -18,7 +18,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from events.approvals import action_hash
+from openscript_sdk.events.approvals import action_hash
 
 
 class Level(IntEnum):

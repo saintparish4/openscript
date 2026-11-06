@@ -15,9 +15,7 @@ import time
 
 logging.disable(logging.CRITICAL)  # the policies log every finding; the UI is the report
 
-from events.approvals import InMemoryApprovalStore
-from events.writer import EventWriter
-from sdk import (
+from openscript_sdk import (
     ActionBlockedError,
     AuditPolicy,
     CompliancePolicy,
@@ -32,7 +30,9 @@ from sdk import (
     ToolRules,
     ToxicityPolicy,
 )
-from sdk.observability.risk import aggregate_risk
+from openscript_sdk.events.approvals import InMemoryApprovalStore
+from openscript_sdk.events.writer import EventWriter
+from openscript_sdk.observability.risk import aggregate_risk
 
 # Tool rules the sandboxed agents are held to. One of each kind of check the
 # firewall makes, so the gallery can show each of them refusing something: an

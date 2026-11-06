@@ -41,7 +41,10 @@ FROZEN = {
     # Destinations the user named, a candidate measured before any run of it.
     "PROTOCOL-named.md": "81cd62a163d8822535f3740813a27f9eab33e4bd3880a2587ed4dd595644039d",
     "named.yaml": "9319ba2094ce356fa705bf71fb42e5e4f5a36298e1e832a8358ec9d8ba59f140",
-    "named.py": "b8672ba856fd864a0ac358fb29f0c6fabca4ae45700087990bcae317d984be50",
+    # Version 2, 2026-11-05: the package moved from sdk to openscript_sdk; only the
+    # import line and two words of its docstring changed, and `make agentdojo-named`
+    # reproduced results/named/ byte for byte. See evals/agentdojo/README.md.
+    "named.py": "77cd888e1bb78c1cd087856736e23ea47027e2bb80adc9d96b91b1b7edc139f2",
     # Holding only what cannot be undone, frozen before any run of it.
     "PROTOCOL-irreversible.md": "30a147fb150d78121bde88a79a09807237e0a04a56510940b020a7383da42d2d",
     "irreversible.yaml": "46fdf2b6c69c504181f719383a19382a0176418f55b5bdb6d035688ac17fa58e",
@@ -443,7 +446,7 @@ def test_the_rescore_of_the_model_runs_is_what_the_transcripts_give():
 
 
 def test_every_suites_known_lists_are_accepted_by_the_session_rule():
-    from sdk import SessionTaintPolicy
+    from openscript_sdk import SessionTaintPolicy
 
     lists = yaml.safe_load((HERE / "classification.yaml").read_text())["suites"]
     known = yaml.safe_load((HERE / "known.yaml").read_text())

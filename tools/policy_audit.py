@@ -19,7 +19,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from sdk.policies.config import _REGISTRY  # noqa: E402
+from openscript_sdk.policies.config import _REGISTRY  # noqa: E402
 
 # Third-party packages a pure local policy is allowed to import at module scope
 ALLOWED_RUNTIME_DEPS = {"pydantic", "structlog", "yaml", "annotated_types", "typing_extensions"}
@@ -47,16 +47,16 @@ LAZY_ONLY = {"sentence_transformers", "prometheus_client", "opentelemetry", "red
 
 # The concrete module each registry entry's policy class lives in.
 _POLICY_MODULES = {
-    "prompt_injection": "sdk/interceptors/threat.py",
-    "toxicity": "sdk/policies/toxicity.py",
-    "harmful_request": "sdk/policies/harmful_request.py",
-    "pii": "sdk/interceptors/pii.py",
-    "secrets": "sdk/policies/secrets.py",
-    "compliance": "sdk/policies/compliance.py",
-    "tool_firewall": "sdk/policies/tool_firewall.py",
-    "session_taint": "sdk/policies/session_taint.py",
-    "output_schema": "sdk/policies/output_schema.py",
-    "audit": "sdk/interceptors/event_writer.py",
+    "prompt_injection": "openscript_sdk/interceptors/threat.py",
+    "toxicity": "openscript_sdk/policies/toxicity.py",
+    "harmful_request": "openscript_sdk/policies/harmful_request.py",
+    "pii": "openscript_sdk/interceptors/pii.py",
+    "secrets": "openscript_sdk/policies/secrets.py",
+    "compliance": "openscript_sdk/policies/compliance.py",
+    "tool_firewall": "openscript_sdk/policies/tool_firewall.py",
+    "session_taint": "openscript_sdk/policies/session_taint.py",
+    "output_schema": "openscript_sdk/policies/output_schema.py",
+    "audit": "openscript_sdk/interceptors/event_writer.py",
 }
 
 
@@ -64,7 +64,7 @@ _POLICY_MODULES = {
 # demo: they need a model. Listed here so the audit reports them as what they
 # are instead of either hiding them or counting them as local.
 OPT_IN_POLICIES = {
-    "semantic": "sdk/policies/semantic.py",
+    "semantic": "openscript_sdk/policies/semantic.py",
 }
 
 
@@ -102,7 +102,7 @@ def lazy_imports(path: Path) -> set[str]:
 def audit(opt_in: bool = False) -> list[dict]:
     """Audit the pure-local built-ins, or with opt_in=True the opt-in policies."""
     rows = []
-    first_party = {"sdk", "contracts", "events"}
+    first_party = {"openscript_sdk"}
     modules = OPT_IN_POLICIES if opt_in else _POLICY_MODULES
     for name in sorted(_REGISTRY):
         if name == "noop" or name not in modules:

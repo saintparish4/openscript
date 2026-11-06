@@ -58,7 +58,7 @@ jobs:
           pip install -e . 
 
       - name: MyPy 
-        run: mypy --strict sdk/ contracts/ 
+        run: mypy --strict openscript_sdk/ --exclude openscript_sdk/server/
 
   test:
     runs-on: ubuntu-latest
@@ -176,7 +176,7 @@ jobs:
         working-directory: site
 
   # The Java client against the real policies: the server is started with
-  # server/guard_example.yaml and LiveServerTest runs through it. The script
+  # openscript_sdk/server/guard_example.yaml and LiveServerTest runs through it. The script
   # fails if that test was skipped, so this job cannot pass on the stub alone.
   java:
     runs-on: ubuntu-latest
@@ -239,5 +239,5 @@ jobs:
       - name: Verify wheel
         run: |
           pip install dist/*.whl
-          python -c "from contracts import Interceptor, FailureMode, AgentCapabilities; print('contracts OK')"
-          python -c "from sdk import OpenScriptMiddleware, NoopInterceptor; print('sdk OK')"
+          python -c "from openscript_sdk.contracts import Interceptor, FailureMode, AgentCapabilities; print('contracts OK')"
+          python -c "from openscript_sdk import OpenScriptMiddleware, NoopInterceptor; print('openscript_sdk OK')"

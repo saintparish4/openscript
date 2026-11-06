@@ -15,9 +15,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from contracts.types import ActionBlockedError, ActionContext, FailureMode
-from events.approvals import InMemoryApprovalStore
-from sdk import (
+from openscript_sdk import (
     SecureAgent,
     SecureTool,
     SessionTaintPolicy,
@@ -27,6 +25,8 @@ from sdk import (
     aggregate_risk,
     load_policies,
 )
+from openscript_sdk.contracts.types import ActionBlockedError, ActionContext, FailureMode
+from openscript_sdk.events.approvals import InMemoryApprovalStore
 
 SOURCES = ["fetch_issue", "read_page"]
 SINKS = ["send_email", "run_shell"]

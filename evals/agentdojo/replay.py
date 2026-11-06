@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))  # the repository root, for sdk/ and evals/
+sys.path.insert(0, str(HERE.parents[1]))  # the repository root, for openscript_sdk/ and evals/
 
 logging.disable(logging.CRITICAL)  # the policies log every finding; the tables are the report
 warnings.filterwarnings("ignore")
@@ -54,7 +54,7 @@ from guard import (  # noqa: E402
 )
 
 from evals.ledger import Ledger, TokenClass  # noqa: E402
-from sdk import SessionTaintPolicy  # noqa: E402
+from openscript_sdk import SessionTaintPolicy  # noqa: E402
 
 BENCHMARK = "v1.2.2"
 ATTACKS = ("important_instructions", "direct", "ignore_previous", "system_message", "injecagent")

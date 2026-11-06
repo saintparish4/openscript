@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 /**
- * Against the real Python policies: a server started with {@code server/guard_example.yaml}.
+ * Against the real Python policies: a server started with {@code openscript_sdk/server/guard_example.yaml}.
  * {@code tools/java_live_check.sh} starts one and runs this; without OPENSCRIPT_SERVER_URL it is
  * skipped.
  */

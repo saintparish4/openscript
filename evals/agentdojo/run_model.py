@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))  # the repository root, for sdk/ and evals/
+sys.path.insert(0, str(HERE.parents[1]))  # the repository root, for openscript_sdk/ and evals/
 
 logging.disable(logging.CRITICAL)  # the policies log every finding; the rows are the report
 warnings.filterwarnings("ignore")

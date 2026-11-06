@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the Java client's tests against the real Python policies: start the
-# server with server/guard_example.yaml on a free port, run `mvn test` with
+# server with openscript_sdk/server/guard_example.yaml on a free port, run `mvn test` with
 # OPENSCRIPT_SERVER_URL set (which enables LiveServerTest), stop the server.
 #
 # It needs the Postgres the server needs (`docker compose up -d postgres`, or
@@ -26,14 +26,14 @@ MVN="${MVN:-mvn}"
 
 PORT="$("$PYTHON" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
 export OPENSCRIPT_API_KEY="java-live-check"
-export OPENSCRIPT_GUARD_CONFIG="server/guard_example.yaml"
+export OPENSCRIPT_GUARD_CONFIG="openscript_sdk/server/guard_example.yaml"
 export OPENSCRIPT_SERVER_URL="http://127.0.0.1:${PORT}"
 export DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://openscript:openscript@localhost:5432/openscript}"
 LOG="$(mktemp)"
 
 "$PYTHON" -m alembic upgrade head
 
-"$PYTHON" -m uvicorn server.app:app --host 127.0.0.1 --port "$PORT" >"$LOG" 2>&1 &
+"$PYTHON" -m uvicorn openscript_sdk.server.app:app --host 127.0.0.1 --port "$PORT" >"$LOG" 2>&1 &
 SERVER=$!
 trap 'kill "$SERVER" 2>/dev/null || true; rm -f "$LOG"' EXIT
 

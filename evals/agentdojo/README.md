@@ -29,7 +29,7 @@ were committed before any defended configuration ran, and
 ## Run it
 
 AgentDojo has an environment of its own. It pulls in the anthropic, openai,
-cohere, google-genai and langchain SDKs, and nothing under `sdk/` may import
+cohere, google-genai and langchain SDKs, and nothing under `openscript_sdk/` may import
 any of them.
 
 ```bash
@@ -66,7 +66,7 @@ uv pip install --python .venv/bin/python -r requirements.txt -e ../..
 | `known.py`, `known.yaml` | The rule applied to each suite's environment; the lists it gives. Frozen |
 | `summarize_known.py`, `rescore_known.py` | Its tables from the rows, and the exact re-score of the banking model runs |
 | `results/known/` | Its rows, `summary.json` and `rescore.json` |
-| `PROTOCOL-named.md`, `named.yaml`, `named.py` | A candidate: destinations the user named count as known, with a check on links. Measured in the harness, not in `sdk/`. Frozen |
+| `PROTOCOL-named.md`, `named.yaml`, `named.py` | A candidate: destinations the user named count as known, with a check on links. Measured in the harness, not in `openscript_sdk/`. Frozen; `named.py` is version 2 (below) |
 | `summarize_named.py`, `results/named/` | Its tables, rows and the re-score of the model runs |
 | `PROTOCOL-irreversible.md`, `irreversible.yaml` | Holding only what cannot be undone: the criterion, and every tool classed from its code. Frozen |
 | `summarize_irreversible.py`, `results/irreversible/` | Its tables and rows |
@@ -178,6 +178,8 @@ approve, 12 of 16 were done instead of 7. No attack was followed, so it
 contained nothing here.
 
 **Destinations the user named, 2026-10-15** (`PROTOCOL-named.md`, `results/named/`, free): a candidate rule, kept in the harness. It reached 30 of 97 ordinary tasks needing a person, under a third, but Slack stayed at 14 of 21 and 21 travel attacks got through, so it was not adopted, as decided before the run.
+
+**`named.py`, version 2, 2026-11-05.** The package moved from `sdk` to `openscript_sdk` before its first release on PyPI. `named.py` is frozen, so its new bytes are a labelled version: the import line `from sdk import SessionTaintPolicy` became `from openscript_sdk import SessionTaintPolicy`, and two words of its docstring changed to match. The rule did not change. `make agentdojo-named` was run again and reproduced `results/named/` byte for byte, and the hash in `tests/test_agentdojo_results.py` was updated. The other frozen files did not need to change.
 
 **Holding only what cannot be undone, 2026-11-03** (`PROTOCOL-irreversible.md`, `results/irreversible/`, free): 26 of the 74 tools are irreversible by their code. Holding only those after an untrusted read asks on 51 of 97 ordinary tasks instead of 55, and lets no attacker irreversible call run that the session rule held. It is recommended over the session rule as it stands, by the rule set beforehand, and is still over a third.
 

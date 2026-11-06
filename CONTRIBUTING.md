@@ -18,7 +18,7 @@ pip install -e .
 pytest                          # full test suite
 ruff check .                    # lint
 black .                         # format
-mypy --strict sdk/ contracts/   # type-check — this is what CI runs, not plain `mypy`
+mypy --strict openscript_sdk/ --exclude openscript_sdk/server/   # type-check — this is what CI runs, not plain `mypy`
 ```
 
 All four run in CI (`.github/workflows/ci.yml`) and must pass.
@@ -34,9 +34,9 @@ CI runs it against a Redis service container, and fails rather than skips if tha
 
 ## The browser-compatibility constraint
 
-This is the one architectural rule that isn't optional: every built-in policy must stay pure-Python with zero network calls, because the same `sdk` package is compiled to WebAssembly via Pyodide and runs the live browser demo (`site/`) with nothing behind it. `tests/test_audit.py` enforces this in CI — it fails if any policy grows a network call or an import Pyodide can't supply. If a change needs either, that's a deliberate architecture decision (bringing a backend service back into scope), not something to slip in quietly.
+This is the one architectural rule that isn't optional: every built-in policy must stay pure-Python with zero network calls, because the same `openscript_sdk` package is compiled to WebAssembly via Pyodide and runs the live browser demo (`site/`) with nothing behind it. `tests/test_audit.py` enforces this in CI — it fails if any policy grows a network call or an import Pyodide can't supply. If a change needs either, that's a deliberate architecture decision (bringing a backend service back into scope), not something to slip in quietly.
 
-If you touch anything under `sdk/policies/` or `sdk/interceptors/`, also run:
+If you touch anything under `openscript_sdk/policies/` or `openscript_sdk/interceptors/`, also run:
 
 ```bash
 python tools/policy_audit.py
@@ -45,10 +45,10 @@ pytest tests/test_audit.py tests/test_pyodide_compat.py
 
 ## Adding a new built-in policy
 
-1. Implement it satisfying the `Policy` protocol (`contracts/interceptor.py`) — `before_action`, `after_action`, `failure_mode`; subclass `BasePolicy` for pass-through defaults.
+1. Implement it satisfying the `Policy` protocol (`openscript_sdk/contracts/interceptor.py`) — `before_action`, `after_action`, `failure_mode`; subclass `BasePolicy` for pass-through defaults.
 2. Standardize its metadata shape: `context.metadata["your_category"] = {"risk": float, "category": str, ...}` — this is what `RiskScorer`/`MetricsRecorder` read.
-3. Register a factory in `sdk/policies/config.py`'s `_REGISTRY` so it's usable from YAML via `load_policies()`.
-4. Add it to the README's "Built-in Policies" table and, if it changes wire-visible behavior, to `sdk/policies/policies_example.yaml`.
+3. Register a factory in `openscript_sdk/policies/config.py`'s `_REGISTRY` so it's usable from YAML via `load_policies()`.
+4. Add it to the README's "Built-in Policies" table and, if it changes wire-visible behavior, to `openscript_sdk/policies/policies_example.yaml`.
 5. Write tests under `tests/`, following the existing `test_<policy>.py` naming.
 
 ## Deprecating / renaming public API
@@ -79,16 +79,16 @@ Moved here from the README on 2026-11-04, unchanged.
 
 ```
 openscript/
-├── sdk/                      the package (there is no `import openscript`: it is `import sdk`)
+├── openscript_sdk/           the package: `pip install openscript-sdk`, `import openscript_sdk`
 │   ├── middleware/           SecureAgent (middleware.py) and SecureTool (tool.py)
 │   ├── policies/             the built-in policies, the YAML loader, example configs
 │   ├── interceptors/         PII, threat scoring and the event writer (the pre-1.0 names)
 │   ├── hooks/                openscript-hook for Claude Code, its config model and examples
 │   ├── integrations/         wrap_agent / wrap_graph_agent for LangChain and LangGraph
-│   └── observability/        risk scoring, Prometheus metrics, OpenTelemetry tracing
-├── contracts/                the Policy protocol, ActionContext, decisions, failure modes
-├── events/                   event writer and store; approval stores (in-memory, Redis)
-├── server/                   optional FastAPI server: events, SSE, dashboard, approvals, /v1/guard, /metrics
+│   ├── observability/        risk scoring, Prometheus metrics, OpenTelemetry tracing
+│   ├── contracts/            the Policy protocol, ActionContext, decisions, failure modes
+│   ├── events/               event writer and store; approval stores (in-memory, Redis)
+│   └── server/               optional FastAPI server ([server] extra): events, SSE, dashboard, approvals, /v1/guard, /metrics
 ├── clients/java/             a Java client: SecureAgent and SecureTool over /v1/guard
 ├── site/                     the live demo: a Next.js static export that runs the package via Pyodide
 ├── extension/                a Chrome extension: the package around a scripted browsing agent

@@ -6,18 +6,18 @@ from typing import Any
 
 import pytest
 
-from contracts.server_types import Event
-from contracts.types import ActionContext, FailureMode
-from sdk.interceptors.base import NoopInterceptor
-from sdk.interceptors.event_writer import AuditPolicy
-from sdk.interceptors.pii import PIIMode, PIIPolicy
-from sdk.interceptors.threat import PromptInjectionPolicy
-from sdk.policies.compliance import CompliancePolicy, PHIMode
-from sdk.policies.config import PolicyConfig, load_policies, register_policy
-from sdk.policies.harmful_request import HarmfulRequestPolicy
-from sdk.policies.secrets import SecretsPolicy
-from sdk.policies.tool_firewall import ToolFirewallPolicy
-from sdk.policies.toxicity import ToxicityPolicy
+from openscript_sdk.contracts.server_types import Event
+from openscript_sdk.contracts.types import ActionContext, FailureMode
+from openscript_sdk.interceptors.base import NoopInterceptor
+from openscript_sdk.interceptors.event_writer import AuditPolicy
+from openscript_sdk.interceptors.pii import PIIMode, PIIPolicy
+from openscript_sdk.interceptors.threat import PromptInjectionPolicy
+from openscript_sdk.policies.compliance import CompliancePolicy, PHIMode
+from openscript_sdk.policies.config import PolicyConfig, load_policies, register_policy
+from openscript_sdk.policies.harmful_request import HarmfulRequestPolicy
+from openscript_sdk.policies.secrets import SecretsPolicy
+from openscript_sdk.policies.tool_firewall import ToolFirewallPolicy
+from openscript_sdk.policies.toxicity import ToxicityPolicy
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -174,7 +174,7 @@ def test_load_from_empty_yaml_file(tmp_path: Path):
 
 
 def test_shipped_example_config_loads():
-    policies = load_policies(Path("sdk/policies/policies_example.yaml"))
+    policies = load_policies(Path("openscript_sdk/policies/policies_example.yaml"))
     assert [type(p) for p in policies] == [
         PromptInjectionPolicy,
         ToxicityPolicy,

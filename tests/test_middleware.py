@@ -2,8 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from contracts.types import ActionContext, FailureMode
-from sdk import SecureAgent
+from openscript_sdk import SecureAgent
+from openscript_sdk.contracts.types import ActionContext, FailureMode
 
 
 class FakeAgent:
@@ -139,7 +139,7 @@ class TestPolicyErrorLogging:
         mock_logger = MagicMock()
         mock_logger.bind.return_value = mock_bound
 
-        with patch("sdk.middleware.middleware.logger", mock_logger):
+        with patch("openscript_sdk.middleware.middleware.logger", mock_logger):
             agent = FakeAgent()
             policy = FailingPolicy(FailureMode.FAIL_OPEN)
             mw = SecureAgent(agent=agent, policies=[policy])
@@ -158,7 +158,7 @@ class TestPolicyErrorLogging:
         mock_logger = MagicMock()
         mock_logger.bind.return_value = mock_bound
 
-        with patch("sdk.middleware.middleware.logger", mock_logger):
+        with patch("openscript_sdk.middleware.middleware.logger", mock_logger):
             agent = FakeAgent()
             policy = FailingPolicy(FailureMode.FAIL_CLOSED)
             mw = SecureAgent(agent=agent, policies=[policy])
@@ -178,7 +178,7 @@ class TestPolicyErrorLogging:
         mock_logger = MagicMock()
         mock_logger.bind.return_value = mock_bound
 
-        with patch("sdk.middleware.middleware.logger", mock_logger):
+        with patch("openscript_sdk.middleware.middleware.logger", mock_logger):
             agent = FakeAgent()
             policy = FailingPolicy(FailureMode.FAIL_EXCEPTION)
             mw = SecureAgent(agent=agent, policies=[policy])
@@ -199,7 +199,7 @@ class TestPolicyErrorLogging:
         mock_logger = MagicMock()
         mock_logger.bind.return_value = mock_bound
 
-        with patch("sdk.middleware.middleware.logger", mock_logger):
+        with patch("openscript_sdk.middleware.middleware.logger", mock_logger):
             agent = FakeAgent()
             policy = FailingPolicy(FailureMode.FAIL_OPEN)
             mw = SecureAgent(agent=agent, policies=[policy])

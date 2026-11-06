@@ -25,14 +25,18 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG = ROOT / "sdk" / "hooks" / "claude_code_example.yaml"
+CONFIG = ROOT / "openscript_sdk" / "hooks" / "claude_code_example.yaml"
 BUDGET_MEDIAN_MS, BUDGET_P95_MS = 200.0, 300.0
 SESSION = "3f2b9c1e-7d4a-4b8e-9a51-0c6d2e8f4b17"
 
 
 def _command(event: str) -> list[str]:
     script = Path(sys.executable).with_name("openscript-hook")
-    base = [str(script)] if script.exists() else [sys.executable, "-m", "sdk.hooks.claude_code"]
+    base = (
+        [str(script)]
+        if script.exists()
+        else [sys.executable, "-m", "openscript_sdk.hooks.claude_code"]
+    )
     return [*base, "--config", str(CONFIG), event]
 
 

@@ -38,7 +38,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import IO, Any
 
-from events.approvals import action_hash
+from openscript_sdk.events.approvals import action_hash
 
 #: Separates these MACs from any other use of the same key.
 DOMAIN = b"openscript-effect:v1|"

@@ -78,7 +78,7 @@ migrate-new:  ## Create a new migration — usage: make migrate-new m="add users
 
 .PHONY: serve
 serve:  ## Run the FastAPI dev server with hot-reload on :8000
-	$(UVICORN) server.app:app --host 0.0.0.0 --port 8000 --reload
+	$(UVICORN) openscript_sdk.server.app:app --host 0.0.0.0 --port 8000 --reload
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -109,8 +109,8 @@ lint-fix:  ## Run ruff and auto-fix fixable issues
 	$(RUFF) check . --fix
 
 .PHONY: typecheck
-typecheck:  ## Run mypy strict type-checking on sdk/ and contracts/
-	$(MYPY) --strict sdk/ contracts/
+typecheck:  ## Run mypy strict type-checking on openscript_sdk/ (the server is not yet strict)
+	$(MYPY) --strict openscript_sdk/ --exclude openscript_sdk/server/
 
 .PHONY: check
 check: fmt-check lint typecheck  ## Run all quality checks (format + lint + types)
@@ -155,7 +155,7 @@ evals-semantic:  ## Same corpora, with SemanticPolicy added (needs the [ml] extr
 
 # The AgentDojo replay has an environment of its own: agentdojo pulls in the
 # anthropic, openai, cohere, google-genai and langchain SDKs, and nothing under
-# sdk/ may import any of them. See evals/agentdojo/README.md.
+# openscript_sdk/ may import any of them. See evals/agentdojo/README.md.
 AGENTDOJO := evals/agentdojo
 
 $(AGENTDOJO)/.venv:

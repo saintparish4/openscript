@@ -4,13 +4,13 @@ from typing import Any
 
 import pytest
 
-from contracts.interceptor import BasePolicy
-from contracts.server_types import Event, EventType
-from contracts.types import ActionBlockedError, InterceptorDecision
-from sdk.interceptors.event_writer import AuditPolicy
-from sdk.interceptors.pii import PIIMode, PIIPolicy
-from sdk.middleware.middleware import SecureAgent, StreamOutputMode
-from sdk.policies.secrets import SecretsPolicy
+from openscript_sdk.contracts.interceptor import BasePolicy
+from openscript_sdk.contracts.server_types import Event, EventType
+from openscript_sdk.contracts.types import ActionBlockedError, InterceptorDecision
+from openscript_sdk.interceptors.event_writer import AuditPolicy
+from openscript_sdk.interceptors.pii import PIIMode, PIIPolicy
+from openscript_sdk.middleware.middleware import SecureAgent, StreamOutputMode
+from openscript_sdk.policies.secrets import SecretsPolicy
 
 # A secret deliberately split across two chunks: neither fragment matches the
 # sk- pattern on its own, only the assembled text does.

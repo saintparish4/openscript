@@ -9,9 +9,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source
 COPY . .
 
-# Install the package in editable mode so sdk/contracts/etc resolve correctly
+# Install the package in editable mode so openscript_sdk/contracts/etc resolve correctly
 RUN pip install --no-cache-dir -e .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "openscript_sdk.server.app:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -55,7 +55,7 @@ What that buys, and what it does not:
 - **Output policies in the tool's list apply to what the tool returns.** `PIIPolicy` and `SecretsPolicy` redact it. `PromptInjectionPolicy` scores it, because a tool's result is how the text of a fetched page or an email reaches the model. That score is recorded and let through by default (`tool_output="annotate"`), since the patterns behind it miss most attacks they were not written for; `tool_output="deny"` withholds the result. Withholding is not undoing: by then the tool has run.
 - **It does not stop harm done through a call the rules permit.** If `send_email` may write to anyone, an injected agent can still send mail. The rules are the boundary, and it is only as tight as they are.
 
-Start from `sdk/policies/tools_example.yaml`. The same check is available without the wrapper as `validate_tool_call(call, rules=rules)` and `POST /v1/tools/validate`.
+Start from `openscript_sdk/policies/tools_example.yaml`. The same check is available without the wrapper as `validate_tool_call(call, rules=rules)` and `POST /v1/tools/validate`.
 
 ## The session rule: what it buys and what it costs
 
@@ -82,11 +82,11 @@ Claude Code's permissions decide which tools may run. `openscript-hook` runs the
 
 ```bash
 pip install -e .                                                     # from this repo: puts openscript-hook in your venv
-cp sdk/hooks/claude_code_example.yaml your-project/.claude/openscript.yaml   # then name your MCP servers' tools
+cp openscript_sdk/hooks/claude_code_example.yaml your-project/.claude/openscript.yaml   # then name your MCP servers' tools
 openscript-hook --config your-project/.claude/openscript.yaml check          # what it will do, and any name that looks like a typo
 ```
 
-Then merge [`sdk/hooks/settings_example.json`](../sdk/hooks/settings_example.json) into `your-project/.claude/settings.json`, with the absolute path to `openscript-hook`. On each call it answers **deny** (the call does not run, and Claude is told why), **ask** (Claude Code's own prompt, with OpenScript's reason), or nothing, and Claude Code decides as it always would.
+Then merge [`openscript_sdk/hooks/settings_example.json`](../openscript_sdk/hooks/settings_example.json) into `your-project/.claude/settings.json`, with the absolute path to `openscript-hook`. On each call it answers **deny** (the call does not run, and Claude is told why), **ask** (Claude Code's own prompt, with OpenScript's reason), or nothing, and Claude Code decides as it always would.
 
 Tried in a real Claude Code session (2.1.292, auto permission mode), with a small MCP issue tracker: a comment posted before any read went through; after the agent read an issue, the next comment brought up Claude Code's prompt with OpenScript's reason, and two comments asked for in one message were held one by one; a comment on an issue the rules did not allow was refused and Claude said why; and a `.env` reached the model masked through both Bash and Read. The payloads from that session are replayed in [`tests/test_claude_code_hook.py`](../tests/test_claude_code_hook.py).
 
@@ -94,7 +94,7 @@ What it does not do, stated plainly:
 
 - **It guards its own inputs from the file tools.** Write, Edit, MultiEdit and NotebookEdit go to the hook, which refuses a write to its config, a rules file the config names, Claude Code's settings files and its own state. It does this whatever the session has read, at about 150 ms per write. Bash is not checked this way, because a command's targets cannot be read off its text ([red team](red-team.md), B5).
 - **It only tightens.** It never approves a call, so your own permission rules and modes still apply on top of it.
-- **Bash, Write and Edit are not held after a read by default.** In a coding session that would ask on nearly every command after any web read. Argument rules and redaction still apply to them if you configure them. The strict profile, [`claude_code_strict_example.yaml`](../sdk/hooks/claude_code_strict_example.yaml) with [`settings_strict_example.json`](../sdk/hooks/settings_strict_example.json), holds them after a read: under it, a command that reaches a sink after a web read waits for you, as the [red team](red-team.md) checked (B4).
+- **Bash, Write and Edit are not held after a read by default.** In a coding session that would ask on nearly every command after any web read. Argument rules and redaction still apply to them if you configure them. The strict profile, [`claude_code_strict_example.yaml`](../openscript_sdk/hooks/claude_code_strict_example.yaml) with [`settings_strict_example.json`](../openscript_sdk/hooks/settings_strict_example.json), holds them after a read: under it, a command that reaches a sink after a web read waits for you, as the [red team](red-team.md) checked (B4).
 - **Redaction changes what the model is sent, not what Claude Code records.** The transcript and your terminal still hold the original output. For built-in tools the masked output has to match the tool's own output shape, or Claude Code ignores it: it does for Bash and Read, checked in a real session; for other built-in tools it has not been checked. The hook tells the model that something was masked, because without that it took the stars for the file's real content.
 - **A new conversation is a new session.** `/clear` gives Claude Code a new session id, so what was read before it no longer holds anything, which is right: the model no longer has that text either.
 - **It fails closed while deciding.** A missing or invalid config, or any error, blocks the call. A hook that times out does not block: that is Claude Code's rule. The example settings run it as `openscript-hook pre-tool-use || exit 2`, so a hook that cannot start blocks too; Claude Code 2.1.295 and later also take `"onFailure": "block"`.
@@ -107,7 +107,7 @@ What it does not do, stated plainly:
 When a policy returns `REQUIRE_APPROVAL`, the action is blocked and a pending approval record is created. The usual source is a tool rule with `requires_approval: true`:
 
 ```python
-from sdk import ActionBlockedError, RedisApprovalStore, SecureTool, ToolFirewallPolicy
+from openscript_sdk import ActionBlockedError, RedisApprovalStore, SecureTool, ToolFirewallPolicy
 
 transfer = SecureTool(
     transfer_funds,
@@ -133,7 +133,7 @@ Approvals are **single-use**, expire after 1 hour, and are bound to the tool's n
 
 ## What the detection actually measures
 
-The three input-side policies scan the prompt as it arrived **and** normalized views of it, so an attack disguised with zero-width characters, Cyrillic look-alikes, leetspeak, spaced-out letters, full-width forms or a base64 payload scores like the attack it is. Plain prose produces one view and costs what it always did. See `sdk/policies/normalize.py`.
+The three input-side policies scan the prompt as it arrived **and** normalized views of it, so an attack disguised with zero-width characters, Cyrillic look-alikes, leetspeak, spaced-out letters, full-width forms or a base64 payload scores like the attack it is. Plain prose produces one view and costs what it always did. See `openscript_sdk/policies/normalize.py`.
 
 Asserting that a security tool works is cheap. `evals/` holds labelled corpora and `make evals` scores the policies against them; `tests/test_evals.py` fails the build if the numbers regress. Measured 2026-10-11:
 
@@ -187,12 +187,12 @@ async for chunk in secure.stream({"input": "..."}, stream_output="guarded"):
     print(chunk, end="")
 ```
 
-Custom policies can participate in guarded streaming by implementing `stream_guard()` (see `contracts.interceptor.StreamGuard`).
+Custom policies can participate in guarded streaming by implementing `stream_guard()` (see `openscript_sdk.contracts.interceptor.StreamGuard`).
 
 ## Observability
 
 ```python
-from sdk import MetricsRecorder, SecureAgent
+from openscript_sdk import MetricsRecorder, SecureAgent
 
 secure = SecureAgent(agent, policies=[...], metrics=MetricsRecorder())
 ```
@@ -204,8 +204,8 @@ OpenTelemetry (`pip install -e ".[otel]"`): set `OPENSCRIPT_OTEL=1` for one span
 ## Write a custom policy
 
 ```python
-from contracts.types import ActionContext, InterceptorDecision
-from sdk import BasePolicy
+from openscript_sdk.contracts.types import ActionContext, InterceptorDecision
+from openscript_sdk import BasePolicy
 
 class BusinessHoursPolicy(BasePolicy):
     async def before_action(self, context: ActionContext) -> ActionContext:
@@ -295,7 +295,7 @@ The pipeline is deliberately dumb — all detection lives in the policies. Deny 
 `SecureAgent` wraps any object exposing `ainvoke`/`invoke` (and `astream`/`stream`) — `wrap_agent` and `wrap_graph_agent` are named convenience aliases over that for LangChain and LangGraph:
 
 ```python
-from sdk import wrap_agent, wrap_graph_agent, load_policies
+from openscript_sdk import wrap_agent, wrap_graph_agent, load_policies
 
 secure = wrap_agent(langchain_agent, policies=load_policies("policies.yaml"))
 result = await secure.invoke({"input": "What is prompt injection?"})
@@ -309,7 +309,7 @@ This means any framework whose runnables expose that same shape — CrewAI, Pyda
 
 ## Server
 
-An optional FastAPI server (`uvicorn server.app:app`) provides the event store, SSE feeds, a session dashboard (`/dashboard/`), stateless scoring endpoints (`/v1/threat/score`, `/v1/tools/validate`), the approval queue (`/v1/approvals`), and Prometheus metrics (`/metrics`). All endpoints except `/health` require the `X-API-KEY` header (`OPENSCRIPT_API_KEY`). The server needs a running Postgres with migrations applied before it will boot — `docker compose up -d && alembic upgrade head` (see `docker-compose.yml`), or point `DATABASE_URL` at your own instance. The approval queue is only shared with SDK clients in other processes when the server has `REDIS_URL`; the compose file starts a Redis and sets it. Without one the server keeps approvals in its own memory and says so in its log.
+An optional FastAPI server (`uvicorn openscript_sdk.server.app:app`) provides the event store, SSE feeds, a session dashboard (`/dashboard/`), stateless scoring endpoints (`/v1/threat/score`, `/v1/tools/validate`), the approval queue (`/v1/approvals`), and Prometheus metrics (`/metrics`). All endpoints except `/health` require the `X-API-KEY` header (`OPENSCRIPT_API_KEY`). The server needs a running Postgres with migrations applied before it will boot — `docker compose up -d && alembic upgrade head` (see `docker-compose.yml`), or point `DATABASE_URL` at your own instance. The approval queue is only shared with SDK clients in other processes when the server has `REDIS_URL`; the compose file starts a Redis and sets it. Without one the server keeps approvals in its own memory and says so in its log.
 
 Try the full pipeline end-to-end (in-memory, no server or database required):
 
@@ -412,7 +412,7 @@ pip install -e .
 `pip install -e .` pulls only pydantic, structlog and PyYAML, and it is enough for everything in [Usage](#usage). It also puts the `openscript-hook` command in the virtual environment. Check the install:
 
 ```bash
-python -c "import sdk; print(sdk.SecureAgent, sdk.SecureTool)"
+python -c "import openscript_sdk; print(openscript_sdk.SecureAgent, openscript_sdk.SecureTool)"
 openscript-hook --help
 ```
 
@@ -442,7 +442,7 @@ The full walkthrough, under a minute: [`docs/demo.mp4`](demo.mp4). It goes on to
 
 ```python
 import asyncio
-from sdk import PIIPolicy, PromptInjectionPolicy, SecretsPolicy, SecureAgent
+from openscript_sdk import PIIPolicy, PromptInjectionPolicy, SecretsPolicy, SecureAgent
 
 class MyAgent:
     async def ainvoke(self, input_data, **kwargs):
@@ -482,7 +482,7 @@ policies:
 ```
 
 ```python
-from sdk import SecureAgent, load_policies
+from openscript_sdk import SecureAgent, load_policies
 
 secure = SecureAgent(agent, policies=load_policies("policies.yaml"))
 ```
@@ -492,7 +492,7 @@ secure = SecureAgent(agent, policies=load_policies("policies.yaml"))
 The tools an agent calls run inside the agent, where `SecureAgent`'s policies cannot see them, and that is where a manipulated agent does its damage. `SecureTool` wraps one tool and runs the same pipeline on every call to it:
 
 ```python
-from sdk import SecureTool, ToolFirewallPolicy
+from openscript_sdk import SecureTool, ToolFirewallPolicy
 
 async def send_email(to: str, body: str = "") -> str:
     ...
@@ -529,7 +529,7 @@ A refused call raises `ActionBlockedError` and **the tool does not run**. The ru
 A prompt injection works in two steps: the agent reads something a stranger wrote, then it acts. `SessionTaintPolicy` remembers the first step and holds the second:
 
 ```python
-from sdk import SecureTool, SessionTaintPolicy, ToolFirewallPolicy
+from openscript_sdk import SecureTool, SessionTaintPolicy, ToolFirewallPolicy
 
 firewall = ToolFirewallPolicy(rules_path="tools.yaml")
 taint = SessionTaintPolicy(
@@ -550,7 +550,7 @@ Share one instance between all of a session's tools, because the memory lives on
 #### 5. Approve a Held Call
 
 ```python
-from sdk import ActionBlockedError, RedisApprovalStore, SecureTool, ToolFirewallPolicy
+from openscript_sdk import ActionBlockedError, RedisApprovalStore, SecureTool, ToolFirewallPolicy
 
 transfer = SecureTool(
     transfer_funds,
@@ -574,11 +574,11 @@ The default in-memory store works within one process. Approvals decided through 
 `openscript-hook` runs the tool policies as a [Claude Code hook](https://code.claude.com/docs/en/hooks). It adds what Claude Code's per-tool permissions cannot express: rules on a call's arguments, a memory of what the session has read, secrets masked in tool output, and a JSON line for every decision.
 
 ```bash
-cp sdk/hooks/claude_code_example.yaml your-project/.claude/openscript.yaml   # name your MCP servers' tools
+cp openscript_sdk/hooks/claude_code_example.yaml your-project/.claude/openscript.yaml   # name your MCP servers' tools
 openscript-hook --config your-project/.claude/openscript.yaml check          # what it will do, and any likely typo
 ```
 
-Then merge [`sdk/hooks/settings_example.json`](../sdk/hooks/settings_example.json) into `your-project/.claude/settings.json`, using the absolute path to `openscript-hook`.
+Then merge [`openscript_sdk/hooks/settings_example.json`](../openscript_sdk/hooks/settings_example.json) into `your-project/.claude/settings.json`, using the absolute path to `openscript-hook`.
 
 On each call it answers **deny** (the call does not run, and Claude is told why), **ask** (Claude Code's own prompt, carrying OpenScript's reason), or nothing. It never approves anything, so your own permission settings still apply.
 
@@ -589,14 +589,14 @@ It was tried in a real Claude Code session with a small MCP issue tracker:
 
 The payloads from that session are replayed in the tests. The guide covers [its limits](guide.md#the-claude-code-hook-what-it-adds-and-what-it-does-not-do): Bash is not held by default, and the transcript keeps the unmasked output.
 
-To hold Bash, Write and Edit after an untrusted read as well, start from the strict profile instead. That is [`claude_code_strict_example.yaml`](../sdk/hooks/claude_code_strict_example.yaml) with [`settings_strict_example.json`](../sdk/hooks/settings_strict_example.json). Expect a prompt on most commands after any web read. Under it, the red team saw nothing reach a sink after a web read. A shell can still rewrite the hook's files, so keep the config outside the project with `OPENSCRIPT_HOOK_CONFIG` and the shell's writes inside it with Claude Code's sandbox.
+To hold Bash, Write and Edit after an untrusted read as well, start from the strict profile instead. That is [`claude_code_strict_example.yaml`](../openscript_sdk/hooks/claude_code_strict_example.yaml) with [`settings_strict_example.json`](../openscript_sdk/hooks/settings_strict_example.json). Expect a prompt on most commands after any web read. Under it, the red team saw nothing reach a sink after a web read. A shell can still rewrite the hook's files, so keep the config outside the project with `OPENSCRIPT_HOOK_CONFIG` and the shell's writes inside it with Claude Code's sandbox.
 
 #### 7. Guard a Java Agent
 
 The policies run in Python. A Java program reaches them through the server, which runs one phase of the pipeline per request: the client asks about the input, runs its agent or tool on what came back, then asks about the output. The two lists are configured on the server, as a Python program would build them for `SecureAgent` and `SecureTool`:
 
 ```bash
-OPENSCRIPT_GUARD_CONFIG=server/guard_example.yaml uvicorn server.app:app   # Postgres up, OPENSCRIPT_API_KEY set
+OPENSCRIPT_GUARD_CONFIG=openscript_sdk/server/guard_example.yaml uvicorn openscript_sdk.server.app:app   # Postgres up, OPENSCRIPT_API_KEY set
 ```
 
 ```java
@@ -643,7 +643,7 @@ The [browser demo](https://openscript-demo.vercel.app/) is twenty-one prompts fr
 | `OPENSCRIPT_API_KEY` | the server | none: protected endpoints return 500 until it is set | The key every endpoint except `/health` expects in `X-API-KEY` |
 | `DATABASE_URL` | the server, Alembic | `postgresql+asyncpg://openscript:openscript@localhost:5432/openscript` | The event store |
 | `REDIS_URL` | the server | none: approvals stay in the server's memory | Shares the approval queue with SDK clients in other processes |
-| `OPENSCRIPT_GUARD_CONFIG` | the server | none: `/v1/guard` answers 503 | The policies behind `/v1/guard`, for the Java client ([example](../server/guard_example.yaml)). An invalid file stops the server from starting |
+| `OPENSCRIPT_GUARD_CONFIG` | the server | none: `/v1/guard` answers 503 | The policies behind `/v1/guard`, for the Java client ([example](../openscript_sdk/server/guard_example.yaml)). An invalid file stops the server from starting |
 | `OPENSCRIPT_HOOK_CONFIG` | `openscript-hook` | `$CLAUDE_PROJECT_DIR/.claude/openscript.yaml` | The hook's config (`--config` overrides it) |
 | `OPENSCRIPT_STATE_DIR` | `openscript-hook` | `$XDG_STATE_HOME/openscript`, else `~/.local/state/openscript` | Where the hook keeps session memory, its config cache and the audit log (under `claude-code/`). Keep it on a local disk |
 | `ANTHROPIC_API_KEY` | `evals/agentdojo/run_model.py` | none | Only for AgentDojo runs with a real model, which also need `--budget` and `--yes` |
@@ -654,13 +654,13 @@ For the server, `cp .env.example .env` (or `make env`) gives a working starting 
 
 | File | Configures | Start from |
 |---|---|---|
-| `policies.yaml` | Which policies run and their options, via `load_policies()` | [`sdk/policies/policies_example.yaml`](../sdk/policies/policies_example.yaml) |
-| `tools.yaml` | Tool and argument rules, via `ToolFirewallPolicy(rules_path=...)` | [`sdk/policies/tools_example.yaml`](../sdk/policies/tools_example.yaml) |
-| `.claude/openscript.yaml` | The Claude Code hook: rules, session sources and sinks, redaction, audit | [`sdk/hooks/claude_code_example.yaml`](../sdk/hooks/claude_code_example.yaml) |
-| `.claude/settings.json` | Which Claude Code tool calls go through the hook | [`sdk/hooks/settings_example.json`](../sdk/hooks/settings_example.json) |
-| The strict profile | The same two files, holding Bash, Write and Edit after an untrusted read | [`claude_code_strict_example.yaml`](../sdk/hooks/claude_code_strict_example.yaml), [`settings_strict_example.json`](../sdk/hooks/settings_strict_example.json) |
+| `policies.yaml` | Which policies run and their options, via `load_policies()` | [`openscript_sdk/policies/policies_example.yaml`](../openscript_sdk/policies/policies_example.yaml) |
+| `tools.yaml` | Tool and argument rules, via `ToolFirewallPolicy(rules_path=...)` | [`openscript_sdk/policies/tools_example.yaml`](../openscript_sdk/policies/tools_example.yaml) |
+| `.claude/openscript.yaml` | The Claude Code hook: rules, session sources and sinks, redaction, audit | [`openscript_sdk/hooks/claude_code_example.yaml`](../openscript_sdk/hooks/claude_code_example.yaml) |
+| `.claude/settings.json` | Which Claude Code tool calls go through the hook | [`openscript_sdk/hooks/settings_example.json`](../openscript_sdk/hooks/settings_example.json) |
+| The strict profile | The same two files, holding Bash, Write and Edit after an untrusted read | [`claude_code_strict_example.yaml`](../openscript_sdk/hooks/claude_code_strict_example.yaml), [`settings_strict_example.json`](../openscript_sdk/hooks/settings_strict_example.json) |
 | `.env` | The server | [`.env.example`](../.env.example) |
-| `guard.yaml`, named by `OPENSCRIPT_GUARD_CONFIG` | The policies `/v1/guard` runs for the Java client: an `agent` list and a `tool` list | [`server/guard_example.yaml`](../server/guard_example.yaml) |
+| `guard.yaml`, named by `OPENSCRIPT_GUARD_CONFIG` | The policies `/v1/guard` runs for the Java client: an `agent` list and a `tool` list | [`openscript_sdk/server/guard_example.yaml`](../openscript_sdk/server/guard_example.yaml) |
 
 Every rule file is validated strictly, so a misspelt key fails at load instead of being quietly ignored.
 

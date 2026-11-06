@@ -1,6 +1,6 @@
-"""sdk and contracts export lazily: a name's module is imported when the name is.
+"""openscript_sdk and its contracts export lazily: a name's module is imported when the name is.
 
-So `import sdk` is nearly free, and `from sdk import ToolFirewallPolicy` costs
+So `import openscript_sdk` is nearly free, and `from openscript_sdk import ToolFirewallPolicy` costs
 that policy and what it imports, not all ten. What has to hold: every exported
 name still resolves, to the same object as before, and asking for nothing
 imports nothing heavy.
@@ -14,8 +14,10 @@ from pathlib import Path
 
 import pytest
 
-import contracts
-import sdk
+import openscript_sdk
+import openscript_sdk.contracts as contracts
+
+sdk = openscript_sdk
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,12 +30,12 @@ def test_every_exported_name_resolves(package):
 
 
 def test_a_name_resolves_to_the_object_in_its_module():
-    from sdk.policies.session_taint import SessionTaintPolicy
-    from sdk.policies.tool_firewall import validate_tool_call
+    from openscript_sdk.policies.session_taint import SessionTaintPolicy
+    from openscript_sdk.policies.tool_firewall import validate_tool_call
 
     assert sdk.SessionTaintPolicy is SessionTaintPolicy
     assert sdk.validate_tool_call is validate_tool_call
-    from contracts.session_graph import NodeType
+    from openscript_sdk.contracts.session_graph import NodeType
 
     assert contracts.NodeType is NodeType, "listed in __all__, and now importable too"
 
@@ -42,12 +44,12 @@ def test_a_name_it_does_not_export_is_an_attribute_error():
     with pytest.raises(AttributeError, match="no attribute 'NoSuchPolicy'"):
         sdk.NoSuchPolicy  # noqa: B018
     with pytest.raises(ImportError):
-        from sdk import NoSuchPolicy  # noqa: F401
+        from openscript_sdk import NoSuchPolicy  # noqa: F401
 
 
 def test_importing_the_packages_alone_imports_nothing_heavy():
     script = (
-        "import sys, sdk, contracts\n"
+        "import sys, openscript_sdk, openscript_sdk.contracts\n"
         "heavy = sorted(m for m in ('pydantic', 'structlog', 'yaml') if m in sys.modules)\n"
         "print(heavy)\n"
     )

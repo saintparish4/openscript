@@ -94,12 +94,12 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e .        # Python 3.11+; pulls pydantic, structlog and PyYAML
 ```
 
-The package imports as `sdk`, not `openscript`. A tool that the rules hold
+The package imports as `openscript_sdk`. A tool that the rules hold
 waits for a person, and the retry with the approval runs that exact call
 once:
 
 ```python
-from sdk import ActionBlockedError, SecureTool, ToolFirewallPolicy
+from openscript_sdk import ActionBlockedError, SecureTool, ToolFirewallPolicy
 
 async def transfer_funds(to: str, amount: int) -> str: ...
 
@@ -150,7 +150,7 @@ trail and an event server. The [guide](docs/guide.md) covers each.
 ## Contributing
 
 ```bash
-make install && pytest && ruff check . && black --check . && mypy --strict sdk/ contracts/
+make install && pytest && ruff check . && black --check . && mypy --strict openscript_sdk/ --exclude openscript_sdk/server/
 ```
 
 [CONTRIBUTING.md](CONTRIBUTING.md) has the full checklist, including the

@@ -4,7 +4,7 @@ import warnings
 
 import pytest
 
-from sdk import NoopInterceptor, SecureAgent
+from openscript_sdk import NoopInterceptor, SecureAgent
 
 WARMUP_ROUNDS = 5
 BENCH_ROUNDS = 50

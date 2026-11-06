@@ -46,8 +46,8 @@ from agentdojo.functions_runtime import FunctionCall, FunctionsRuntime  # noqa: 
 from agentdojo.task_suite.load_suites import get_suites  # noqa: E402
 from guard import known_for, load_classification, policies_for  # noqa: E402
 
-from contracts.types import ActionContext, InterceptorDecision  # noqa: E402
-from sdk import SessionTaintPolicy  # noqa: E402
+from openscript_sdk import SessionTaintPolicy  # noqa: E402
+from openscript_sdk.contracts.types import ActionContext, InterceptorDecision  # noqa: E402
 
 BENCHMARK = "v1.2.2"
 #: "none" is the control: with no policy the search must reach the goals, or

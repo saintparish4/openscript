@@ -15,7 +15,7 @@ Usage:
 To view the session graph in the dashboard afterward:
     docker compose up -d
     alembic upgrade head
-    OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload
+    OPENSCRIPT_API_KEY=demo uvicorn openscript_sdk.server.app:app --reload
     # open http://localhost:8000/dashboard/
 """
 
@@ -44,11 +44,7 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
-from contracts.server_types import Event
-from contracts.types import ActionBlockedError, ActionContext, InterceptorDecision
-from events.approvals import InMemoryApprovalStore
-from events.writer import EventWriter
-from sdk import (
+from openscript_sdk import (
     AuditPolicy,
     BasePolicy,
     MetricsRecorder,
@@ -61,8 +57,12 @@ from sdk import (
     ToxicityPolicy,
     validate_tool_call,
 )
-from sdk.interceptors.threat import score_text
-from sdk.policies.tool_firewall import ToolRule, ToolRules
+from openscript_sdk.contracts.server_types import Event
+from openscript_sdk.contracts.types import ActionBlockedError, ActionContext, InterceptorDecision
+from openscript_sdk.events.approvals import InMemoryApprovalStore
+from openscript_sdk.events.writer import EventWriter
+from openscript_sdk.interceptors.threat import score_text
+from openscript_sdk.policies.tool_firewall import ToolRule, ToolRules
 
 console = Console()
 
@@ -153,7 +153,7 @@ async def _build_sink():
         from sqlalchemy import text
         from sqlalchemy.ext.asyncio import create_async_engine
 
-        from events.store import EventStore
+        from openscript_sdk.events.store import EventStore
 
         engine = create_async_engine(db_url)
         try:
@@ -757,7 +757,7 @@ async def run_demo() -> None:
                 f"[bold]Session saved to Postgres.[/bold] Open the dashboard to visualize it:\n\n"
                 f"  [cyan]http://localhost:8000/dashboard/session.html?session_id={session_id}[/cyan]\n\n"
                 "[dim]Reminder — run this in a WSL terminal to start the server:[/dim]\n"
-                "  [cyan]OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload[/cyan]",
+                "  [cyan]OPENSCRIPT_API_KEY=demo uvicorn openscript_sdk.server.app:app --reload[/cyan]",
                 border_style="green",
                 title="[dim]Visualize[/dim]",
             )
@@ -770,7 +770,7 @@ async def run_demo() -> None:
                 "  2. [cyan]alembic upgrade head[/cyan]\n"
                 "  3. [cyan]DATABASE_URL=postgresql+asyncpg://openscript:openscript@localhost:5432/openscript \\\n"
                 "     OPENSCRIPT_API_KEY=demo python demo/injection_demo.py[/cyan]\n"
-                "  4. [cyan]OPENSCRIPT_API_KEY=demo uvicorn server.app:app --reload[/cyan]\n"
+                "  4. [cyan]OPENSCRIPT_API_KEY=demo uvicorn openscript_sdk.server.app:app --reload[/cyan]\n"
                 "  5. Open [link=http://localhost:8000/dashboard/]http://localhost:8000/dashboard/[/link]\n\n"
                 "[dim]Re-running with DATABASE_URL set persists events so the dashboard has data.[/dim]",
                 border_style="dim",
