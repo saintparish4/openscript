@@ -1,7 +1,7 @@
 # OpenScript
 
 [![CI](https://github.com/saintparish4/openscript/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/saintparish4/openscript/actions/workflows/ci.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/saintparish4/openscript/blob/master/LICENSE)
 [![Live demo](https://img.shields.io/badge/demo-live%20in%20your%20browser-22c55e)](https://openscript-demo.vercel.app/)
 
 **Irreversible actions wait for a person, even when the model has been fooled.**
@@ -26,7 +26,6 @@ runs in your browser tab, compiled to WebAssembly, with no backend.
   rules and the approvals, and the rules are only as tight as you write them.
 - **Not a compliance certification.** Its compliance presets assist a
   program and certify nothing.
-- **Not on PyPI.** It installs from source.
 
 ## What it has been shown to do
 
@@ -57,13 +56,13 @@ injections. The protocol was frozen before the run.
   the no-model replay of all four suites it is 59 of 97. The session rule
   asks less and misses the attacks that arrive through Slack's channel
   listing.
-- **It was attacked before it was trusted.** A [red team](docs/red-team.md)
+- **It was attacked before it was trusted.** A [red team](https://github.com/saintparish4/openscript/blob/master/docs/red-team.md)
   searched for bypasses and published 7 findings, each committed as a
   failing test before its fix.
 
 Every number, with its date, command and caveats, is in
-[`docs/metrics.md`](docs/metrics.md). The claim and what it does not cover
-are in [the threat model](docs/threat-model.md).
+[`docs/metrics.md`](https://github.com/saintparish4/openscript/blob/master/docs/metrics.md). The claim and what it does not cover
+are in [the threat model](https://github.com/saintparish4/openscript/blob/master/docs/threat-model.md).
 
 ## How it works
 
@@ -83,18 +82,22 @@ agent ── calls a tool ──► SecureTool ── before: tool rules · sess
   stranger wrote, and then holds the calls you list as irreversible.
 - **An approval** is single-use, expires in an hour, and is bound to the
   tool, its exact arguments and the session.
-- **The effect side** ([`evals/ledger.py`](evals/ledger.py)) is a reference
+- **The effect side** ([`evals/ledger.py`](https://github.com/saintparish4/openscript/blob/master/evals/ledger.py)) is a reference
   implementation, standard library only.
 
 ## Quick start
 
 ```bash
-git clone https://github.com/saintparish4/openscript.git && cd openscript
-python -m venv .venv && source .venv/bin/activate
-pip install -e .        # Python 3.11+; pulls pydantic, structlog and PyYAML
+pip install openscript-sdk          # Python 3.11+; pulls pydantic, structlog and PyYAML
 ```
 
-The package imports as `openscript_sdk`. A tool that the rules hold
+The distribution is `openscript-sdk` and the package imports as
+`openscript_sdk`. The extras are `[server]` (the FastAPI server, whose
+database migrations are in this repository's `alembic/`), `[redis]`,
+`[metrics]` and `[otel]`. To work on it, clone the repository and run
+`make install`.
+
+A tool that the rules hold
 waits for a person, and the retry with the approval runs that exact call
 once:
 
@@ -125,26 +128,26 @@ rules:
 ```
 
 Also in the package: redaction of secrets and PII, input screening, an audit
-trail and an event server. The [guide](docs/guide.md) covers each.
+trail and an event server. The [guide](https://github.com/saintparish4/openscript/blob/master/docs/guide.md) covers each.
 
 ## Where it runs
 
 | Surface | Start here |
 |---|---|
-| Python agents and tools (LangChain, LangGraph, anything with `invoke`) | [the guide](docs/guide.md) |
-| Claude Code, as a hook, with a strict profile that holds Bash after a web read | [the hook](docs/guide.md#the-claude-code-hook-what-it-adds-and-what-it-does-not-do) |
-| Java agents, through the server | [`clients/java`](clients/java/README.md) |
+| Python agents and tools (LangChain, LangGraph, anything with `invoke`) | [the guide](https://github.com/saintparish4/openscript/blob/master/docs/guide.md) |
+| Claude Code, as a hook, with a strict profile that holds Bash after a web read | [the hook](https://github.com/saintparish4/openscript/blob/master/docs/guide.md#the-claude-code-hook-what-it-adds-and-what-it-does-not-do) |
+| Java agents, through the server | [`clients/java`](https://github.com/saintparish4/openscript/blob/master/clients/java/README.md) |
 | A browser, and a Chrome extension | [the demo](https://openscript-demo.vercel.app/) |
 
 ## Further reading
 
-- [`docs/guide.md`](docs/guide.md): every feature, its limits and its
+- [`docs/guide.md`](https://github.com/saintparish4/openscript/blob/master/docs/guide.md): every feature, its limits and its
   configuration, including environment variables and options.
-- [`docs/metrics.md`](docs/metrics.md): every measurement.
-- [`docs/threat-model.md`](docs/threat-model.md) and
-  [`docs/red-team.md`](docs/red-team.md): the claim and the attempts to
+- [`docs/metrics.md`](https://github.com/saintparish4/openscript/blob/master/docs/metrics.md): every measurement.
+- [`docs/threat-model.md`](https://github.com/saintparish4/openscript/blob/master/docs/threat-model.md) and
+  [`docs/red-team.md`](https://github.com/saintparish4/openscript/blob/master/docs/red-team.md): the claim and the attempts to
   break it.
-- [`docs/submission.md`](docs/submission.md): the AI-safety challenge
+- [`docs/submission.md`](https://github.com/saintparish4/openscript/blob/master/docs/submission.md): the AI-safety challenge
   write-up.
 
 ## Contributing
@@ -153,10 +156,10 @@ trail and an event server. The [guide](docs/guide.md) covers each.
 make install && pytest && ruff check . && black --check . && mypy --strict openscript_sdk/ --exclude openscript_sdk/server/
 ```
 
-[CONTRIBUTING.md](CONTRIBUTING.md) has the full checklist, including the
+[CONTRIBUTING.md](https://github.com/saintparish4/openscript/blob/master/CONTRIBUTING.md) has the full checklist, including the
 Pyodide and Java checks. Changes to approvals, the session rule or the hook
 also run `pytest tests/bypass`.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Apache License 2.0. See [LICENSE](https://github.com/saintparish4/openscript/blob/master/LICENSE).

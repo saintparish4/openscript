@@ -59,6 +59,34 @@ Follow the existing pattern (see `PIIInterceptor` → `PIIPolicy`, `OpenScriptMi
 
 Plain, descriptive commit messages about what changed. No phase numbers or references to internal planning docs — those don't mean anything to someone reading `git log` outside the project.
 
+## Releasing to PyPI
+
+The distribution is `openscript-sdk`; the package imports as `openscript_sdk`.
+
+1. Bump `version` in `pyproject.toml`, then `make browser-wheels` and commit
+   `site/public/wheels/`, so the demo serves the release's code.
+2. Build from a clean tree and check what you built:
+
+   ```bash
+   rm -rf dist build *.egg-info
+   python -m build
+   twine check --strict dist/*
+   ```
+
+3. Install the wheel into a fresh venv outside the repository, so nothing is
+   imported from the checkout, and use it: import it, hold and approve a
+   call, run `openscript-hook --config <its claude_code_example.yaml> check`,
+   and start the server from `pip install "dist/openscript_sdk-<v>-py3-none-any.whl[server]"`.
+4. Upload to TestPyPI first, install from there, then upload to PyPI:
+
+   ```bash
+   twine upload --repository testpypi dist/*
+   pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ openscript-sdk
+   twine upload dist/*
+   ```
+
+   A version number can be uploaded once. A mistake is fixed with a new version.
+
 ## The stack and the layout
 
 Moved here from the README on 2026-11-04, unchanged.

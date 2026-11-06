@@ -1,4 +1,4 @@
 {
-  "openscript": "./wheels/openscript-0.1.0-py3-none-any.whl",
-  "structlog": "./wheels/structlog-26.1.0-py3-none-any.whl"
+  "structlog": "./wheels/structlog-26.1.0-py3-none-any.whl",
+  "openscript": "./wheels/openscript_sdk-0.1.0-py3-none-any.whl"
 }
