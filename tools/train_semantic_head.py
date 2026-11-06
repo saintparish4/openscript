@@ -2,7 +2,7 @@
 
     pip install -e ".[ml]" scikit-learn pandas pyarrow     # training-only extras
     python tools/train_semantic_head.py --data-dir ~/.cache/openscript-semantic
-    python tools/train_semantic_head.py --write-head       # also rewrite sdk/policies/semantic_head.py
+    python tools/train_semantic_head.py --write-head       # also rewrite openscript_sdk/policies/semantic_head.py
 
 Not part of `make install`, CI or the test suite: it downloads ~50 MB of public
 datasets and an encoder. The committed head is its output, and
@@ -62,8 +62,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from sdk.policies import normalize  # noqa: E402
-from sdk.policies.semantic import (  # noqa: E402
+from openscript_sdk.policies import normalize  # noqa: E402
+from openscript_sdk.policies.semantic import (  # noqa: E402
     BENIGN,
     SemanticHead,
     SemanticScorer,
@@ -368,7 +368,7 @@ def write_head(head: SemanticHead, meta: dict[str, object]) -> None:
     for row in head.weights:
         lines.append("        [" + ", ".join(f"{w:.4f}" for w in row) + "],")
     lines += ["    ],", "}", ""]
-    target = REPO_ROOT / "sdk/policies/semantic_head.py"
+    target = REPO_ROOT / "openscript_sdk/policies/semantic_head.py"
     target.write_text("\n".join(lines), encoding="utf-8")
     subprocess.run([sys.executable, "-m", "black", "-q", str(target)], check=False)
 
@@ -472,7 +472,7 @@ def main() -> int:
             threshold=float(winner["threshold"]),  # type: ignore[arg-type]
         )
         write_head(head, meta)
-        print("wrote sdk/policies/semantic_head.py", file=sys.stderr)
+        print("wrote openscript_sdk/policies/semantic_head.py", file=sys.stderr)
     return 0
 
 

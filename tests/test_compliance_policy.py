@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from contracts.server_types import Event, EventType
-from contracts.types import ActionContext, InterceptorDecision
-from sdk.policies.compliance import CompliancePolicy, PHIMode, find_phi
+from openscript_sdk.contracts.server_types import Event, EventType
+from openscript_sdk.contracts.types import ActionContext, InterceptorDecision
+from openscript_sdk.policies.compliance import CompliancePolicy, PHIMode, find_phi
 
 # ---------------------------------------------------------------------------
 # Helpers

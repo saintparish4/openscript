@@ -6,12 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 from prometheus_client import CollectorRegistry
 
-from contracts.types import ActionBlockedError, ActionContext, InterceptorDecision
-from sdk.interceptors.pii import PIIMode, PIIPolicy
-from sdk.interceptors.threat import PromptInjectionPolicy
-from sdk.middleware.middleware import SecureAgent
-from sdk.observability.metrics import MetricsRecorder
-from sdk.policies.secrets import SecretsPolicy
+from openscript_sdk.contracts.types import ActionBlockedError, ActionContext, InterceptorDecision
+from openscript_sdk.interceptors.pii import PIIMode, PIIPolicy
+from openscript_sdk.interceptors.threat import PromptInjectionPolicy
+from openscript_sdk.middleware.middleware import SecureAgent
+from openscript_sdk.observability.metrics import MetricsRecorder
+from openscript_sdk.policies.secrets import SecretsPolicy
 
 try:
     import opentelemetry  # noqa: F401
@@ -170,7 +170,7 @@ async def test_otel_env_flag_fails_open(monkeypatch):
 
 @pytest.mark.skipif(_HAS_OTEL, reason="otel installed — import error path unavailable")
 def test_action_tracer_requires_otel():
-    from sdk.observability.tracing import ActionTracer
+    from openscript_sdk.observability.tracing import ActionTracer
 
     with pytest.raises(ImportError, match=r"pip install -e '\.\[otel\]'"):
         ActionTracer()
@@ -187,7 +187,7 @@ def server_client(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql+asyncpg://openscript:openscript@localhost:5432/openscript"
     )
-    from server.app import app
+    from openscript_sdk.server.app import app
 
     return TestClient(app, raise_server_exceptions=False)
 

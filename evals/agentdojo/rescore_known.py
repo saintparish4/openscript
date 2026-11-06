@@ -22,7 +22,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
-from sdk.policies.session_taint import SessionTaintPolicy  # noqa: E402
+from openscript_sdk.policies.session_taint import SessionTaintPolicy  # noqa: E402
 
 MODELS = ("claude-haiku-4-5", "claude-sonnet-5-5")
 

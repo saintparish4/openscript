@@ -80,7 +80,7 @@ def test_the_rules_and_the_panel_name_the_same_site():
     site it never visits."""
     import yaml
 
-    from sdk import ToolRules
+    from openscript_sdk import ToolRules
 
     panel = (EXT / "sidepanel.js").read_text()
     vendor = re.search(r'^const VENDOR = "([^"]+)";', panel, re.M).group(1)

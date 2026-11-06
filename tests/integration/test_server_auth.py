@@ -10,7 +10,7 @@ def client(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql+asyncpg://openscript:openscript@localhost:5432/openscript"
     )
-    from server.app import app
+    from openscript_sdk.server.app import app
 
     return TestClient(app, raise_server_exceptions=False)
 

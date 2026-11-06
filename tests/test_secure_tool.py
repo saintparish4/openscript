@@ -18,10 +18,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from contracts.interceptor import BasePolicy
-from contracts.types import ActionBlockedError, ActionContext
-from events.approvals import InMemoryApprovalStore
-from sdk import (
+from openscript_sdk import (
     PIIPolicy,
     PromptInjectionPolicy,
     SecretsPolicy,
@@ -31,6 +28,9 @@ from sdk import (
     ToolRules,
     validate_tool_call,
 )
+from openscript_sdk.contracts.interceptor import BasePolicy
+from openscript_sdk.contracts.types import ActionBlockedError, ActionContext
+from openscript_sdk.events.approvals import InMemoryApprovalStore
 
 RULES = ToolRules.model_validate(
     {

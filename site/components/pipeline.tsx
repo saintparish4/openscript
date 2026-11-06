@@ -35,7 +35,7 @@ const DECISIONS: { name: string; tone: string; icon: ReactNode; text: string }[]
 ];
 
 // The README's "Wrap an Agent" example, trimmed to the call that matters.
-const SAMPLE = `from sdk import PIIPolicy, PromptInjectionPolicy, SecretsPolicy, SecureAgent
+const SAMPLE = `from openscript_sdk import PIIPolicy, PromptInjectionPolicy, SecretsPolicy, SecureAgent
 
 secure = SecureAgent(
     agent=MyAgent(),

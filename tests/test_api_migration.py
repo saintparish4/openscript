@@ -6,9 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from contracts.interceptor import BasePolicy, Interceptor, Policy
-from contracts.types import ActionContext, FailureMode, InterceptorDecision
-from sdk import (
+from openscript_sdk import (
     AuditPolicy,
     EventWriterInterceptor,
     OpenScriptMiddleware,
@@ -18,8 +16,10 @@ from sdk import (
     SecureAgent,
     ThreatInterceptor,
 )
-from sdk.interceptors.base import NoopInterceptor
-from sdk.interceptors.pii import PIIMode
+from openscript_sdk.contracts.interceptor import BasePolicy, Interceptor, Policy
+from openscript_sdk.contracts.types import ActionContext, FailureMode, InterceptorDecision
+from openscript_sdk.interceptors.base import NoopInterceptor
+from openscript_sdk.interceptors.pii import PIIMode
 
 
 class FakeAgent:
@@ -198,7 +198,7 @@ def test_event_writer_interceptor_is_subclass_of_audit_policy():
 
 @pytest.mark.asyncio
 async def test_audit_policy_before_action_returns_context():
-    from events.writer import EventWriter
+    from openscript_sdk.events.writer import EventWriter
 
     mock_store = AsyncMock()
     mock_store.insert_events = AsyncMock()
@@ -216,7 +216,7 @@ async def test_audit_policy_before_action_returns_context():
 
 @pytest.mark.asyncio
 async def test_event_writer_interceptor_alias_warns():
-    from events.writer import EventWriter
+    from openscript_sdk.events.writer import EventWriter
 
     mock_store = AsyncMock()
     mock_store.insert_events = AsyncMock()

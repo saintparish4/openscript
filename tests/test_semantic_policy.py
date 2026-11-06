@@ -14,11 +14,11 @@ import math
 
 import pytest
 
-from contracts.types import ActionBlockedError, ActionContext, InterceptorDecision
-from sdk import SecureAgent, SemanticHead, SemanticMode, SemanticPolicy, load_policies
-from sdk.observability.risk import aggregate_risk
-from sdk.policies import semantic
-from sdk.policies.semantic import WINDOW_WORDS, default_head, windows
+from openscript_sdk import SecureAgent, SemanticHead, SemanticMode, SemanticPolicy, load_policies
+from openscript_sdk.contracts.types import ActionBlockedError, ActionContext, InterceptorDecision
+from openscript_sdk.observability.risk import aggregate_risk
+from openscript_sdk.policies import semantic
+from openscript_sdk.policies.semantic import WINDOW_WORDS, default_head, windows
 
 # A 2-d space: axis 0 is "ordinary", axis 1 is "asks for the guardrails off".
 HEAD = SemanticHead(

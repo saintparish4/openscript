@@ -4,13 +4,13 @@ import asyncio
 
 import pytest
 
-from contracts.interceptor import Policy
-from contracts.server_types import Event, EventType
-from contracts.session_graph import SessionGraph
-from contracts.types import FailureMode
-from events.writer import EventWriter
-from sdk import SecureAgent
-from sdk.interceptors.event_writer import AuditPolicy
+from openscript_sdk import SecureAgent
+from openscript_sdk.contracts.interceptor import Policy
+from openscript_sdk.contracts.server_types import Event, EventType
+from openscript_sdk.contracts.session_graph import SessionGraph
+from openscript_sdk.contracts.types import FailureMode
+from openscript_sdk.events.writer import EventWriter
+from openscript_sdk.interceptors.event_writer import AuditPolicy
 
 
 class FakeAgent:

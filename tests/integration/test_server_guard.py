@@ -8,11 +8,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from events.approvals import InMemoryApprovalStore
-from events.writer import EventWriter
-from server.guard import load_checkpoints
-from server.routers import approvals as approvals_router
-from server.routers import guard as guard_router
+from openscript_sdk.events.approvals import InMemoryApprovalStore
+from openscript_sdk.events.writer import EventWriter
+from openscript_sdk.server.guard import load_checkpoints
+from openscript_sdk.server.routers import approvals as approvals_router
+from openscript_sdk.server.routers import guard as guard_router
 
 KEY = {"X-API-KEY": "test-api-key"}
 
@@ -274,7 +274,9 @@ def test_example_config_loads():
         async def insert_events(self, events):
             pass
 
-    checkpoints = load_checkpoints("server/guard_example.yaml", writer=EventWriter(_Sink()))
+    checkpoints = load_checkpoints(
+        "openscript_sdk/server/guard_example.yaml", writer=EventWriter(_Sink())
+    )
     assert set(checkpoints) == {"invoke", "stream", "tool_call"}
     # One pipeline per section: a streamed answer meets the same policy instances.
     assert checkpoints["invoke"] is checkpoints["stream"]

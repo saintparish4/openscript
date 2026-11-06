@@ -4,14 +4,14 @@ from typing import Any
 
 import pytest
 
-from contracts.server_types import Event, EventType
-from contracts.types import ActionBlockedError, ActionContext
-from sdk.interceptors.event_writer import AuditPolicy
-from sdk.interceptors.pii import PIIMode, PIIPolicy
-from sdk.interceptors.threat import PromptInjectionPolicy
-from sdk.middleware.middleware import SecureAgent
-from sdk.observability.risk import RiskScorer, aggregate_risk
-from sdk.policies.secrets import SecretsPolicy
+from openscript_sdk.contracts.server_types import Event, EventType
+from openscript_sdk.contracts.types import ActionBlockedError, ActionContext
+from openscript_sdk.interceptors.event_writer import AuditPolicy
+from openscript_sdk.interceptors.pii import PIIMode, PIIPolicy
+from openscript_sdk.interceptors.threat import PromptInjectionPolicy
+from openscript_sdk.middleware.middleware import SecureAgent
+from openscript_sdk.observability.risk import RiskScorer, aggregate_risk
+from openscript_sdk.policies.secrets import SecretsPolicy
 
 # ---------------------------------------------------------------------------
 # Helpers

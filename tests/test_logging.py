@@ -6,8 +6,8 @@ import logging
 import pytest
 import structlog
 
-import sdk.logging as sdk_logging
-from sdk import SecureAgent, configure_logging
+import openscript_sdk.logging as sdk_logging
+from openscript_sdk import SecureAgent, configure_logging
 
 
 class FakeAgent:

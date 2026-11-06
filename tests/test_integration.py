@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from sdk import (
+from openscript_sdk import (
     NoopInterceptor,
     SecureAgent,
     wrap_agent,

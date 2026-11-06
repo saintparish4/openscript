@@ -9,8 +9,8 @@ argument carries a link the user did not give: "message Alice" must not
 release a message to Alice carrying the attacker's link.
 
 It is a subclass of SessionTaintPolicy here, in the harness, and nowhere in
-``sdk/``: the rule ships only if the measurement says it is worth shipping.
-Standard library and ``sdk`` only, so it is testable without AgentDojo.
+``openscript_sdk/``: the rule ships only if the measurement says it is worth shipping.
+Standard library and ``openscript_sdk`` only, so it is testable without AgentDojo.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from typing import Any
 
 import yaml
 
-from sdk import SessionTaintPolicy
+from openscript_sdk import SessionTaintPolicy
 
 HERE = Path(__file__).resolve().parent
 

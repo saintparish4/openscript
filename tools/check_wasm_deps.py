@@ -28,7 +28,7 @@ PYODIDE_VERSION = "0.28.3"
 LOCK_URL = "https://cdn.jsdelivr.net/pyodide/v{v}/full/pyodide-lock.json"
 BINARY_SUFFIXES = (".so", ".pyd", ".dll", ".dylib")
 
-# Runtime deps of `import sdk` — must match [project].dependencies in pyproject.toml.
+# Runtime deps of `import openscript_sdk` — must match [project].dependencies in pyproject.toml.
 RUNTIME_DEPS = ["pydantic", "structlog", "pyyaml"]
 
 

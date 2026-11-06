@@ -1,7 +1,7 @@
 """The candidate rule PROTOCOL-named.md measures: destinations the user named
 count as known, unless the call carries a link the user did not give.
 
-It lives in evals/agentdojo/named.py and imports only sdk, so it is tested
+It lives in evals/agentdojo/named.py and imports only openscript_sdk, so it is tested
 here without AgentDojo.
 """
 

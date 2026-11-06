@@ -17,8 +17,14 @@ from pathlib import Path
 
 import pytest
 
-from sdk import SessionTaintPolicy
-from sdk.policies.taint_store import UNREADABLE, FileTaintStore, append_jsonl, prune, state_dir
+from openscript_sdk import SessionTaintPolicy
+from openscript_sdk.policies.taint_store import (
+    UNREADABLE,
+    FileTaintStore,
+    append_jsonl,
+    prune,
+    state_dir,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SESSION = "3f2b9c1e-7d4a-4b8e-9a51-0c6d2e8f4b17"  # the shape of a Claude Code session id
@@ -68,7 +74,7 @@ def test_a_session_id_that_could_name_another_file_is_refused(tmp_path, bad):
 def test_parallel_writers_lose_no_line(tmp_path):
     """32 processes appending at once, as parallel hooks would."""
     script = (
-        "import sys; from sdk.policies.taint_store import FileTaintStore; "
+        "import sys; from openscript_sdk.policies.taint_store import FileTaintStore; "
         "FileTaintStore(sys.argv[1]).add(sys.argv[2], 'source-' + sys.argv[3])"
     )
     procs = [

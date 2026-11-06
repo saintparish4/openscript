@@ -62,14 +62,14 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
-from contracts.interceptor import Policy  # noqa: E402
-from contracts.types import ActionBlockedError  # noqa: E402
-from sdk import (  # noqa: E402
+from openscript_sdk import (  # noqa: E402
     HarmfulRequestPolicy,
     PromptInjectionPolicy,
     SecureAgent,
     ToxicityPolicy,
 )
+from openscript_sdk.contracts.interceptor import Policy  # noqa: E402
+from openscript_sdk.contracts.types import ActionBlockedError  # noqa: E402
 
 DATASETS = Path(__file__).resolve().parent / "datasets"
 
@@ -86,7 +86,7 @@ _SEMANTIC: list[Policy] = []
 def _semantic() -> Policy:
     """Built once: the encoder is the expensive part and it is stateless."""
     if not _SEMANTIC:
-        from sdk.policies.semantic import SemanticPolicy
+        from openscript_sdk.policies.semantic import SemanticPolicy
 
         _SEMANTIC.append(SemanticPolicy())
     return _SEMANTIC[0]
@@ -405,7 +405,7 @@ def manifest(semantic: bool) -> dict[str, object]:
     if semantic:
         import sentence_transformers
 
-        from sdk.policies.semantic import default_head
+        from openscript_sdk.policies.semantic import default_head
 
         head = default_head()
         info["semantic"] = {

@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import pytest
 
-from contracts.interceptor import BasePolicy
-from contracts.types import ActionContext, FailureMode, InterceptorDecision
 from evals.run import CORPORA, SEALED, evaluate, load, paired, wilson
+from openscript_sdk.contracts.interceptor import BasePolicy
+from openscript_sdk.contracts.types import ActionContext, FailureMode, InterceptorDecision
 
 # policy -> (minimum block rate on attacks, maximum false-positive rate)
 FLOORS = {
@@ -76,7 +76,7 @@ def test_obfuscated_variants_score_like_the_attacks_they_rewrite(policy: str):
     assert result.obfuscated, f"{policy} has no obfuscated rows to check"
     assert result.obfuscated_detected == result.obfuscated, (
         f"{policy} lost {result.obfuscated - result.obfuscated_detected} obfuscated variants. "
-        "sdk/policies/normalize.py is what makes these score at all."
+        "openscript_sdk/policies/normalize.py is what makes these score at all."
     )
 
 

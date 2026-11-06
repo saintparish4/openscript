@@ -33,7 +33,7 @@ from named import NamedTaintPolicy, load_named  # noqa: E402
 from rescore_known import held  # noqa: E402
 from summarize_known import MAIN_ATTACK, SUITES, Row, _fmt, _read, _share  # noqa: E402
 
-from sdk.policies.session_taint import SessionTaintPolicy  # noqa: E402
+from openscript_sdk.policies.session_taint import SessionTaintPolicy  # noqa: E402
 
 #: (configuration, where its rows are)
 COLUMNS = (

@@ -26,17 +26,17 @@ import yaml
 from agentdojo.agent_pipeline.tool_execution import tool_result_to_str
 from agentdojo.functions_runtime import Function, FunctionsRuntime, TaskEnvironment
 
-from contracts.interceptor import Policy
-from contracts.types import ActionBlockedError
 from evals.ledger import Ledger, call_hash
-from events.approvals import InMemoryApprovalStore
-from sdk import (
+from openscript_sdk import (
     PromptInjectionPolicy,
     SecureTool,
     SessionTaintPolicy,
     ToolFirewallPolicy,
     ToolRules,
 )
+from openscript_sdk.contracts.interceptor import Policy
+from openscript_sdk.contracts.types import ActionBlockedError
+from openscript_sdk.events.approvals import InMemoryApprovalStore
 
 HERE = Path(__file__).parent
 
@@ -57,7 +57,7 @@ SHIPPED_CONFIGURATION = "taint_known_shipped"
 #: something that exists: an email, an event, a share are each new.
 SHIPPED_UPDATES = {"banking": ["update_scheduled_transaction"]}
 #: The configuration PROTOCOL-named.md adds: destinations the user named count
-#: as known too, with a check on links (named.py, a candidate not in sdk/).
+#: as known too, with a check on links (named.py, a candidate not in openscript_sdk/).
 NAMED_CONFIGURATIONS = ("taint_named",)
 #: The configurations PROTOCOL-irreversible.md adds: only a tool that cannot be
 #: undone (irreversible.yaml) is held, every time or after an untrusted read.

@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from sdk import PromptInjectionPolicy, SecretsPolicy, SecureAgent
+from openscript_sdk import PromptInjectionPolicy, SecretsPolicy, SecureAgent
 
 KEY = "AKIAIOSFODNN7EXAMPLE"
 PROMPT = {"input": f"deploy with {KEY} please"}

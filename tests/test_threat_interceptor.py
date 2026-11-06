@@ -4,10 +4,10 @@ import asyncio
 
 import pytest
 
-from contracts.server_types import Event, EventType
-from contracts.types import ActionContext, FailureMode, InterceptorDecision
-from events.writer import EventWriter
-from sdk.interceptors.threat import PromptInjectionPolicy, score_text
+from openscript_sdk.contracts.server_types import Event, EventType
+from openscript_sdk.contracts.types import ActionContext, FailureMode, InterceptorDecision
+from openscript_sdk.events.writer import EventWriter
+from openscript_sdk.interceptors.threat import PromptInjectionPolicy, score_text
 
 
 def _ctx(text: str, session_id: str = "s1") -> ActionContext:

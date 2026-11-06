@@ -12,9 +12,9 @@ import logging
 
 logging.disable(logging.CRITICAL)  # keep structlog's warnings out of the report
 
-from contracts.types import ActionContext
+from openscript_sdk.contracts.types import ActionContext
 from pydantic import BaseModel
-from sdk import (
+from openscript_sdk import (
     ActionBlockedError,
     AuditPolicy,
     CompliancePolicy,
@@ -173,7 +173,7 @@ record("output_schema", m["missing_fields"] == ["confidence"], f"missing={m['mis
 
 
 # 9 — audit logging (EventWriter draining into an in-memory sink)
-from events.writer import EventWriter
+from openscript_sdk.events.writer import EventWriter
 
 
 class MemorySink:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from contracts.types import ActionContext, FailureMode, InterceptorDecision
-from sdk.interceptors.pii import PIIMode, PIIPolicy, _find_pii, _redact_text
+from openscript_sdk.contracts.types import ActionContext, FailureMode, InterceptorDecision
+from openscript_sdk.interceptors.pii import PIIMode, PIIPolicy, _find_pii, _redact_text
 
 
 def _ctx(output: str, session_id: str = "s1") -> ActionContext:

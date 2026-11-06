@@ -20,11 +20,11 @@ from typing import Any
 
 import pytest
 
-from contracts.types import ActionBlockedError
 from evals.ledger import ServiceProcess, TokenClass, call_hash
-from events.approvals import InMemoryApprovalStore
-from sdk import SecureTool, SessionTaintPolicy, ToolFirewallPolicy, ToolRules
-from sdk.policies.taint_store import FileTaintStore
+from openscript_sdk import SecureTool, SessionTaintPolicy, ToolFirewallPolicy, ToolRules
+from openscript_sdk.contracts.types import ActionBlockedError
+from openscript_sdk.events.approvals import InMemoryApprovalStore
+from openscript_sdk.policies.taint_store import FileTaintStore
 
 ROOT = Path(__file__).resolve().parents[2]
 NOWHERE = "redis://127.0.0.1:1/0"  # nothing listens on port 1
@@ -43,7 +43,7 @@ def _held_tool(store: Any, effects: list[int]) -> SecureTool:
 
 
 def test_redis_unreachable_when_a_call_is_held_is_closed():
-    from events.approvals import RedisApprovalStore
+    from openscript_sdk.events.approvals import RedisApprovalStore
 
     effects: list[int] = []
     with pytest.raises(Exception) as raised:
@@ -53,7 +53,7 @@ def test_redis_unreachable_when_a_call_is_held_is_closed():
 
 
 def test_redis_unreachable_when_an_approval_is_redeemed_is_closed():
-    from events.approvals import RedisApprovalStore
+    from openscript_sdk.events.approvals import RedisApprovalStore
 
     effects: list[int] = []
     tool = _held_tool(RedisApprovalStore(NOWHERE), effects)
@@ -145,7 +145,14 @@ def _hook(tmp: Path, command: str, stdin: str) -> subprocess.CompletedProcess[st
     config = tmp / "openscript.yaml"
     config.write_text(json.dumps(CONFIG))
     return subprocess.run(
-        [sys.executable, "-m", "sdk.hooks.claude_code", "--config", str(config), command],
+        [
+            sys.executable,
+            "-m",
+            "openscript_sdk.hooks.claude_code",
+            "--config",
+            str(config),
+            command,
+        ],
         input=stdin,
         capture_output=True,
         text=True,
@@ -159,7 +166,7 @@ def _kill_mid_decision(tmp: Path, wrapped: bool) -> int:
     """The hook as the example settings run it, killed while it decides."""
     config = tmp / "openscript.yaml"
     config.write_text(json.dumps(CONFIG))
-    hook = f"{sys.executable} -m sdk.hooks.claude_code --config {config} pre-tool-use"
+    hook = f"{sys.executable} -m openscript_sdk.hooks.claude_code --config {config} pre-tool-use"
     shell = subprocess.Popen(
         ["sh", "-c", f"{hook} || exit 2" if wrapped else f"exec {hook}"],
         stdin=subprocess.PIPE,
@@ -173,7 +180,7 @@ def _kill_mid_decision(tmp: Path, wrapped: bool) -> int:
     child = None
     while child is None and time.monotonic() < deadline:
         found = subprocess.run(
-            ["pgrep", "-f", "sdk.hooks.claude_code"], capture_output=True, text=True
+            ["pgrep", "-f", "openscript_sdk.hooks.claude_code"], capture_output=True, text=True
         )
         pids = [int(p) for p in found.stdout.split() if int(p) != shell.pid]
         child = pids[0] if pids else (shell.pid if not wrapped else None)

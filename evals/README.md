@@ -53,7 +53,7 @@ The three `public_*` files are the answer to that. They are copied whole from
 their sources (`deepset/prompt-injections`, Apache-2.0;
 `leolee99/NotInject` at revision `847ae76`, MIT; and `Paul/XSTest` at revision
 `f600c99`, CC-BY-4.0), with only the field names changed,
-and nothing in `sdk/` is ever edited because of a row in them.
+and nothing in `openscript_sdk/` is ever edited because of a row in them.
 
 ## Dev and holdout
 
@@ -74,7 +74,7 @@ write a new holdout. The public sets are not edited at all.
 
 A pattern bank recognises shapes. Give it a shape it knows — including one
 disguised with look-alike characters, leetspeak or base64, which
-`sdk/policies/normalize.py` folds back first — and it is close to perfect.
+`openscript_sdk/policies/normalize.py` folds back first — and it is close to perfect.
 Give it an attack phrased in words nobody wrote a pattern for and it sees
 nothing at all. Both halves of that are measured here, and neither is a
 surprise; it is what a pattern bank is. Closing the second half needs a model,

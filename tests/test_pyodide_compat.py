@@ -3,7 +3,7 @@
 These tests catch the two failures that broke the browser build the first time:
 
   1. `include = ["sdk", ...]` shipped a wheel containing only sdk/__init__.py and
-     sdk/logging.py — every policy subpackage was missing. Invisible locally,
+     sdk/logging.py (the package's name before it became openscript_sdk) — every policy subpackage was missing. Invisible locally,
      because pytest runs from the repo root with pythonpath = ["."].
   2. `pydantic>=2.12` cannot be satisfied in the browser: Pyodide 0.28.3 bundles
      2.10.6, and no pydantic-core between 2.28 and 2.46 publishes a WASM wheel.
@@ -30,28 +30,28 @@ LOCK_URL = f"https://cdn.jsdelivr.net/pyodide/v{PYODIDE_VERSION}/full/pyodide-lo
 
 # Every module the browser demo imports, relative to the wheel root.
 REQUIRED_WHEEL_MEMBERS = [
-    "sdk/__init__.py",
-    "sdk/logging.py",
-    "sdk/interceptors/pii.py",
-    "sdk/interceptors/threat.py",
-    "sdk/interceptors/event_writer.py",
-    "sdk/interceptors/base.py",
-    "sdk/policies/normalize.py",
-    "sdk/policies/secrets.py",
-    "sdk/policies/toxicity.py",
-    "sdk/policies/harmful_request.py",
-    "sdk/policies/compliance.py",
-    "sdk/policies/tool_firewall.py",
-    "sdk/policies/output_schema.py",
-    "sdk/policies/config.py",
-    "sdk/middleware/middleware.py",
-    "sdk/observability/risk.py",
-    "sdk/integrations/langchain.py",
-    "contracts/types.py",
-    "contracts/interceptor.py",
-    "contracts/server_types.py",
-    "events/writer.py",
-    "events/approvals.py",
+    "openscript_sdk/__init__.py",
+    "openscript_sdk/logging.py",
+    "openscript_sdk/interceptors/pii.py",
+    "openscript_sdk/interceptors/threat.py",
+    "openscript_sdk/interceptors/event_writer.py",
+    "openscript_sdk/interceptors/base.py",
+    "openscript_sdk/policies/normalize.py",
+    "openscript_sdk/policies/secrets.py",
+    "openscript_sdk/policies/toxicity.py",
+    "openscript_sdk/policies/harmful_request.py",
+    "openscript_sdk/policies/compliance.py",
+    "openscript_sdk/policies/tool_firewall.py",
+    "openscript_sdk/policies/output_schema.py",
+    "openscript_sdk/policies/config.py",
+    "openscript_sdk/middleware/middleware.py",
+    "openscript_sdk/observability/risk.py",
+    "openscript_sdk/integrations/langchain.py",
+    "openscript_sdk/contracts/types.py",
+    "openscript_sdk/contracts/interceptor.py",
+    "openscript_sdk/contracts/server_types.py",
+    "openscript_sdk/events/writer.py",
+    "openscript_sdk/events/approvals.py",
 ]
 
 
@@ -112,8 +112,8 @@ def test_wheel_contains_every_policy_module(wheel: Path):
     missing = [m for m in REQUIRED_WHEEL_MEMBERS if m not in names]
     assert not missing, (
         f"{len(missing)} modules missing from {wheel.name}: {missing}\n"
-        "Check [tool.setuptools.packages.find].include — bare 'sdk' does not "
-        "match sdk.policies / sdk.interceptors / sdk.middleware. Use 'sdk*'."
+        "Check [tool.setuptools.packages.find].include — a bare package name does not "
+        "match its subpackages (openscript_sdk.policies, .interceptors, .middleware). Use 'openscript_sdk*'."
     )
 
 

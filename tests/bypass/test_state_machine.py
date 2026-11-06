@@ -28,10 +28,10 @@ from hypothesis.stateful import (
     rule,
 )
 
-from contracts.types import ActionBlockedError
-from events.approvals import InMemoryApprovalStore
-from sdk import SecureTool, SessionTaintPolicy
-from sdk.policies.taint_store import FileTaintStore
+from openscript_sdk import SecureTool, SessionTaintPolicy
+from openscript_sdk.contracts.types import ActionBlockedError
+from openscript_sdk.events.approvals import InMemoryApprovalStore
+from openscript_sdk.policies.taint_store import FileTaintStore
 
 SESSIONS = st.sampled_from(["s1", "s2"])
 AMOUNTS = st.integers(min_value=1, max_value=3)
